@@ -4,6 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
 import { searchSpells, Spell } from '@/lib/spells-data';
+import { searchMonsters, getMonsterTypes, MonsterDataExtended } from '@/lib/monsters-search';
 
 type TabType = 'grimorio' | 'bestiario' | 'itens' | 'notas';
 
@@ -139,6 +140,128 @@ function GrimorioTab({ searchQuery }: { searchQuery: string }) {
     );
 }
 
+// Componente Bestiário
+function BestiarioTab({ searchQuery }: { searchQuery: string }) {
+    const [typeFilter, setTypeFilter] = useState<string>('');
+    const [crMinFilter, setCrMinFilter] = useState<number | undefined>(undefined);
+    const [crMaxFilter, setCrMaxFilter] = useState<number | undefined>(undefined);
+    const [selectedMonster, setSelectedMonster] = useState<MonsterDataExtended | null>(null);
+
+    const monsters = searchMonsters(searchQuery, {
+        type: typeFilter || undefined,
+        challengeMin: crMinFilter,
+        challengeMax: crMaxFilter
+    });
+
+    const types = getMonsterTypes();
+
+    return (
+        <div>
+            <h2 className="text-2xl font-bold font-cinzel text-rpg-gold mb-4">🐉 Bestiário</h2>
+
+            {/* Filtros */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                <div>
+                    <label className="block text-sm text-rpg-grey mb-2">Tipo</label>
+                    <select
+                        value={typeFilter}
+                        onChange={(e) => setTypeFilter(e.target.value)}
+                        className="w-full bg-rpg-slate border border-rpg-gold/20 rounded px-3 py-2 text-rpg-parchment focus:border-rpg-gold focus:outline-none"
+                    >
+                        <option value="">Todos</option>
+                        {types.map(type => (
+                            <option key={type} value={type}>{type}</option>
+                        ))}
+                    </select>
+                </div>
+                <div>
+                    <label className="block text-sm text-rpg-grey mb-2">CR Mínimo</label>
+                    <input
+                        type="number"
+                        min="0"
+                        max="30"
+                        value={crMinFilter ?? ''}
+                        onChange={(e) => setCrMinFilter(e.target.value ? Number(e.target.value) : undefined)}
+                        className="w-full bg-rpg-slate border border-rpg-gold/20 rounded px-3 py-2 text-rpg-parchment focus:border-rpg-gold focus:outline-none"
+                        placeholder="0"
+                    />
+                </div>
+                <div>
+                    <label className="block text-sm text-rpg-grey mb-2">CR Máximo</label>
+                    <input
+                        type="number"
+                        min="0"
+                        max="30"
+                        value={crMaxFilter ?? ''}
+                        onChange={(e) => setCrMaxFilter(e.target.value ? Number(e.target.value) : undefined)}
+                        className="w-full bg-rpg-slate border border-rpg-gold/20 rounded px-3 py-2 text-rpg-parchment focus:border-rpg-gold focus:outline-none"
+                        placeholder="30"
+                    />
+                </div>
+            </div>
+
+            {/* Lista de Monstros */}
+            <div className="grid md:grid-cols-2 gap-4">
+                <div className="space-y-3 max-h-[600px] overflow-y-auto pr-2">
+                    {monsters.length === 0 ? (
+                        <p className="text-rpg-grey text-center py-8">Nenhuma criatura encontrada.</p>
+                    ) : (
+                        monsters.map(monster => (
+                            <div
+                                key={monster.name}
+                                onClick={() => setSelectedMonster(monster)}
+                                className={`bg-rpg-slate border rounded p-4 cursor-pointer transition-all hover:border-rpg-gold/50 ${selectedMonster?.name === monster.name ? 'border-rpg-gold ring-1 ring-rpg-gold/30' : 'border-rpg-gold/10'
+                                    }`}
+                            >
+                                <h3 className="font-bold text-rpg-gold flex items-center gap-2">
+                                    🐉 {monster.name}
+                                </h3>
+                                <p className="text-sm text-rpg-grey">
+                                    CR {monster.challenge} • {monster.type} • {monster.xp} XP
+                                </p>
+                            </div>
+                        ))
+                    )}
+                </div>
+
+                {/* Detalhes do Monstro */}
+                <div className="bg-rpg-slate border border-rpg-gold/20 rounded p-6 sticky top-4">
+                    {selectedMonster ? (
+                        <div>
+                            <h3 className="text-2xl font-bold text-rpg-gold mb-2">{selectedMonster.name}</h3>
+                            <p className="text-sm text-rpg-grey mb-4">{selectedMonster.type}</p>
+                            <div className="space-y-3 text-sm">
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <span className="font-bold text-rpg-gold">CA:</span> {selectedMonster.ac}
+                                    </div>
+                                    <div>
+                                        <span className="font-bold text-rpg-gold">HP:</span> {selectedMonster.hp}
+                                    </div>
+                                    <div>
+                                        <span className="font-bold text-rpg-gold">CR:</span> {selectedMonster.challenge}
+                                    </div>
+                                    <div>
+                                        <span className="font-bold text-rpg-gold">XP:</span> {selectedMonster.xp}
+                                    </div>
+                                </div>
+                                <div className="pt-3 border-t border-rpg-gold/20">
+                                    <p className="text-rpg-parchment leading-relaxed">{selectedMonster.description}</p>
+                                </div>
+                            </div>
+                        </div>
+                    ) : (
+                        <div className="text-center text-rpg-grey py-12">
+                            <p className="text-4xl mb-4">🐲</p>
+                            <p>Selecione uma criatura para ver os detalhes</p>
+                        </div>
+                    )}
+                </div>
+            </div>
+        </div>
+    );
+}
+
 export default function BibliotecaPage() {
     const { user } = useAuth();
     const [activeTab, setActiveTab] = useState<TabType>('grimorio');
@@ -215,12 +338,7 @@ export default function BibliotecaPage() {
                 <div className="bg-rpg-panel border border-rpg-gold/20 rounded-lg p-6 min-h-[500px]">
                     {activeTab === 'grimorio' && <GrimorioTab searchQuery={searchQuery} />}
 
-                    {activeTab === 'bestiario' && (
-                        <div>
-                            <h2 className="text-2xl font-bold font-cinzel text-rpg-gold mb-4">🐉 Bestiário</h2>
-                            <p className="text-rpg-grey">Em breve: Catálogo completo de monstros e criaturas.</p>
-                        </div>
-                    )}
+                    {activeTab === 'bestiario' && <BestiarioTab searchQuery={searchQuery} />}
 
                     {activeTab === 'itens' && (
                         <div>
