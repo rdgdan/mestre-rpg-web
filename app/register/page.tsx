@@ -16,8 +16,8 @@ export default function RegisterPage() {
     e.preventDefault();
     setError(null);
     if (password.length < 6) {
-        setError("A senha deve ter no mínimo 6 caracteres.");
-        return;
+      setError("A senha deve ter no mínimo 6 caracteres.");
+      return;
     }
     try {
       await createUserWithEmailAndPassword(auth, email, password);
@@ -42,44 +42,46 @@ export default function RegisterPage() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-background-start p-4">
+    <div className="min-h-screen flex flex-col items-center justify-center bg-rpg-dark p-4 bg-[url('https://www.transparenttextures.com/patterns/dark-matter.png')]">
       <div className="text-center mb-8">
-            <h1 className="text-5xl font-bold font-serif text-accent">D&D Campanha e Álcool</h1>
-            <p className="text-text/80 font-sans">Sua aventura começa aqui</p>
-        </div>
-      <div className="bg-surface p-8 rounded-lg shadow-2xl w-full max-w-md border border-accent/20 shadow-glow-accent">
-        <h2 className="text-3xl font-bold mb-6 text-center font-serif text-text">Criar Conta</h2>
-        {error && <p className="bg-primary/20 text-text p-3 rounded-md mb-4 text-center font-sans">{error}</p>}
+        <h1 className="text-5xl font-bold font-cinzel text-rpg-gold text-shadow-lg tracking-wider">D&D Campanha e Álcool</h1>
+        <p className="text-rpg-parchment/80 font-medieval text-xl mt-2">Sua aventura começa agora</p>
+      </div>
+      <div className="bg-rpg-panel p-8 rounded-lg shadow-2xl w-full max-w-md border-2 border-rpg-gold/30 shadow-black/50 backdrop-blur-sm">
+        <h2 className="text-3xl font-bold mb-6 text-center font-cinzel text-rpg-gold border-b border-rpg-gold/20 pb-4">Criar Grimório</h2>
+        {error && <p className="bg-rpg-red/20 border border-rpg-red/40 text-red-200 p-3 rounded-md mb-4 text-center font-medieval">{error}</p>}
         <form onSubmit={handleRegister} className="space-y-6">
           <div>
-            <label className="block mb-2 font-serif text-text/90">Email</label>
+            <label className="block mb-2 font-cinzel text-rpg-gold font-bold">Email</label>
             <input
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full p-3 rounded bg-background-end border border-text/20 focus:outline-none focus:ring-2 focus:ring-accent transition-all font-sans"
+              className="w-full p-3 rounded bg-rpg-slate border border-rpg-gold/20 focus:outline-none focus:ring-2 focus:ring-rpg-gold text-rpg-parchment transition-all font-medieval placeholder-rpg-grey/30"
+              placeholder="seu@novo-email.com"
               required
             />
           </div>
           <div className="mb-6">
-            <label className="block mb-2 font-serif text-text/90">Senha</label>
+            <label className="block mb-2 font-cinzel text-rpg-gold font-bold">Senha da Alma</label>
             <input
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full p-3 rounded bg-background-end border border-text/20 focus:outline-none focus:ring-2 focus:ring-accent transition-all font-sans"
+              className="w-full p-3 rounded bg-rpg-slate border border-rpg-gold/20 focus:outline-none focus:ring-2 focus:ring-rpg-gold text-rpg-parchment transition-all font-medieval placeholder-rpg-grey/30"
+              placeholder="••••••••"
               required
             />
           </div>
           <button
             type="submit"
-            className="w-full bg-primary hover:bg-primary/80 p-3 rounded font-bold font-serif text-lg text-text transition-all transform hover:scale-105 shadow-lg hover:shadow-glow-primary"
+            className="w-full bg-rpg-gold hover:bg-rpg-gold/80 p-3 rounded font-bold font-cinzel text-lg text-rpg-dark transition-all transform hover:scale-[1.02] shadow-lg hover:shadow-glow-gold border border-rpg-gold/50"
           >
             Forjar Personagem
           </button>
         </form>
-         <div className="mt-8 text-center">
-          <p className="font-sans text-text/80">Já tem uma conta? <Link href="/login" className="text-accent hover:underline font-bold">Entre na Taverna</Link></p>
+        <div className="mt-8 text-center">
+          <p className="font-medieval text-rpg-grey">Já tem uma conta? <Link href="/login" className="text-rpg-gold hover:text-rpg-gold-light hover:underline font-bold transition-colors">Entre na Taverna</Link></p>
         </div>
       </div>
     </div>

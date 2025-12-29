@@ -3,7 +3,7 @@
 import { Inventory, OtherEquipmentItem } from './items-data';
 
 export const ATTRIBUTE_KEYS = ['strength', 'dexterity', 'constitution', 'intelligence', 'wisdom', 'charisma'] as const;
-type AttributeKey = typeof ATTRIBUTE_KEYS[number];
+export type AttributeKey = typeof ATTRIBUTE_KEYS[number];
 
 export const ATTRIBUTE_DISPLAY_NAMES: Record<AttributeKey, string> = {
     strength: 'Força',
@@ -58,6 +58,8 @@ export interface Character {
     bonds: string;
     flaws: string;
     notes: string;
+    deathSaves: { successes: number; failures: number };
+    address?: string; // Adding optional address to suppressed potential errors if mapper uses it, though not seen.
     inventory: Inventory;
     features: { name: string; description: string }[];
     spells: { name: string; level: number; castingTime: string; range: string; duration: string; description: string }[];
@@ -99,40 +101,95 @@ export function calculateComputedStats(character: Omit<Character, 'proficiencyBo
     const lowerCaseClass = className.toLowerCase();
 
     const proficiencyBonus = getProficiencyBonusFromLevel(level);
-    
+
     const attributeModifiers = ATTRIBUTE_KEYS.reduce((acc, key) => {
         acc[key] = getModifier(attributes[key]);
         return acc;
     }, {} as Record<AttributeKey, number>);
 
-    const dexMod = attributeModifiers.dexterity;
-    const initiative = dexMod;
+    const dexterity = attributes.dexterity || 10;
+    const dexMod = Math.floor((dexterity - 10) / 2);
 
-    let armorClass = 10 + dexMod; // Assume no armor for simplicity. Will be enhanced later.
+    // -- CÁLCULO DE CA (ARMOR CLASS) --
+    let ac = 10 + dexMod; // Base: Sem armadura
 
-    const spellcastingAbility = SPELLCASTING_ABILITY_MAP[lowerCaseClass] || '';
-    let spellSaveDc = 8 + proficiencyBonus;
-    let spellAttackBonus = proficiencyBonus;
+    if (character.inventory && character.inventory.otherEquipment) {
+        const equippedArmor = character.inventory.otherEquipment.find(item => item.isEquipped && item.type === 'armor');
+        const equippedShield = character.inventory.otherEquipment.find(item => item.isEquipped && item.type === 'shield');
 
-    if (spellcastingAbility && attributeModifiers[spellcastingAbility]) {
-        const spellMod = attributeModifiers[spellcastingAbility];
-        spellSaveDc += spellMod;
-        spellAttackBonus += spellMod;
+        if (equippedArmor) {
+            const baseAC = equippedArmor.armorClass || 10;
+            // Heurística simples para tipo de armadura baseada no valor de CA, já que não temos o subtipo explícito no momento
+            // AC Base < 14: Leve (Dex total)
+            // AC Base 14 ou 15: Média (Dex máx +2)
+            // AC Base >= 16: Pesada (Sem Dex)
+            if (baseAC < 14) {
+                ac = baseAC + dexMod;
+            } else if (baseAC < 16) {
+                ac = baseAC + Math.min(dexMod, 2);
+            } else {
+                ac = baseAC;
+            }
+        }
+
+        // Defesa sem Armadura (Bárbaro/Monge) - simplificado por detecção de string na classe
+        if (!equippedArmor && className) {
+            const lowerClass = className.toLowerCase();
+            if (lowerClass.includes('bárbaro') || lowerClass.includes('barbaro')) {
+                const conMod = Math.floor(((attributes.constitution || 10) - 10) / 2);
+                ac = 10 + dexMod + conMod;
+            } else if (lowerClass.includes('monge')) {
+                const wisMod = Math.floor(((attributes.wisdom || 10) - 10) / 2);
+                ac = 10 + dexMod + wisMod;
+            }
+        }
+
+        if (equippedShield) {
+            ac += (equippedShield.armorClass || 2);
+        }
     }
 
-    return {
+    // -- CÁLCULO DE MAGIA --
+    const castingAbility = SPELLCASTING_ABILITY_MAP[lowerCaseClass] as AttributeKey | undefined;
+
+    // Preserva slots existentes ou inicia vazio
+    // Usamos 'any' aqui para acessar spellcasting se ele existir no objeto character (partial)
+    const existingSpellcasting = (character as any).spellcasting;
+    const existingSlots = existingSpellcasting?.slots || {};
+
+    let spellcastingData: Character['spellcasting'];
+
+    if (castingAbility) {
+        const abilityScore = attributes[castingAbility] || 10;
+        const mod = Math.floor((abilityScore - 10) / 2);
+        const saveDc = 8 + proficiencyBonus + mod;
+        const attackBonus = proficiencyBonus + mod;
+
+        spellcastingData = {
+            ability: castingAbility,
+            saveDc,
+            attackBonus,
+            slots: existingSlots
+        };
+    } else {
+        spellcastingData = existingSpellcasting || {
+            ability: '',
+            saveDc: 0,
+            attackBonus: 0,
+            slots: {}
+        };
+    }
+
+    const computed: Character = {
         ...character,
         proficiencyBonus,
-        armorClass,
-        initiative,
+        armorClass: ac,
+        initiative: dexMod,
         attributeModifiers,
-        spellcasting: {
-            ...(character.spellcasting || {}),
-            ability: spellcastingAbility,
-            saveDc: spellSaveDc,
-            attackBonus: spellAttackBonus
-        }
-    } as Character;
+        spellcasting: spellcastingData
+    };
+
+    return computed;
 }
 
 export function createBlankCharacter(ownerId: string): Character {
@@ -160,10 +217,11 @@ export function createBlankCharacter(ownerId: string): Character {
         inventory: {
             weapons: [],
             currency: { cp: 0, sp: 0, ep: 0, gp: 0, pp: 0 },
-            otherEquipment: [], 
+            otherEquipment: [],
         },
         features: [],
         spells: [],
+        deathSaves: { successes: 0, failures: 0 },
     };
 
     return calculateComputedStats(blank);
@@ -189,7 +247,7 @@ export function hydrateCharacter(partialData: Partial<Character> & { equipment?:
             weapons: partialData.inventory.weapons || [],
         };
 
-        const oldEquipment = partialData.inventory.otherEquipment;
+        const oldEquipment = partialData.inventory.otherEquipment as unknown;
         if (Array.isArray(oldEquipment)) {
             finalInventory.otherEquipment = oldEquipment;
         } else if (typeof oldEquipment === 'string' && oldEquipment.trim() !== '') {
@@ -201,7 +259,7 @@ export function hydrateCharacter(partialData: Partial<Character> & { equipment?:
             }];
         }
     } else if (partialData.equipment && typeof partialData.equipment === 'string') {
-         finalInventory.otherEquipment = [{
+        finalInventory.otherEquipment = [{
             id: new Date().toISOString(),
             name: 'Equipamento (Migrado)',
             quantity: 1,
