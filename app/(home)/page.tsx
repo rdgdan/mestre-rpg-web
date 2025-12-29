@@ -4,7 +4,7 @@ import { useState, useEffect, FormEvent } from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
 import { auth, db } from '@/lib/firebase';
-import { signOut } from 'firebase/auth';
+import { signOut, updateProfile } from 'firebase/auth';
 import { useRouter } from 'next/navigation';
 import { addDoc, collection, query, where, onSnapshot, orderBy, limit } from 'firebase/firestore';
 import Modal from '@/components/Modal';
@@ -51,6 +51,10 @@ export default function HomePage() {
   const [npcAmount, setNpcAmount] = useState(1);
   const [selectedProfession, setSelectedProfession] = useState('Aleatória');
   const [generatedNpcs, setGeneratedNpcs] = useState<NPC[]>([]);
+
+  // States para Edição de Nome
+  const [isEditingName, setIsEditingName] = useState(false);
+  const [newName, setNewName] = useState(user?.displayName || '');
 
   useEffect(() => {
     if (user) {
@@ -167,6 +171,20 @@ export default function HomePage() {
     setGeneratedNpcs(npcs);
   }
 
+  const handleUpdateName = async () => {
+    if (!user || !newName.trim()) return;
+    try {
+      await updateProfile(user, { displayName: newName });
+      setIsEditingName(false);
+      // O Firebase Auth atualiza o objeto user localmente, mas o estado do React no useAuth pode demorar. 
+      // Em alguns casos recarregar a página ou forçar um update é necessário se o provider não reagir.
+      window.location.reload();
+    } catch (err) {
+      console.error("Erro ao atualizar nome:", err);
+      alert("Não foi possível atualizar o nome.");
+    }
+  };
+
   return (
     <>
       <div className="min-h-screen bg-rpg-dark text-rpg-parchment flex flex-col bg-[url('https://www.transparenttextures.com/patterns/dark-matter.png')]">
@@ -188,7 +206,30 @@ export default function HomePage() {
                 <div className="flex items-center gap-4">
                   <div className="flex items-center font-medieval">
                     <span className="hidden md:inline text-rpg-grey mr-2">Mestre</span>
-                    <span className="text-rpg-parchment font-bold text-lg">{user.displayName || 'Viajante'}</span>
+                    {isEditingName ? (
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="text"
+                          value={newName}
+                          onChange={(e) => setNewName(e.target.value)}
+                          className="bg-rpg-slate border border-rpg-gold/30 rounded px-2 py-1 text-sm text-rpg-parchment focus:outline-none focus:border-rpg-gold w-32"
+                          autoFocus
+                        />
+                        <button onClick={handleUpdateName} className="text-green-500 hover:text-green-400 text-xl" title="Salvar">✓</button>
+                        <button onClick={() => setIsEditingName(false)} className="text-red-500 hover:text-red-400 text-xl" title="Cancelar">✕</button>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2 group">
+                        <span className="text-rpg-parchment font-bold text-lg">{user.displayName || 'Viajante'}</span>
+                        <button
+                          onClick={() => { setNewName(user.displayName || ''); setIsEditingName(true); }}
+                          className="opacity-0 group-hover:opacity-100 transition-opacity text-rpg-grey hover:text-rpg-gold text-xs"
+                          title="Editar nome"
+                        >
+                          ✎
+                        </button>
+                      </div>
+                    )}
                   </div>
                   <button
                     onClick={handleLogout}

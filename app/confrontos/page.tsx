@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
 import { db } from '@/lib/firebase';
-import { collection, query, where, onSnapshot } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, doc, updateDoc, increment } from 'firebase/firestore';
 import Modal from '@/components/Modal';
 import { dndMonsters, MonsterData } from '@/lib/monsters-data';
 import { npcTemplates, NPCTemplate } from '@/lib/npc-combatants-data';
@@ -28,6 +28,7 @@ interface Combatant {
     maxHp: number;
     ac: number;
     cr: string;
+    xp: number;
     initiative: number;
     statusEffects: StatusEffect[];
     // Detalhes extras do banco
@@ -62,7 +63,10 @@ export default function ConfrontosPage() {
     // --- Estados de Modais ---
     const [isAddModalOpen, setIsAddModalOpen] = useState(false);
     const [isEffectModalOpen, setIsEffectModalOpen] = useState(false);
+    const [isXPModalOpen, setIsXPModalOpen] = useState(false);
     const [selectedCombatantId, setSelectedCombatantId] = useState<string | null>(null);
+    const [xpDonationActive, setXpDonationActive] = useState(false);
+    const [xpSummary, setXpSummary] = useState({ totalXp: 0, xpPerPlayer: 0, playerCount: 0 });
 
     // --- Estados de Formulário ---
     const [availablePlayers, setAvailablePlayers] = useState<PlayerReference[]>([]);
@@ -72,6 +76,7 @@ export default function ConfrontosPage() {
         hp: 10,
         ac: 10,
         cr: '0',
+        xp: 0,
         initiative: '' as string | number,
         playerId: ''
     });
@@ -173,6 +178,46 @@ export default function ConfrontosPage() {
         }
     };
 
+    const finishCombat = () => {
+        const defeatedEnemies = combatants.filter(c => (c.type === 'monster' || c.type === 'npc') && c.hp === 0);
+        const totalXp = defeatedEnemies.reduce((acc, c) => acc + (c.xp || 0), 0);
+        const players = combatants.filter(c => c.type === 'player');
+        const playerCount = players.length;
+        const xpPerPlayer = playerCount > 0 ? Math.floor(totalXp / playerCount) : 0;
+
+        setXpSummary({ totalXp, xpPerPlayer, playerCount });
+        setIsXPModalOpen(true);
+    };
+
+    const handleAwardXP = async () => {
+        if (!xpDonationActive) {
+            // Distribuir XP automaticamente
+            const players = combatants.filter(c => c.type === 'player' && c.externalId);
+            if (players.length > 0) {
+                try {
+                    const promises = players.map(async (p) => {
+                        const pRef = doc(db, 'personagens', p.externalId!);
+                        await updateDoc(pRef, {
+                            experience: increment(xpSummary.xpPerPlayer)
+                        });
+                    });
+                    await Promise.all(promises);
+                    alert(`Sucesso! ${xpSummary.xpPerPlayer} XP adicionados à ficha de cada jogador.`);
+                } catch (err) {
+                    console.error("Erro ao distribuir XP:", err);
+                    alert("Erro ao atualizar fichas. Verifique o console.");
+                }
+            }
+        } else {
+            alert("Modo de Doação Ativo: O XP não foi adicionado automaticamente. O mestre deve ajustar manualmente se necessário.");
+        }
+
+        setIsXPModalOpen(false);
+        setRound(1);
+        setCurrentTurnIndex(0);
+        setPhase('preparation');
+    };
+
     const clearCombat = () => {
         if (confirm("Deseja limpar o campo de batalha? Todos os combatentes serão removidos.")) {
             setCombatants([]);
@@ -205,7 +250,8 @@ export default function ConfrontosPage() {
                     spells: p.spells,
                     abilities: p.abilities,
                     ac: 10, // Default for players if not in ref
-                    cr: `Lvl ${p.level}`
+                    cr: `Lvl ${p.level}`,
+                    xp: 0 // Players don't give XP
                 };
             }
         }
@@ -226,6 +272,7 @@ export default function ConfrontosPage() {
             maxHp: hp,
             ac: newCombatant.ac || 10,
             cr: newCombatant.cr || '0',
+            xp: newCombatant.xp || 0,
             initiative: initiativeValue,
             statusEffects: [],
             ...extraData
@@ -394,10 +441,10 @@ export default function ConfrontosPage() {
                         {phase === 'combat' && (
                             <>
                                 <button
-                                    onClick={resetCombat}
-                                    className="text-rpg-grey hover:text-white font-medieval px-4"
+                                    onClick={finishCombat}
+                                    className="text-rpg-gold hover:text-white font-medieval px-4 border border-rpg-gold/20 rounded hover:bg-rpg-gold/10 transition-all"
                                 >
-                                    Terminar Combate
+                                    Terminar Combate & XP
                                 </button>
                                 <button
                                     onClick={nextTurn}
@@ -499,6 +546,10 @@ export default function ConfrontosPage() {
                                                     <div className="flex flex-col items-center justify-center bg-rpg-panel border border-white/5 rounded px-2 min-w-[40px]">
                                                         <span className="text-[8px] text-rpg-grey uppercase font-cinzel">CR</span>
                                                         <span className="text-xs font-bold text-rpg-parchment">{c.cr}</span>
+                                                    </div>
+                                                    <div className="flex flex-col items-center justify-center bg-rpg-panel border border-rpg-gold/10 rounded px-2 min-w-[40px]">
+                                                        <span className="text-[8px] text-rpg-grey uppercase font-cinzel">XP</span>
+                                                        <span className="text-xs font-bold text-rpg-gold-light">{c.xp}</span>
                                                     </div>
                                                 </div>
                                             </div>
@@ -726,7 +777,8 @@ export default function ConfrontosPage() {
                                                         name: m.name,
                                                         hp: m.hp,
                                                         ac: m.ac,
-                                                        cr: m.challenge
+                                                        cr: m.challenge,
+                                                        xp: m.xp
                                                     });
                                                 }
                                             } else {
@@ -737,7 +789,8 @@ export default function ConfrontosPage() {
                                                         name: n.name,
                                                         hp: n.hp,
                                                         ac: n.ac,
-                                                        cr: n.challenge
+                                                        cr: n.challenge,
+                                                        xp: n.xp
                                                     });
                                                 }
                                             }
@@ -796,6 +849,16 @@ export default function ConfrontosPage() {
                                             value={newCombatant.cr}
                                             onChange={(e) => setNewCombatant({ ...newCombatant, cr: e.target.value })}
                                             placeholder="Ex: 1/4, 5, etc"
+                                        />
+                                    </div>
+                                    <div className="col-span-1">
+                                        <label className="block text-rpg-gold text-xs uppercase font-cinzel mb-1">XP (Recompensa)</label>
+                                        <input
+                                            type="number"
+                                            className="w-full bg-rpg-slate border border-white/10 p-3 rounded font-medieval text-rpg-parchment focus:border-rpg-gold outline-none"
+                                            value={newCombatant.xp}
+                                            onChange={(e) => setNewCombatant({ ...newCombatant, xp: Number(e.target.value) })}
+                                            placeholder="XP..."
                                         />
                                     </div>
                                     <div className="col-span-1">
@@ -875,6 +938,66 @@ export default function ConfrontosPage() {
                         </button>
                     </div>
                 </form>
+            </Modal>
+
+            {/* MODAL XP SUMMARY */}
+            <Modal isOpen={isXPModalOpen} onClose={() => setIsXPModalOpen(false)} title="Resumo de Recompensas">
+                <div className="space-y-6">
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="bg-rpg-slate p-4 rounded-lg border border-rpg-gold/20 text-center">
+                            <span className="text-[10px] text-rpg-gold uppercase font-cinzel block mb-1">XP Total Acumulado</span>
+                            <span className="text-3xl font-bold text-rpg-parchment font-medieval">{xpSummary.totalXp}</span>
+                        </div>
+                        <div className="bg-rpg-slate p-4 rounded-lg border border-white/5 text-center">
+                            <span className="text-[10px] text-rpg-grey uppercase font-cinzel block mb-1">XP por Jogador</span>
+                            <span className="text-3xl font-bold text-rpg-parchment font-medieval">{xpSummary.xpPerPlayer}</span>
+                        </div>
+                    </div>
+
+                    <div className="bg-black/20 p-4 rounded border border-white/5">
+                        <h4 className="text-xs font-bold text-rpg-gold uppercase font-cinzel mb-2 tracking-widest">Participantes ({xpSummary.playerCount} Heróis)</h4>
+                        <div className="max-h-32 overflow-y-auto space-y-1 custom-scrollbar">
+                            {combatants.filter(c => c.type === 'player').map(p => (
+                                <div key={p.id} className="text-sm font-medieval flex justify-between">
+                                    <span>• {p.name}</span>
+                                    <span className="text-rpg-gold">+{xpSummary.xpPerPlayer} XP</span>
+                                </div>
+                            ))}
+                            {xpSummary.playerCount === 0 && <p className="text-xs text-rpg-grey italic text-center">Nenhum jogador na arena para receber XP.</p>}
+                        </div>
+                    </div>
+
+                    <div className="flex items-center gap-3 p-4 bg-rpg-gold/5 border border-rpg-gold/20 rounded">
+                        <input
+                            type="checkbox"
+                            id="donatingXp"
+                            checked={xpDonationActive}
+                            onChange={(e) => setXpDonationActive(e.target.checked)}
+                            className="w-5 h-5 rounded border-rpg-gold/30 text-rpg-gold bg-rpg-dark focus:ring-rpg-gold cursor-pointer"
+                        />
+                        <div className="flex-grow">
+                            <label htmlFor="donatingXp" className="font-bold text-rpg-gold text-sm cursor-pointer select-none">Doar XP (Manual)</label>
+                            <p className="text-[10px] text-rpg-grey leading-tight">Marque se o XP deve ser distribuído manualmente fora do sistema (ex: doar para outro personagem).</p>
+                        </div>
+                    </div>
+
+                    <div className="pt-4 flex justify-end gap-3 border-t border-white/10">
+                        <button
+                            type="button"
+                            onClick={() => setIsXPModalOpen(false)}
+                            className="p-3 px-6 font-medieval text-rpg-grey hover:text-white"
+                        >
+                            Continuar Luta
+                        </button>
+                        <button
+                            type="button"
+                            onClick={handleAwardXP}
+                            className="bg-green-700 hover:bg-green-600 text-white p-3 px-8 rounded font-bold font-cinzel shadow-glow-green/20 transition-all"
+                        >
+                            Confirmar & Finalizar
+                        </button>
+                    </div>
+                </div>
             </Modal>
 
         </div>

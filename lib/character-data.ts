@@ -43,6 +43,7 @@ export interface Character {
     race: string;
     class: string;
     level: number;
+    experience: number;
     proficiencyBonus: number;
     armorClass: number;
     initiative: number;
@@ -203,6 +204,7 @@ export function createBlankCharacter(ownerId: string): Character {
         race: '',
         class: '',
         level: 1,
+        experience: 0,
         speed: 9,
         currentHp: 10,
         maxHp: 10,

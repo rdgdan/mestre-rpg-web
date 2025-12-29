@@ -2,12 +2,13 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { createUserWithEmailAndPassword, GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
+import { createUserWithEmailAndPassword, GoogleAuthProvider, signInWithPopup, updateProfile } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
 import Link from 'next/link';
 
 export default function RegisterPage() {
   const [email, setEmail] = useState('');
+  const [name, setName] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
@@ -20,7 +21,10 @@ export default function RegisterPage() {
       return;
     }
     try {
-      await createUserWithEmailAndPassword(auth, email, password);
+      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+      await updateProfile(userCredential.user, {
+        displayName: name
+      });
       router.push('/');
     } catch (error: any) {
       let friendlyMessage = "Ocorreu um erro ao criar a conta.";
@@ -51,6 +55,17 @@ export default function RegisterPage() {
         <h2 className="text-3xl font-bold mb-6 text-center font-cinzel text-rpg-gold border-b border-rpg-gold/20 pb-4">Criar Grimório</h2>
         {error && <p className="bg-rpg-red/20 border border-rpg-red/40 text-red-200 p-3 rounded-md mb-4 text-center font-medieval">{error}</p>}
         <form onSubmit={handleRegister} className="space-y-6">
+          <div>
+            <label className="block mb-2 font-cinzel text-rpg-gold font-bold">Como devemos te chamar?</label>
+            <input
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className="w-full p-3 rounded bg-rpg-slate border border-rpg-gold/20 focus:outline-none focus:ring-2 focus:ring-rpg-gold text-rpg-parchment transition-all font-medieval placeholder-rpg-grey/30"
+              placeholder="Ex: Mestre Arkan..."
+              required
+            />
+          </div>
           <div>
             <label className="block mb-2 font-cinzel text-rpg-gold font-bold">Email</label>
             <input
