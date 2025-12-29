@@ -72,6 +72,18 @@ export default function SharedArenaPage() {
     const [customEffName, setCustomEffName] = useState('');
     const [customEffDur, setCustomEffDur] = useState(10);
 
+    // Helpers para renderização (definidos cedo para uso nas funções)
+    const isHost = session && user && user.uid === session.hostId;
+    const currentCombatant = session?.combatants[session.turnIndex];
+
+    const getHpStatusLabel = (c: Combatant) => {
+        if (c.hp <= 0) return '💀 MORTO/CAÍDO';
+        const percent = (c.hp / c.maxHp) * 100;
+        if (percent > 75) return '🟩 Saudável';
+        if (percent > 25) return '🟨 Ferido';
+        return '🟥 Nas Últimas';
+    };
+
     useEffect(() => {
         if (!id) return;
 
@@ -247,6 +259,50 @@ export default function SharedArenaPage() {
         }
     };
 
+    const handleHostAdvanceTurn = async (direction: 'next' | 'prev') => {
+        if (!isHost || !session) return;
+
+        const sessionRef = doc(db, 'arenas_online', id as string);
+        let newIndex = session.turnIndex;
+        let newRound = session.round;
+
+        if (direction === 'next') {
+            newIndex++;
+            if (newIndex >= session.combatants.length) {
+                newIndex = 0;
+                newRound++;
+            }
+        } else {
+            newIndex--;
+            if (newIndex < 0) {
+                newIndex = session.combatants.length - 1;
+                newRound = Math.max(1, newRound - 1);
+            }
+        }
+
+        await updateDoc(sessionRef, {
+            turnIndex: newIndex,
+            round: newRound
+        });
+    };
+
+    const handleHostUpdateHp = async (combatantId: string, delta: number) => {
+        if (!isHost || !session) return;
+
+        const sessionRef = doc(db, 'arenas_online', id as string);
+        const updatedCombatants = session.combatants.map(c => {
+            if (c.id === combatantId) {
+                return { ...c, hp: Math.min(c.maxHp, Math.max(0, c.hp + delta)) };
+            }
+            return c;
+        });
+
+        await updateDoc(sessionRef, {
+            combatants: updatedCombatants
+        });
+    };
+
+
     if (loading) {
         return (
             <div className="min-h-screen bg-rpg-dark flex items-center justify-center font-cinzel text-rpg-gold animate-pulse">
@@ -267,16 +323,6 @@ export default function SharedArenaPage() {
         );
     }
 
-    const isHost = user && user.uid === session.hostId;
-    const currentCombatant = session.combatants[session.turnIndex];
-
-    const getHpStatusLabel = (c: Combatant) => {
-        if (c.hp <= 0) return '💀 MORTO/CAÍDO';
-        const percent = (c.hp / c.maxHp) * 100;
-        if (percent > 75) return '🟩 Saudável';
-        if (percent > 25) return '🟨 Ferido';
-        return '🟥 Nas Últimas';
-    };
 
     return (
         <div className="min-h-screen bg-rpg-dark text-rpg-parchment bg-[url('https://www.transparenttextures.com/patterns/dark-matter.png')] flex flex-col font-lato">
@@ -314,9 +360,29 @@ export default function SharedArenaPage() {
                         </div>
                         <div className="flex flex-col border-l border-white/10 pl-8">
                             <span className="text-[10px] text-rpg-grey uppercase font-cinzel tracking-widest">Turno de</span>
-                            <span className="text-xl font-bold text-rpg-parchment font-medieval">
-                                {currentCombatant?.name || "Aguardando"}
-                            </span>
+                            <div className="flex items-center gap-3">
+                                {isHost && (
+                                    <button
+                                        onClick={() => handleHostAdvanceTurn('prev')}
+                                        className="text-rpg-gold hover:text-white transition-all scale-125"
+                                        title="Turno Anterior"
+                                    >
+                                        ◀
+                                    </button>
+                                )}
+                                <span className="text-xl font-bold text-rpg-parchment font-medieval">
+                                    {currentCombatant?.name || "Aguardando"}
+                                </span>
+                                {isHost && (
+                                    <button
+                                        onClick={() => handleHostAdvanceTurn('next')}
+                                        className="text-rpg-gold hover:text-white transition-all scale-125"
+                                        title="Próximo Turno"
+                                    >
+                                        ▶
+                                    </button>
+                                )}
+                            </div>
                         </div>
                     </div>
                     <div className="hidden md:block">
@@ -407,24 +473,43 @@ export default function SharedArenaPage() {
                                     </div>
 
                                     {/* HP BAR (Player View) */}
-                                    {(isHost || isPlayer) ? (
-                                        <div className="w-32 md:w-48 shrink-0">
-                                            <div className="flex justify-between items-center mb-1">
-                                                <span className="text-[10px] uppercase font-cinzel text-rpg-grey">{getHpStatusLabel(c)}</span>
-                                                {showFullHP && <span className="text-[10px] font-bold text-rpg-parchment">{c.hp}/{c.maxHp}</span>}
+                                    <div className="flex items-center gap-3">
+                                        {(isHost || isPlayer) ? (
+                                            <div className="w-32 md:w-48 shrink-0">
+                                                <div className="flex justify-between items-center mb-1">
+                                                    <span className="text-[10px] uppercase font-cinzel text-rpg-grey">{getHpStatusLabel(c)}</span>
+                                                    {showFullHP && <span className="text-[10px] font-bold text-rpg-parchment">{c.hp}/{c.maxHp}</span>}
+                                                </div>
+                                                <div className="h-1.5 bg-black/40 rounded-full border border-white/5 overflow-hidden">
+                                                    <div
+                                                        className={`h-full transition-all duration-500 ${c.hp / c.maxHp > 0.5 ? 'bg-green-600' : c.hp / c.maxHp > 0.2 ? 'bg-yellow-600' : 'bg-red-600'}`}
+                                                        style={{ width: `${(c.hp / c.maxHp) * 100}%` }}
+                                                    ></div>
+                                                </div>
                                             </div>
-                                            <div className="h-1.5 bg-black/40 rounded-full border border-white/5 overflow-hidden">
-                                                <div
-                                                    className={`h-full transition-all duration-500 ${c.hp / c.maxHp > 0.5 ? 'bg-green-600' : c.hp / c.maxHp > 0.2 ? 'bg-yellow-600' : 'bg-red-600'}`}
-                                                    style={{ width: `${(c.hp / c.maxHp) * 100}%` }}
-                                                ></div>
+                                        ) : (
+                                            <div className="w-32 md:w-48 flex items-center justify-end">
+                                                <span className="text-[10px] font-cinzel text-rpg-grey italic tracking-widest bg-white/5 px-2 py-1 rounded">Status Desconhecido</span>
                                             </div>
-                                        </div>
-                                    ) : (
-                                        <div className="w-32 md:w-48 flex items-center justify-end">
-                                            <span className="text-[10px] font-cinzel text-rpg-grey italic tracking-widest bg-white/5 px-2 py-1 rounded">Status Desconhecido</span>
-                                        </div>
-                                    )}
+                                        )}
+
+                                        {isHost && (
+                                            <div className="flex items-center bg-black/40 rounded border border-white/10 overflow-hidden">
+                                                <button
+                                                    onClick={() => handleHostUpdateHp(c.id, -1)}
+                                                    className="px-2 py-1 text-red-500 hover:bg-red-500/10 transition-all font-bold"
+                                                >
+                                                    -
+                                                </button>
+                                                <button
+                                                    onClick={() => handleHostUpdateHp(c.id, 1)}
+                                                    className="px-2 py-1 text-green-500 hover:bg-green-500/10 transition-all font-bold border-l border-white/10"
+                                                >
+                                                    +
+                                                </button>
+                                            </div>
+                                        )}
+                                    </div>
                                 </div>
                             </div>
                         );
