@@ -234,55 +234,77 @@ export default function SharedArenaPage() {
         }
     };
 
-    const handlePlayerRemoveEffect = async (effectId: string) => {
+    const handleRemoveEffect = async (combatantId: string, effectId: string) => {
         if (!user || !session) return;
 
-        const myCombatantIndex = session.combatants.findIndex(c => c.ownerId === user.uid);
-        if (myCombatantIndex === -1) return;
+        // Verificar permissão: Host pode tudo, Player só no seu próprio
+        const combatant = session.combatants.find(c => c.id === combatantId);
+        if (!combatant) return;
 
-        setIsJoining(true);
+        const isMyCharacter = user.uid === combatant.ownerId;
+        if (!isHost && !isMyCharacter) return;
+
         try {
             const sessionRef = doc(db, 'arenas_online', id as string);
-            const updatedCombatants = [...session.combatants];
-            const myCombatant = { ...updatedCombatants[myCombatantIndex] };
-
-            myCombatant.statusEffects = myCombatant.statusEffects.filter(e => e.id !== effectId);
-            updatedCombatants[myCombatantIndex] = myCombatant;
+            const updatedCombatants = session.combatants.map(c => {
+                if (c.id === combatantId) {
+                    return {
+                        ...c,
+                        statusEffects: c.statusEffects.filter(e => e.id !== effectId)
+                    };
+                }
+                return c;
+            });
 
             await updateDoc(sessionRef, {
                 combatants: updatedCombatants
             });
         } catch (err) {
             console.error("Erro ao remover efeito:", err);
-        } finally {
-            setIsJoining(false);
         }
     };
 
     const handleHostAdvanceTurn = async (direction: 'next' | 'prev') => {
-        if (!isHost || !session) return;
+        if (!isHost || !session || session.combatants.length === 0) return;
 
         const sessionRef = doc(db, 'arenas_online', id as string);
-        let newIndex = session.turnIndex;
-        let newRound = session.round;
+        let nextIndex = session.turnIndex;
+        let nextRound = session.round;
+        let attempts = 0;
 
         if (direction === 'next') {
-            newIndex++;
-            if (newIndex >= session.combatants.length) {
-                newIndex = 0;
-                newRound++;
-            }
+            // Procurar próximo combatente vivo
+            do {
+                nextIndex = (nextIndex + 1) % session.combatants.length;
+                if (nextIndex === 0) nextRound++;
+                attempts++;
+                if (attempts >= session.combatants.length) break;
+            } while (session.combatants[nextIndex].hp <= 0);
         } else {
-            newIndex--;
-            if (newIndex < 0) {
-                newIndex = session.combatants.length - 1;
-                newRound = Math.max(1, newRound - 1);
+            nextIndex--;
+            if (nextIndex < 0) {
+                nextIndex = session.combatants.length - 1;
+                nextRound = Math.max(1, nextRound - 1);
             }
         }
 
+        // Lógica de Efeitos: Diminuir duração ao INICIAR o turno (apenas se avançou)
+        const updatedCombatants = session.combatants.map((c, idx) => {
+            if (direction === 'next' && idx === nextIndex) {
+                return {
+                    ...c,
+                    statusEffects: c.statusEffects
+                        .map(e => ({ ...e, duration: e.duration - 1 }))
+                        .filter(e => e.duration > 0)
+                };
+            }
+            return c;
+        });
+
         await updateDoc(sessionRef, {
-            turnIndex: newIndex,
-            round: newRound
+            turnIndex: nextIndex,
+            round: nextRound,
+            combatants: updatedCombatants
         });
     };
 
@@ -402,7 +424,7 @@ export default function SharedArenaPage() {
                     {session.combatants.map((c, index) => {
                         const isCurrent = index === session.turnIndex;
                         const isPlayer = c.type === 'player';
-                        const isOwnHero = isPlayer && user && c.externalId; // Simulação: se tiver externalId é player
+                        const isOwnHero = user && c.ownerId === user.uid;
                         const showFullHP = isHost || isOwnHero;
 
                         return (
@@ -457,9 +479,9 @@ export default function SharedArenaPage() {
                                                 <div key={eff.id} className="group relative">
                                                     <span className="text-[9px] bg-purple-900/30 text-purple-200 px-1.5 py-0.5 rounded border border-purple-500/20 flex items-center gap-1">
                                                         ✨ {eff.name} ({eff.duration})
-                                                        {isOwnHero && (
+                                                        {(isOwnHero || isHost) && (
                                                             <button
-                                                                onClick={() => handlePlayerRemoveEffect(eff.id)}
+                                                                onClick={() => handleRemoveEffect(c.id, eff.id)}
                                                                 className="ml-1 text-red-400 hover:text-red-200 opacity-0 group-hover:opacity-100 transition-opacity"
                                                                 title="Encerrar Efeito"
                                                             >
