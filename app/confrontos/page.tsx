@@ -67,6 +67,7 @@ export default function ConfrontosPage() {
     const [selectedCombatantId, setSelectedCombatantId] = useState<string | null>(null);
     const [xpDonationActive, setXpDonationActive] = useState(false);
     const [xpSummary, setXpSummary] = useState({ totalXp: 0, xpPerPlayer: 0, playerCount: 0 });
+    const [fallenHeroesStatus, setFallenHeroesStatus] = useState<Record<string, 'dead' | 'revive'>>({});
 
     // --- Estados de Formulário ---
     const [availablePlayers, setAvailablePlayers] = useState<PlayerReference[]>([]);
@@ -138,21 +139,34 @@ export default function ConfrontosPage() {
         // Ordenar antes de começar o combate propriamente dito
         const sorted = [...combatants].sort((a, b) => b.initiative - a.initiative);
         setCombatants(sorted);
-        setCurrentTurnIndex(0);
+
+        // Encontrar o primeiro combatente vivo para começar
+        let firstAliveIndex = sorted.findIndex(c => c.hp > 0);
+        if (firstAliveIndex === -1) firstAliveIndex = 0;
+
+        setCurrentTurnIndex(firstAliveIndex);
         setPhase('combat');
     };
 
     const nextTurn = () => {
         if (combatants.length === 0) return;
 
-        let nextIndex = (currentTurnIndex + 1) % combatants.length;
+        let nextIndex = currentTurnIndex;
         let nextRound = round;
+        let attempts = 0;
 
-        if (nextIndex === 0) {
-            nextRound = round + 1;
-            setRound(nextRound);
-        }
+        // Procurar o próximo combatente vivo
+        do {
+            nextIndex = (nextIndex + 1) % combatants.length;
+            if (nextIndex === 0) {
+                nextRound++;
+            }
+            attempts++;
+            // Se dermos a volta e todos estiverem mortos, paramos
+            if (attempts >= combatants.length) break;
+        } while (combatants[nextIndex].hp <= 0);
 
+        setRound(nextRound);
         setCurrentTurnIndex(nextIndex);
 
         // Lógica de Efeitos: Diminuir duração ao INICIAR o turno do combatente
@@ -186,6 +200,14 @@ export default function ConfrontosPage() {
         const xpPerPlayer = playerCount > 0 ? Math.floor(totalXp / playerCount) : 0;
 
         setXpSummary({ totalXp, xpPerPlayer, playerCount });
+
+        // Inicializar status de heróis caídos
+        const casualties: Record<string, 'dead' | 'revive'> = {};
+        combatants.filter(c => c.type === 'player' && c.hp <= 0).forEach(p => {
+            casualties[p.id] = 'dead';
+        });
+        setFallenHeroesStatus(casualties);
+
         setIsXPModalOpen(true);
     };
 
@@ -197,9 +219,16 @@ export default function ConfrontosPage() {
                 try {
                     const promises = players.map(async (p) => {
                         const pRef = doc(db, 'personagens', p.externalId!);
-                        await updateDoc(pRef, {
+                        const updates: any = {
                             experience: increment(xpSummary.xpPerPlayer)
-                        });
+                        };
+
+                        // Lógica de Reviver se selecionado no modal
+                        if (fallenHeroesStatus[p.id] === 'revive') {
+                            updates.currentHp = 1;
+                        }
+
+                        await updateDoc(pRef, updates);
                     });
                     await Promise.all(promises);
                     alert(`Sucesso! ${xpSummary.xpPerPlayer} XP adicionados à ficha de cada jogador.`);
@@ -482,6 +511,7 @@ export default function ConfrontosPage() {
                                     key={c.id}
                                     className={`
                                 relative bg-rpg-panel border-2 rounded-lg p-1 transition-all
+                                ${c.hp <= 0 ? 'grayscale opacity-50 border-red-900/50 scale-[0.98]' : ''}
                                 ${phase === 'combat' && isCurrent
                                             ? 'border-rpg-gold shadow-glow-gold/40 translate-x-4'
                                             : 'border-rpg-gold/10 opacity-75'}
@@ -491,6 +521,14 @@ export default function ConfrontosPage() {
                                     {phase === 'combat' && isCurrent && (
                                         <div className="absolute -left-6 top-1/2 -translate-y-1/2 text-2xl animate-bounce-right">
                                             🔱
+                                        </div>
+                                    )}
+
+                                    {c.hp <= 0 && (
+                                        <div className="absolute inset-0 flex items-center justify-center z-10 pointer-events-none">
+                                            <div className="bg-red-950/80 border-2 border-red-500 text-red-100 p-2 px-6 rounded-lg font-cinzel font-bold text-xl rotate-12 shadow-2xl">
+                                                {c.type === 'player' ? '☠️ CAÍDO' : '☠️ MORTO'}
+                                            </div>
                                         </div>
                                     )}
 
@@ -959,13 +997,46 @@ export default function ConfrontosPage() {
                         <div className="max-h-32 overflow-y-auto space-y-1 custom-scrollbar">
                             {combatants.filter(c => c.type === 'player').map(p => (
                                 <div key={p.id} className="text-sm font-medieval flex justify-between">
-                                    <span>• {p.name}</span>
+                                    <span className={p.hp <= 0 ? 'line-through text-rpg-grey' : ''}>• {p.name} {p.hp <= 0 && '(Caído)'}</span>
                                     <span className="text-rpg-gold">+{xpSummary.xpPerPlayer} XP</span>
                                 </div>
                             ))}
                             {xpSummary.playerCount === 0 && <p className="text-xs text-rpg-grey italic text-center">Nenhum jogador na arena para receber XP.</p>}
                         </div>
                     </div>
+
+                    {/* BAIXAS NO COMBATE */}
+                    {combatants.some(c => c.type === 'player' && c.hp <= 0) && (
+                        <div className="bg-red-900/10 p-4 rounded border border-red-500/30">
+                            <h4 className="text-xs font-bold text-red-400 uppercase font-cinzel mb-3 tracking-widest flex items-center gap-2">
+                                <span>💀</span> Baixas no Combate
+                            </h4>
+                            <div className="space-y-3">
+                                {combatants.filter(c => c.type === 'player' && c.hp <= 0).map(p => (
+                                    <div key={p.id} className="flex flex-col sm:flex-row items-center justify-between bg-black/20 p-2 rounded gap-2">
+                                        <span className="font-medieval text-sm">{p.name}</span>
+                                        <div className="flex bg-rpg-slate rounded overflow-hidden border border-white/10 text-[10px] font-cinzel">
+                                            <button
+                                                type="button"
+                                                onClick={() => setFallenHeroesStatus(prev => ({ ...prev, [p.id]: 'dead' }))}
+                                                className={`px-3 py-1 transition-all ${fallenHeroesStatus[p.id] === 'dead' ? 'bg-red-600 text-white' : 'text-rpg-grey hover:bg-red-900/40'}`}
+                                            >
+                                                Declarar Óbito
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => setFallenHeroesStatus(prev => ({ ...prev, [p.id]: 'revive' }))}
+                                                className={`px-3 py-1 transition-all ${fallenHeroesStatus[p.id] === 'revive' ? 'bg-blue-600 text-white' : 'text-rpg-grey hover:bg-blue-900/40'}`}
+                                            >
+                                                Reviver (História)
+                                            </button>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                            <p className="text-[9px] text-rpg-grey mt-2 italic leading-tight">* "Reviver" colocará o personagem com 1 HP na ficha. "Óbito" manterá o status de 0 HP.</p>
+                        </div>
+                    )}
 
                     <div className="flex items-center gap-3 p-4 bg-rpg-gold/5 border border-rpg-gold/20 rounded">
                         <input
