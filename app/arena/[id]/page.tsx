@@ -66,6 +66,10 @@ export default function SharedArenaPage() {
     const [joinInitiative, setJoinInitiative] = useState<number>(0);
     const [isJoining, setIsJoining] = useState(false);
 
+    // Effect management for players
+    const [isEffectModalOpen, setIsEffectModalOpen] = useState(false);
+    const [cooldowns, setCooldowns] = useState<{ [key: string]: number }>({});
+
     useEffect(() => {
         if (!id) return;
 
@@ -175,6 +179,44 @@ export default function SharedArenaPage() {
             setMyCharacters(chars);
         } catch (err) {
             console.error("Erro ao carregar personagens:", err);
+        }
+    };
+
+    const handlePlayerAddEffect = async (effectName: string, duration: number) => {
+        if (!user || !session) return;
+
+        // Encontrar o combatente do jogador
+        const myCombatantIndex = session.combatants.findIndex(c => c.ownerId === user.uid);
+        if (myCombatantIndex === -1) return;
+
+        // Verificar cooldown (prevenir cliques duplos/spam)
+        if (cooldowns[effectName] && Date.now() < cooldowns[effectName]) return;
+
+        setIsJoining(true); // Reusando estado de loading
+        try {
+            const sessionRef = doc(db, 'arenas_online', id as string);
+            const updatedCombatants = [...session.combatants];
+            const myCombatant = { ...updatedCombatants[myCombatantIndex] };
+
+            const newEffect = {
+                id: Math.random().toString(36).substr(2, 9),
+                name: effectName,
+                duration: duration
+            };
+
+            myCombatant.statusEffects = [...myCombatant.statusEffects, newEffect];
+            updatedCombatants[myCombatantIndex] = myCombatant;
+
+            await updateDoc(sessionRef, {
+                combatants: updatedCombatants
+            });
+
+            setCooldowns(prev => ({ ...prev, [effectName]: Date.now() + 2000 }));
+            setIsEffectModalOpen(false);
+        } catch (err) {
+            console.error("Erro ao adicionar efeito:", err);
+        } finally {
+            setIsJoining(false);
         }
     };
 
@@ -307,6 +349,14 @@ export default function SharedArenaPage() {
                                                     👁️ Ficha
                                                 </Link>
                                             )}
+                                            {isOwnHero && (
+                                                <button
+                                                    onClick={() => setIsEffectModalOpen(true)}
+                                                    className="text-[8px] bg-purple-900/20 text-purple-400 hover:bg-purple-900/40 uppercase font-bold border border-purple-500/20 px-2 py-0.5 rounded ml-1"
+                                                >
+                                                    ✨ Ativar Efeito
+                                                </button>
+                                            )}
                                         </div>
 
                                         {/* Status Effects */}
@@ -403,6 +453,55 @@ export default function SharedArenaPage() {
                         >
                             {isJoining ? 'Entrando...' : 'Entrar na Arena'}
                         </button>
+                    </div>
+                </div>
+            </Modal>
+
+            {/* MODAL EFEITOS (Para Jogadores) */}
+            <Modal isOpen={isEffectModalOpen} onClose={() => setIsEffectModalOpen(false)} title="Ativar Magia / Habilidade">
+                <div className="space-y-4">
+                    <p className="text-xs text-rpg-grey italic mb-2">Escolha o efeito que você ativou na mesa real:</p>
+
+                    <div className="grid grid-cols-2 gap-2">
+                        {[
+                            { name: 'Bênção (Bless)', d: 10 },
+                            { name: 'Fúria (Rage)', d: 10 },
+                            { name: 'Invisível', d: 10 },
+                            { name: 'Escudo Fé', d: 10 },
+                            { name: 'Abençoado', d: 10 },
+                            { name: 'Concentração', d: 10 },
+                            { name: 'Velocidade', d: 10 },
+                            { name: 'Voar', d: 10 },
+                        ].map(eff => (
+                            <button
+                                key={eff.name}
+                                onClick={() => handlePlayerAddEffect(eff.name, eff.d)}
+                                className="bg-rpg-slate border border-white/5 p-2 rounded text-[10px] font-cinzel text-rpg-parchment hover:border-purple-500/50 hover:bg-purple-900/10 transition-all text-left flex items-center gap-2"
+                            >
+                                <span className="text-purple-400">✨</span> {eff.name}
+                            </button>
+                        ))}
+                    </div>
+
+                    <div className="border-t border-white/5 pt-4">
+                        <label className="block text-[10px] uppercase font-cinzel text-rpg-grey mb-2">Outro Efeito (Nome Personalizado)</label>
+                        <div className="flex gap-2">
+                            <input
+                                id="custom-effect-name"
+                                type="text"
+                                className="flex-grow bg-rpg-slate border border-white/10 p-2 rounded text-xs text-rpg-parchment outline-none focus:border-purple-500"
+                                placeholder="Ex: Pele de Árvore"
+                            />
+                            <button
+                                onClick={() => {
+                                    const input = document.getElementById('custom-effect-name') as HTMLInputElement;
+                                    if (input.value) handlePlayerAddEffect(input.value, 10);
+                                }}
+                                className="bg-purple-700 hover:bg-purple-600 text-white px-4 py-2 rounded text-[10px] font-bold uppercase transition-all"
+                            >
+                                Adicionar
+                            </button>
+                        </div>
                     </div>
                 </div>
             </Modal>
