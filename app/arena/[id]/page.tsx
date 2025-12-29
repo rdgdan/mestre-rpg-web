@@ -220,6 +220,31 @@ export default function SharedArenaPage() {
         }
     };
 
+    const handlePlayerRemoveEffect = async (effectId: string) => {
+        if (!user || !session) return;
+
+        const myCombatantIndex = session.combatants.findIndex(c => c.ownerId === user.uid);
+        if (myCombatantIndex === -1) return;
+
+        setIsJoining(true);
+        try {
+            const sessionRef = doc(db, 'arenas_online', id as string);
+            const updatedCombatants = [...session.combatants];
+            const myCombatant = { ...updatedCombatants[myCombatantIndex] };
+
+            myCombatant.statusEffects = myCombatant.statusEffects.filter(e => e.id !== effectId);
+            updatedCombatants[myCombatantIndex] = myCombatant;
+
+            await updateDoc(sessionRef, {
+                combatants: updatedCombatants
+            });
+        } catch (err) {
+            console.error("Erro ao remover efeito:", err);
+        } finally {
+            setIsJoining(false);
+        }
+    };
+
     if (loading) {
         return (
             <div className="min-h-screen bg-rpg-dark flex items-center justify-center font-cinzel text-rpg-gold animate-pulse">
@@ -359,12 +384,22 @@ export default function SharedArenaPage() {
                                             )}
                                         </div>
 
-                                        {/* Status Effects */}
                                         <div className="flex flex-wrap gap-1">
                                             {c.statusEffects.map(eff => (
-                                                <span key={eff.id} className="text-[9px] bg-purple-900/30 text-purple-200 px-1.5 rounded border border-purple-500/20">
-                                                    ✨ {eff.name} ({eff.duration})
-                                                </span>
+                                                <div key={eff.id} className="group relative">
+                                                    <span className="text-[9px] bg-purple-900/30 text-purple-200 px-1.5 py-0.5 rounded border border-purple-500/20 flex items-center gap-1">
+                                                        ✨ {eff.name} ({eff.duration})
+                                                        {isOwnHero && (
+                                                            <button
+                                                                onClick={() => handlePlayerRemoveEffect(eff.id)}
+                                                                className="ml-1 text-red-400 hover:text-red-200 opacity-0 group-hover:opacity-100 transition-opacity"
+                                                                title="Encerrar Efeito"
+                                                            >
+                                                                ✕
+                                                            </button>
+                                                        )}
+                                                    </span>
+                                                </div>
                                             ))}
                                         </div>
                                     </div>
