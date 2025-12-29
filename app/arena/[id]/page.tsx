@@ -95,30 +95,48 @@ export default function SharedArenaPage() {
 
         setIsJoining(true);
         try {
-            const newCombatant: Combatant = {
-                id: Math.random().toString(36).substr(2, 9),
-                externalId: char.id,
-                name: char.name,
-                type: 'player',
-                hp: char.hp,
-                maxHp: char.hp,
-                ac: 10,
-                cr: `Lvl ${char.level}`,
-                xp: 0,
-                initiative: joinInitiative,
-                statusEffects: [],
-                class: char.class,
-                level: char.level,
-                ownerId: user.uid
-            };
-
             const sessionRef = doc(db, 'arenas_online', id as string);
-            const updatedCombatants = [...session.combatants, newCombatant];
+            let updatedCombatants = [...session.combatants];
 
-            // Se já estiver em combate, reordenar a iniciativa no banco
-            if (session.phase === 'combat') {
-                updatedCombatants.sort((a, b) => b.initiative - a.initiative);
+            // Verifica se o personagem já existe na arena (pode ter sido adicionado pelo mestre como placeholder)
+            const existingIndex = updatedCombatants.findIndex(c => c.externalId === char.id);
+
+            if (existingIndex > -1) {
+                // Atualiza o existente (Lógica de "Assumir Slot")
+                updatedCombatants[existingIndex] = {
+                    ...updatedCombatants[existingIndex],
+                    name: char.name,
+                    hp: char.hp,
+                    maxHp: char.hp,
+                    class: char.class,
+                    level: char.level,
+                    cr: `Lvl ${char.level}`,
+                    initiative: joinInitiative,
+                    ownerId: user.uid
+                };
+            } else {
+                // Adiciona novo caso não exista
+                const newCombatant: Combatant = {
+                    id: Math.random().toString(36).substr(2, 9),
+                    externalId: char.id,
+                    name: char.name,
+                    type: 'player',
+                    hp: char.hp,
+                    maxHp: char.hp,
+                    ac: 10,
+                    cr: `Lvl ${char.level}`,
+                    xp: 0,
+                    initiative: joinInitiative,
+                    statusEffects: [],
+                    class: char.class,
+                    level: char.level,
+                    ownerId: user.uid
+                };
+                updatedCombatants.push(newCombatant);
             }
+
+            // Reordenar a iniciativa no banco
+            updatedCombatants.sort((a, b) => b.initiative - a.initiative);
 
             await updateDoc(sessionRef, {
                 combatants: updatedCombatants
