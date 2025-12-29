@@ -1,0 +1,12 @@
+
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // A regra a seguir permite acesso de leitura e escrita a todos os documentos
+    // em seu banco de dados. Qualquer pessoa, autenticada ou não, pode
+    // ler, modificar ou deletar qualquer dado.
+    match /{document=**} {
+      allow read, write: if true;
+    }
+  }
+}

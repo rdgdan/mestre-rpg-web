@@ -1,0 +1,1482 @@
+{
+  "e": [
+    {
+      "d": "8oj93cnh2snjfng82lpa0utn52",
+      "c": true,
+      "a": "STRENGTH",
+      "uuid": "r34gnmg818qtr10sqnnfd6nscc",
+      "b": 16
+    },
+    {
+      "d": "8oj93cnh2snjfng82lpa0utn52",
+      "c": false,
+      "a": "DEXTERITY",
+      "uuid": "t8maejq72dohcqc1dq1bsukh7t",
+      "b": 13
+    },
+    {
+      "d": "8oj93cnh2snjfng82lpa0utn52",
+      "c": true,
+      "a": "CONSTITUTION",
+      "uuid": "85knug6d5hcterdgalmn5a9gkg",
+      "b": 16
+    },
+    {
+      "d": "8oj93cnh2snjfng82lpa0utn52",
+      "c": false,
+      "a": "INTELLIGENCE",
+      "uuid": "vfs7tg9pp1m48v9eejgab38g1e",
+      "b": 12
+    },
+    {
+      "d": "8oj93cnh2snjfng82lpa0utn52",
+      "c": false,
+      "a": "WISDOM",
+      "uuid": "ek4nc2un553h46g6an7d2260je",
+      "b": 10
+    },
+    {
+      "d": "8oj93cnh2snjfng82lpa0utn52",
+      "c": false,
+      "a": "CHARISMA",
+      "uuid": "qjdmubsf5rhj4c62sb5drf0jor",
+      "b": 8
+    }
+  ],
+  "b": [
+    {
+      "d": false,
+      "c": "É a tendência das criaturas que seguem seus caprichos, mantendo sua liberdade pessoal acima de tudo. Muitos bárbaros e ladinos, e alguns bardos, são caóticos e neutros.",
+      "a": "pt",
+      "b": "Caótico neutro",
+      "uuid": "90039257C703218B199C446AC4EBA238"
+    }
+  ],
+  "k": [
+    {
+      "b": {
+        "b": false,
+        "a": "pt",
+        "c": "Armaduras Leves",
+        "d": true,
+        "uuid": "BE4BA4A3D10E126169DDF93AF63BA44D"
+      },
+      "a": {
+        "b": "BE4BA4A3D10E126169DDF93AF63BA44D",
+        "a": "8oj93cnh2snjfng82lpa0utn52",
+        "c": "",
+        "uuid": "qm5rb2c376p6jf6nravjk0i68h"
+      }
+    },
+    {
+      "b": {
+        "b": false,
+        "a": "pt",
+        "c": "Armaduras Médias",
+        "d": true,
+        "uuid": "0ECD716CCCEB51D597441611B9248433"
+      },
+      "a": {
+        "b": "0ECD716CCCEB51D597441611B9248433",
+        "a": "8oj93cnh2snjfng82lpa0utn52",
+        "c": "",
+        "uuid": "s707lim8chkc9kp7t6cl95hthv"
+      }
+    },
+    {
+      "b": {
+        "b": false,
+        "a": "pt",
+        "c": "Escudos",
+        "d": true,
+        "uuid": "9FA7FAAAA6B386EADC25C52A85F8BB22"
+      },
+      "a": {
+        "b": "9FA7FAAAA6B386EADC25C52A85F8BB22",
+        "a": "8oj93cnh2snjfng82lpa0utn52",
+        "c": "",
+        "uuid": "vldfeq44ff9k4uu76gc82gvg12"
+      }
+    }
+  ],
+  "m": [
+    {
+      "a": {
+        "b": "8oj93cnh2snjfng82lpa0utn52",
+        "a": "1333100754F1DB0C4592FE213C53D6F1",
+        "c": "",
+        "uuid": "mmmskpqhmbinfoiohb0ou8f9c9"
+      },
+      "b": {
+        "b": "A5E89D3735FE621E3F3B4F943079755A",
+        "c": false,
+        "e": "Dados de Vida: 1d12 por nível bárbaro\nPontos de Vida no 1° Nível: 12 + seu modificador de Constituição\nPontos de Vida nos Níveis Seguintes: 1d12 (ou 7) + seu modificador de Constituição por nível de bárbaro após o 1°",
+        "a": "pt",
+        "d": "Pontos de Vida",
+        "f": true,
+        "uuid": "1333100754F1DB0C4592FE213C53D6F1"
+      }
+    },
+    {
+      "a": {
+        "b": "8oj93cnh2snjfng82lpa0utn52",
+        "a": "4388B713B2B5B5D10E56A97D50F5155B",
+        "c": "",
+        "uuid": "90va94stteug14q82o7hqpu2aa"
+      },
+      "b": {
+        "b": "A5E89D3735FE621E3F3B4F943079755A",
+        "c": false,
+        "e": "Armaduras: Armaduras leves, armaduras médias e escudos\nArmas: Armas simples, armas marciais\nFerramentas: Nenhuma\nTestes de Resistência: Força, Constituição\nPerícias: Escolha duas dentre Adestrar Animais, Atletismo, Intimidação, Natureza, Percepção e Sobrevivência",
+        "a": "pt",
+        "d": "Proficiências",
+        "f": true,
+        "uuid": "4388B713B2B5B5D10E56A97D50F5155B"
+      }
+    },
+    {
+      "a": {
+        "b": "8oj93cnh2snjfng82lpa0utn52",
+        "a": "B3788F233A96146D61D07F064B696858",
+        "c": "",
+        "uuid": "oun968nodb7bsb9dcm547mg677"
+      },
+      "b": {
+        "b": "A5E89D3735FE621E3F3B4F943079755A",
+        "c": false,
+        "e": "Você começa com o seguinte equipamento, além do equipamento concedido pelo seu antecedente:\n-(a) um machado grande ou (b) qualquer arma marcial corpo-a-corpo\n-(a) dois machados de mão ou (b) qualquer arma simples\n-Um pacote de aventureiro e quatro azagaias",
+        "a": "pt",
+        "d": "Equipamento",
+        "f": true,
+        "uuid": "B3788F233A96146D61D07F064B696858"
+      }
+    },
+    {
+      "a": {
+        "b": "8oj93cnh2snjfng82lpa0utn52",
+        "a": "E850125C4834A64C8C365C524BD57663",
+        "c": "",
+        "uuid": "s565fan98udbai3mejcf51rqqe"
+      },
+      "b": {
+        "b": "A5E89D3735FE621E3F3B4F943079755A",
+        "c": false,
+        "e": "Em batalha, você luta com uma ferocidade primitiva. No seu turno, você pode entrar em fúria com uma ação bônus.\nEnquanto estiver em fúria, você recebe os seguintes benefícios se você não estiver vestindo uma armadura pesada:\nVocê tem vantagem em testes de Força e testes de resistência de Força\nQuando você desferir um ataque com arma corpo-a-corpo usando Força, você recebe um bônus nas jogadas de dano que aumenta à medida que você adquire níveis de bárbaro, como mostrado na coluna Dano de Fúria na tabela O Bárbaro.\nVocê possui resistência contra dano de concussão, cortante e perfurante.\nSe você for capaz de conjurar magias, você não poderá conjurá-las ou se concentrar nelas enquanto estiver em fúria.\nSua fúria dura por 1 minuto. Ela termina prematuramente se você cair inconsciente ou se seu turno acabar e você não tiver atacado nenhuma criatura hostil desde seu último turno ou tiver sofrido dano nesse período. Você também pode terminar sua fúria no seu turno com uma ação bônus.\nQuando você tiver usado a quantidade de fúrias mostrada para o seu nível de bárbaro na coluna Fúrias da tabela O Bárbaro, você precisará terminar um descanso longo antes de poder entrar em fúria novamente.",
+        "a": "pt",
+        "d": "Fúria",
+        "f": true,
+        "uuid": "E850125C4834A64C8C365C524BD57663"
+      }
+    },
+    {
+      "a": {
+        "b": "8oj93cnh2snjfng82lpa0utn52",
+        "a": "E22A2E4F76973A4F3526099F4DFADE8C",
+        "c": "",
+        "uuid": "etlgrjgvpb99abnjfm01u5bpf1"
+      },
+      "b": {
+        "b": "A5E89D3735FE621E3F3B4F943079755A",
+        "c": false,
+        "e": "Quando você não estiver vestindo qualquer armadura, sua Classe de Armadura será 10 + seu modificador de Destreza + seu modificador de Constituição. Você pode usar um escudo e continuar a receber esse benefício.",
+        "a": "pt",
+        "d": "Defesa sem armadura",
+        "f": true,
+        "uuid": "E22A2E4F76973A4F3526099F4DFADE8C"
+      }
+    },
+    {
+      "a": {
+        "b": "8oj93cnh2snjfng82lpa0utn52",
+        "a": "68827364D718216205F896F57C76EE20",
+        "c": "",
+        "uuid": "r8m4rnlc2on5dchvsu24j54cku"
+      },
+      "b": {
+        "b": "A5E89D3735FE621E3F3B4F943079755A",
+        "c": false,
+        "e": "A partir do 2° nível, você pode desistir de toda preocupação com sua defesa para atacar com um desespero feroz. Quando você fizer o seu primeiro ataque no turno, você pode decidir atacar descuidadamente. Fazer isso lhe concede vantagem nas jogadas de ataque com armas corpo-a-corpo usando Força durante seu turno, porém, as jogadas de ataques feitas contra você possuem vantagem até o início do seu próximo turno.",
+        "a": "pt",
+        "d": "Ataque descuidado",
+        "f": true,
+        "uuid": "68827364D718216205F896F57C76EE20"
+      }
+    },
+    {
+      "a": {
+        "b": "8oj93cnh2snjfng82lpa0utn52",
+        "a": "11027B382760923298FC15073A7E3796",
+        "c": "",
+        "uuid": "d4ohrfofhn3020h738gjao2q7h"
+      },
+      "b": {
+        "b": "A5E89D3735FE621E3F3B4F943079755A",
+        "c": false,
+        "e": "No 2° nível, você adquire um sentido sobrenatural de quando as coisas próximas não estão como deveriam, concedendo a você uma chance maior quando estiver evitando perigos.\nVocê possui vantagem em testes de resistência de Destreza contra efeitos que você possa ver, como armadilhas e magias. Para receber esse benefício você não pode estar cego, surdo ou incapacitado.",
+        "a": "pt",
+        "d": "Sentido de perigo",
+        "f": true,
+        "uuid": "11027B382760923298FC15073A7E3796"
+      }
+    },
+    {
+      "a": {
+        "b": "8oj93cnh2snjfng82lpa0utn52",
+        "a": "0AB5351AE059BF575D61A6EB1BF3E5E9",
+        "c": "",
+        "uuid": "calk4squqd6kclco4s85bv2u1g"
+      },
+      "b": {
+        "b": "A5E89D3735FE621E3F3B4F943079755A",
+        "c": false,
+        "e": "No 3° nível, você escolhe um caminho que molda a natureza da sua fúria. Escolha o Caminho do Furioso ou o Caminho do Guerreiro Totêmico, ambos detalhados no final da descrição de classe. Sua escolha lhe concederá características no 3° nível e novamente no 6°, 10° e 14° níveis.",
+        "a": "pt",
+        "d": "Caminho Primitivo",
+        "f": true,
+        "uuid": "0AB5351AE059BF575D61A6EB1BF3E5E9"
+      }
+    },
+    {
+      "a": {
+        "b": "8oj93cnh2snjfng82lpa0utn52",
+        "a": "l5v0hb4r8me4hoqgaeebcsm4so",
+        "c": "",
+        "uuid": "s46mu5gfmoafr2mv569alvfbso"
+      },
+      "b": {
+        "b": "A5E89D3735FE621E3F3B4F943079755A",
+        "c": true,
+        "e": "Conselheiro Espiritual - conjurar sentido bestial e falar com animais \n",
+        "a": "pt",
+        "d": "GUERREIRO TOTEMICO",
+        "f": true,
+        "uuid": "l5v0hb4r8me4hoqgaeebcsm4so"
+      }
+    },
+    {
+      "a": {
+        "b": "8oj93cnh2snjfng82lpa0utn52",
+        "a": "ugqhbn0q4ht8a16dmrqrd34rdo",
+        "c": "",
+        "uuid": "il845ihmo00v58nsr5vucnvvo8"
+      },
+      "b": {
+        "b": "A5E89D3735FE621E3F3B4F943079755A",
+        "c": true,
+        "e": "Urso - Resistência todos os danos exceto pisico",
+        "a": "pt",
+        "d": "Totem Espiritual",
+        "f": true,
+        "uuid": "ugqhbn0q4ht8a16dmrqrd34rdo"
+      }
+    }
+  ],
+  "d": [
+    {
+      "a": {
+        "b": "8oj93cnh2snjfng82lpa0utn52",
+        "a": "A5E89D3735FE621E3F3B4F943079755A",
+        "c": 1,
+        "uuid": "6ggrfnmrbj677p2fqhejal78q9"
+      },
+      "b": {
+        "d": false,
+        "c": "",
+        "e": 12,
+        "a": "pt",
+        "b": "Bárbaro",
+        "f": true,
+        "uuid": "A5E89D3735FE621E3F3B4F943079755A"
+      }
+    }
+  ],
+  "i": [
+    {
+      "a": {
+        "a": "8oj93cnh2snjfng82lpa0utn52",
+        "b": "412722876B8DC5D47D750239897B1712",
+        "f": "",
+        "e": false,
+        "d": true,
+        "c": 1,
+        "uuid": "vvch644fcri67a9pbop6nfb4ml"
+      },
+      "c": [
+        {
+          "d": "412722876B8DC5D47D750239897B1712",
+          "a": 12,
+          "b": false,
+          "uuid": "14374415B8CC733B099CF963E361CBE8"
+        }
+      ],
+      "b": {
+        "l": 0,
+        "j": 0,
+        "m": false,
+        "n": 0,
+        "c": 30,
+        "d": "GP",
+        "t": false,
+        "v": "",
+        "i": "WEAPON",
+        "a": "pt",
+        "u": "Machado Grande",
+        "x": "Pesada, duas mãos",
+        "w": "Pesada, duas mãos",
+        "g": 1,
+        "h": "UN",
+        "z": true,
+        "o": 0,
+        "b": "cortante",
+        "uuid": "412722876B8DC5D47D750239897B1712",
+        "r": 0,
+        "s": 0,
+        "q": "STRENGTH",
+        "y": "",
+        "f": 7.0,
+        "e": 3.5
+      }
+    },
+    {
+      "a": {
+        "a": "8oj93cnh2snjfng82lpa0utn52",
+        "b": "3F2405A75349AC1F7C78B989D2BB21CD",
+        "f": "1 Pode voltar ",
+        "e": false,
+        "d": true,
+        "c": 2,
+        "uuid": "2l5of4vjtdp6kgjdo4un6b5scu"
+      },
+      "c": [
+        {
+          "d": "3F2405A75349AC1F7C78B989D2BB21CD",
+          "a": 6,
+          "b": false,
+          "uuid": "3082A0784164D8C0B5B39E220D081867"
+        }
+      ],
+      "b": {
+        "l": 0,
+        "j": 0,
+        "m": false,
+        "n": 0,
+        "c": 5,
+        "d": "GP",
+        "t": false,
+        "v": "",
+        "i": "WEAPON",
+        "a": "pt",
+        "u": "Machadinha",
+        "x": "Leve, arremesso (distância 20/60)",
+        "w": "Leve, arremesso (distância 6/18)",
+        "g": 1,
+        "h": "UN",
+        "z": true,
+        "o": 0,
+        "b": "cortante",
+        "uuid": "3F2405A75349AC1F7C78B989D2BB21CD",
+        "r": 0,
+        "s": 0,
+        "q": "STRENGTH",
+        "y": "",
+        "f": 2.0,
+        "e": 1.0
+      }
+    },
+    {
+      "a": {
+        "a": "8oj93cnh2snjfng82lpa0utn52",
+        "b": "0BA0F1CDC2248BBC350D9D3D5E8D61ED",
+        "f": "",
+        "e": false,
+        "d": true,
+        "c": 4,
+        "uuid": "ugphie3ahteeol2eqnh8kf01pv"
+      },
+      "c": [
+        {
+          "d": "0BA0F1CDC2248BBC350D9D3D5E8D61ED",
+          "a": 6,
+          "b": false,
+          "uuid": "1434B14EBDA866518EBD1E2BB1A2FB2E"
+        }
+      ],
+      "b": {
+        "l": 0,
+        "j": 0,
+        "m": false,
+        "n": 0,
+        "c": 5,
+        "d": "SP",
+        "t": false,
+        "v": "",
+        "i": "WEAPON",
+        "a": "pt",
+        "u": "Azagaia",
+        "x": "Arremesso (distância 30/120)",
+        "w": "Arremesso (distância 9/36)",
+        "g": 1,
+        "h": "UN",
+        "z": true,
+        "o": 0,
+        "b": "perfurante",
+        "uuid": "0BA0F1CDC2248BBC350D9D3D5E8D61ED",
+        "r": 0,
+        "s": 0,
+        "q": "STRENGTH",
+        "y": "",
+        "f": 2.0,
+        "e": 1.0
+      }
+    },
+    {
+      "a": {
+        "a": "8oj93cnh2snjfng82lpa0utn52",
+        "b": "2899CE102C418966134437C2CB9C64FC",
+        "f": "",
+        "e": false,
+        "d": false,
+        "c": 1,
+        "uuid": "886lop03kknn1ohd0965rm88cn"
+      },
+      "c": [],
+      "b": {
+        "l": 0,
+        "j": 0,
+        "m": false,
+        "n": 0,
+        "c": 2,
+        "d": "GP",
+        "t": false,
+        "v": "",
+        "i": "NORMAL",
+        "a": "pt",
+        "u": "Mochila",
+        "x": "",
+        "w": "",
+        "g": 1,
+        "h": "UN",
+        "z": true,
+        "o": 0,
+        "b": "",
+        "uuid": "2899CE102C418966134437C2CB9C64FC",
+        "r": 0,
+        "s": 0,
+        "q": "STRENGTH",
+        "y": "",
+        "f": 5.0,
+        "e": 2.5
+      }
+    },
+    {
+      "a": {
+        "a": "8oj93cnh2snjfng82lpa0utn52",
+        "b": "6AA0738356CEB00AFF00DBB606D73F34",
+        "f": "",
+        "e": false,
+        "d": false,
+        "c": 9,
+        "uuid": "qbgm1jefl9fmeq0ood5ml5lrkt"
+      },
+      "c": [],
+      "b": {
+        "l": 0,
+        "j": 0,
+        "m": false,
+        "n": 0,
+        "c": 5,
+        "d": "EP",
+        "t": false,
+        "v": "Rações de viajem consistem em alimentos desidratados adequados para viagens longas, incluindo carne seca, frutas secas, bolachas e nozes.",
+        "i": "NORMAL",
+        "a": "pt",
+        "u": "Ração de viagem (para um dia)",
+        "x": "",
+        "w": "",
+        "g": 1,
+        "h": "UN",
+        "z": true,
+        "o": 0,
+        "b": "",
+        "uuid": "6AA0738356CEB00AFF00DBB606D73F34",
+        "r": 0,
+        "s": 0,
+        "q": "STRENGTH",
+        "y": "",
+        "f": 2.0,
+        "e": 1.0
+      }
+    },
+    {
+      "a": {
+        "a": "8oj93cnh2snjfng82lpa0utn52",
+        "b": "47CF4665BA0DB9B2A244971FD8228155",
+        "f": "",
+        "e": false,
+        "d": false,
+        "c": 1,
+        "uuid": "q2niefefqevc53eec0sda5o4ts"
+      },
+      "c": [],
+      "b": {
+        "l": 0,
+        "j": 0,
+        "m": false,
+        "n": 0,
+        "c": 2,
+        "d": "EP",
+        "t": false,
+        "v": "Usar um pé de cabra concede vantagem nos testes de Força onde uma alavanca possa ser aplicada.",
+        "i": "NORMAL",
+        "a": "pt",
+        "u": "Pé de cabra",
+        "x": "",
+        "w": "",
+        "g": 1,
+        "h": "UN",
+        "z": true,
+        "o": 0,
+        "b": "",
+        "uuid": "47CF4665BA0DB9B2A244971FD8228155",
+        "r": 0,
+        "s": 0,
+        "q": "STRENGTH",
+        "y": "",
+        "f": 5.0,
+        "e": 2.5
+      }
+    },
+    {
+      "a": {
+        "a": "8oj93cnh2snjfng82lpa0utn52",
+        "b": "A05C2046DA0B23A83D7CA8A27EFD5370",
+        "f": "",
+        "e": false,
+        "d": false,
+        "c": 1,
+        "uuid": "srcqv4j30ch5408tpuush307k6"
+      },
+      "c": [],
+      "b": {
+        "l": 0,
+        "j": 0,
+        "m": false,
+        "n": 0,
+        "c": 1,
+        "d": "GP",
+        "t": false,
+        "v": "",
+        "i": "NORMAL",
+        "a": "pt",
+        "u": "Martelo",
+        "x": "",
+        "w": "",
+        "g": 1,
+        "h": "UN",
+        "z": true,
+        "o": 0,
+        "b": "",
+        "uuid": "A05C2046DA0B23A83D7CA8A27EFD5370",
+        "r": 0,
+        "s": 0,
+        "q": "STRENGTH",
+        "y": "",
+        "f": 3.0,
+        "e": 1.5
+      }
+    },
+    {
+      "a": {
+        "a": "8oj93cnh2snjfng82lpa0utn52",
+        "b": "BADC0702665B1113AABB8E4B781E5922",
+        "f": "",
+        "e": false,
+        "d": false,
+        "c": 10,
+        "uuid": "7u4jtcpme6pt94vs7qt1jb4f2a"
+      },
+      "c": [],
+      "b": {
+        "l": 0,
+        "j": 0,
+        "m": false,
+        "n": 0,
+        "c": 5,
+        "d": "SP",
+        "t": false,
+        "v": "",
+        "i": "NORMAL",
+        "a": "pt",
+        "u": "Píton",
+        "x": "",
+        "w": "",
+        "g": 1,
+        "h": "UN",
+        "z": true,
+        "o": 0,
+        "b": "",
+        "uuid": "BADC0702665B1113AABB8E4B781E5922",
+        "r": 0,
+        "s": 0,
+        "q": "STRENGTH",
+        "y": "",
+        "f": 0.0,
+        "e": 0.0
+      }
+    },
+    {
+      "a": {
+        "a": "8oj93cnh2snjfng82lpa0utn52",
+        "b": "6542FE0AABDE9D5F83B0862DBA626119",
+        "f": "",
+        "e": false,
+        "d": false,
+        "c": 1,
+        "uuid": "4pljh0hlu11lqcied61938a759"
+      },
+      "c": [],
+      "b": {
+        "l": 0,
+        "j": 0,
+        "m": false,
+        "n": 0,
+        "c": 5,
+        "d": "SP",
+        "t": false,
+        "v": "Esse pequeno recipiente detém uma pederneira, isqueiro e um pavio (um pano geralmente seco embebido em óleo) usado para acender uma fogueira. Usá-lo para acender uma tocha – ou qualquer outra coisa exposta a um combustível abundante – leva uma ação. Acender qualquer outro fogo leva 1 minuto",
+        "i": "NORMAL",
+        "a": "pt",
+        "u": "Caixa de Fogo",
+        "x": "",
+        "w": "",
+        "g": 1,
+        "h": "UN",
+        "z": true,
+        "o": 0,
+        "b": "",
+        "uuid": "6542FE0AABDE9D5F83B0862DBA626119",
+        "r": 0,
+        "s": 0,
+        "q": "STRENGTH",
+        "y": "",
+        "f": 1.0,
+        "e": 0.5
+      }
+    },
+    {
+      "a": {
+        "a": "8oj93cnh2snjfng82lpa0utn52",
+        "b": "D25E493F3C767CCDB0DB90A153F95C40",
+        "f": "",
+        "e": false,
+        "d": false,
+        "c": 1,
+        "uuid": "bp2urech5k25f193flro7raqfu"
+      },
+      "c": [],
+      "b": {
+        "l": 0,
+        "j": 0,
+        "m": false,
+        "n": 0,
+        "c": 2,
+        "d": "SP",
+        "t": false,
+        "v": "",
+        "i": "NORMAL",
+        "a": "pt",
+        "u": "Cantil",
+        "x": "",
+        "w": "",
+        "g": 1,
+        "h": "UN",
+        "z": true,
+        "o": 0,
+        "b": "",
+        "uuid": "D25E493F3C767CCDB0DB90A153F95C40",
+        "r": 0,
+        "s": 0,
+        "q": "STRENGTH",
+        "y": "",
+        "f": 5.0,
+        "e": 2.5
+      }
+    },
+    {
+      "a": {
+        "a": "8oj93cnh2snjfng82lpa0utn52",
+        "b": "BD51BEFD19CED9F90F78610341BC0884",
+        "f": "",
+        "e": false,
+        "d": false,
+        "c": 10,
+        "uuid": "1imnc1u1an4l0c04527vo8tdbe"
+      },
+      "c": [],
+      "b": {
+        "l": 0,
+        "j": 0,
+        "m": false,
+        "n": 0,
+        "c": 1,
+        "d": "CP",
+        "t": false,
+        "v": "",
+        "i": "NORMAL",
+        "a": "pt",
+        "u": "Tocha",
+        "x": "",
+        "w": "",
+        "g": 1,
+        "h": "UN",
+        "z": true,
+        "o": 0,
+        "b": "",
+        "uuid": "BD51BEFD19CED9F90F78610341BC0884",
+        "r": 0,
+        "s": 0,
+        "q": "STRENGTH",
+        "y": "",
+        "f": 1.0,
+        "e": 0.5
+      }
+    },
+    {
+      "a": {
+        "a": "8oj93cnh2snjfng82lpa0utn52",
+        "b": "F36AA3D28A9B77E1967F5D6D8BC11641",
+        "f": "",
+        "e": false,
+        "d": true,
+        "c": 1,
+        "uuid": "l9qd8huog5d9j9hhtm7ln4lf6h"
+      },
+      "c": [
+        {
+          "d": "F36AA3D28A9B77E1967F5D6D8BC11641",
+          "a": 6,
+          "b": false,
+          "uuid": "786731EDC247EA872EFD0E2975EA50BE"
+        }
+      ],
+      "b": {
+        "l": 0,
+        "j": 0,
+        "m": false,
+        "n": 0,
+        "c": 25,
+        "d": "GP",
+        "t": false,
+        "v": "",
+        "i": "WEAPON",
+        "a": "pt",
+        "u": "Cimitarra",
+        "x": "Acuidade, leve",
+        "w": "Acuidade, leve",
+        "g": 1,
+        "h": "UN",
+        "z": true,
+        "o": 0,
+        "b": "cortante",
+        "uuid": "F36AA3D28A9B77E1967F5D6D8BC11641",
+        "r": 0,
+        "s": 0,
+        "q": "DEXORSTR",
+        "y": "",
+        "f": 3.0,
+        "e": 1.5
+      }
+    },
+    {
+      "a": {
+        "a": "8oj93cnh2snjfng82lpa0utn52",
+        "b": "D87FB7AC26BA171031B2EA0CF92EFCB2",
+        "f": "",
+        "e": false,
+        "d": true,
+        "c": 1,
+        "uuid": "natt3nqk3hs2evhuhde03irdgg"
+      },
+      "c": [
+        {
+          "d": "D87FB7AC26BA171031B2EA0CF92EFCB2",
+          "a": 4,
+          "b": false,
+          "uuid": "CB07726D5DA4601FFB5C037EB2C58474"
+        }
+      ],
+      "b": {
+        "l": 0,
+        "j": 0,
+        "m": false,
+        "n": 0,
+        "c": 2,
+        "d": "GP",
+        "t": false,
+        "v": "Tipo de espada curta, de perfuração, com duplo corte de têmpera forte, serrada ou compacta",
+        "i": "WEAPON",
+        "a": "pt",
+        "u": "Adaga",
+        "x": "Acuidade, leve, arremesso (distância 20/60)",
+        "w": "Acuidade, leve, arremesso (distância 6/18)",
+        "g": 1,
+        "h": "UN",
+        "z": true,
+        "o": 0,
+        "b": "perfurante",
+        "uuid": "D87FB7AC26BA171031B2EA0CF92EFCB2",
+        "r": 0,
+        "s": 0,
+        "q": "DEXORSTR",
+        "y": "",
+        "f": 1.0,
+        "e": 0.5
+      }
+    },
+    {
+      "a": {
+        "a": "8oj93cnh2snjfng82lpa0utn52",
+        "b": "l6o807th74j5ods3d4jd1e8lit",
+        "f": "",
+        "e": false,
+        "d": false,
+        "c": 1,
+        "uuid": "70v5t5cc671cuk6rgvold2b6cn"
+      },
+      "c": [],
+      "b": {
+        "l": 0,
+        "j": 0,
+        "m": false,
+        "n": 0,
+        "c": 300,
+        "d": "GP",
+        "t": true,
+        "v": "",
+        "i": "NORMAL",
+        "a": "pt",
+        "u": "CAPA DE RESPIRAR NA ÁGUA ",
+        "x": "",
+        "w": "",
+        "g": 1,
+        "h": "UN",
+        "z": true,
+        "o": 0,
+        "b": "",
+        "uuid": "l6o807th74j5ods3d4jd1e8lit",
+        "r": 0,
+        "s": 0,
+        "q": "STRENGTH",
+        "y": "",
+        "f": 0.0,
+        "e": 1.0
+      }
+    },
+    {
+      "a": {
+        "a": "8oj93cnh2snjfng82lpa0utn52",
+        "b": "tb2uugupa6p86uf5lradku1a0a",
+        "f": "",
+        "e": false,
+        "d": false,
+        "c": 1,
+        "uuid": "7bpdcsvt3brm74jn6gkceo4fca"
+      },
+      "c": [],
+      "b": {
+        "l": 0,
+        "j": 0,
+        "m": false,
+        "n": 0,
+        "c": 300,
+        "d": "GP",
+        "t": true,
+        "v": "",
+        "i": "NORMAL",
+        "a": "pt",
+        "u": "MOCHILA DE CARGA",
+        "x": "",
+        "w": "",
+        "g": 1,
+        "h": "UN",
+        "z": true,
+        "o": 0,
+        "b": "",
+        "uuid": "tb2uugupa6p86uf5lradku1a0a",
+        "r": 0,
+        "s": 0,
+        "q": "STRENGTH",
+        "y": "",
+        "f": 0.0,
+        "e": 1.0
+      }
+    }
+  ],
+  "o": [],
+  "a": [
+    {
+      "B": "",
+      "x": 0.0,
+      "w": 0.0,
+      "t": 0,
+      "c": "90039257C703218B199C446AC4EBA238",
+      "8": "",
+      "g": 3,
+      "3": "Forasteiro ",
+      "C": "A chuva caía fina sobre a estrada quando Kaiser encontrou Bob.\n\nCorpos espalhados, mortos com precisão, sem sinais de combate prolongado. Bob estava ali, imóvel, limpando a lâmina na lama como se aquilo fosse parte da rotina. Não havia pressa. Nem emoção.\n\nNaquela noite, algo saiu da floresta. Não deixou pegadas, não fez som. Atacou rápido. Kaiser lutou para se manter de pé — e então a escuridão recuou. Quando percebeu, Bob já estava guardando a arma, intacto, como se o perigo nunca tivesse existido.\n\nNenhuma explicação foi dada. Nenhuma pergunta respondida.\n\nAo amanhecer, seguiram pela mesma estrada.\n\nDesde então, viajam juntos. Kaiser enfrenta o que pode ser visto.\nBob elimina o que não deveria existir.\n\nE onde Bob passa, o silêncio fica.",
+      "6": "",
+      "o": 6,
+      "n": 0.0,
+      "q": 0,
+      "d": 1100,
+      "z": "",
+      "9": "",
+      "7": "",
+      "r": 309,
+      "1": "",
+      "u": 0.0,
+      "l": 35,
+      "k": 0,
+      "j": 35,
+      "5": "",
+      "E": "8oj93cnh2snjfng82lpa0utn52alliesOrganizations.png",
+      "D": "8oj93cnh2snjfng82lpa0utn52ic_character.png",
+      "h": 0,
+      "e": false,
+      "y": 7.5,
+      "a": "Bob",
+      "4": "",
+      "s": 0,
+      "f": 2,
+      "b": "B1FE7F0F4A37B7F5EE79CD46968D1917",
+      "p": 9,
+      "0": "",
+      "i": 9.0,
+      "m": 7.5,
+      "A": "",
+      "id": 0,
+      "uuid": "8oj93cnh2snjfng82lpa0utn52",
+      "v": 0.0
+    }
+  ],
+  "q": [],
+  "n": [
+    {
+      "a": {
+        "b": "8oj93cnh2snjfng82lpa0utn52",
+        "c": "",
+        "a": "E530682C86C2467B7BC4A2702FD2156D",
+        "uuid": "u1r0p1l1goub1nrm8091nfq0e5"
+      },
+      "b": {
+        "c": false,
+        "e": "Todos os seus valores de habilidade aumentam em 1.",
+        "a": "pt",
+        "d": "Aumento no Valor de Habilidade",
+        "b": "B1FE7F0F4A37B7F5EE79CD46968D1917",
+        "f": true,
+        "uuid": "E530682C86C2467B7BC4A2702FD2156D"
+      }
+    },
+    {
+      "a": {
+        "b": "8oj93cnh2snjfng82lpa0utn52",
+        "c": "",
+        "a": "1A35BE6B5A789B5A8CCBAD9DAF4D8E42",
+        "uuid": "8bbuja2fb72iog80lih3bd5cjj"
+      },
+      "b": {
+        "c": false,
+        "e": "Os humanos chegam à idade adulta no final da adolescência e vivem menos de um século.",
+        "a": "pt",
+        "d": "Idade",
+        "b": "B1FE7F0F4A37B7F5EE79CD46968D1917",
+        "f": true,
+        "uuid": "1A35BE6B5A789B5A8CCBAD9DAF4D8E42"
+      }
+    },
+    {
+      "a": {
+        "b": "8oj93cnh2snjfng82lpa0utn52",
+        "c": "",
+        "a": "B2001375E3C13884B46F45DCD060AD0D",
+        "uuid": "luu21tfi7gif2vrgo62ktfqufh"
+      },
+      "b": {
+        "c": false,
+        "e": "Os humanos não possuem inclinação a nenhuma tendência em especial. Os melhores e os piores são encontrados entre eles.",
+        "a": "pt",
+        "d": "Tendência",
+        "b": "B1FE7F0F4A37B7F5EE79CD46968D1917",
+        "f": true,
+        "uuid": "B2001375E3C13884B46F45DCD060AD0D"
+      }
+    },
+    {
+      "a": {
+        "b": "8oj93cnh2snjfng82lpa0utn52",
+        "c": "",
+        "a": "5F0F9E39AF7E511FB72A2A1D38EDAA63",
+        "uuid": "loesevfd8vgice3dqr1jrklde4"
+      },
+      "b": {
+        "c": false,
+        "e": "Os humanos variam muito em altura e peso, podem ter quase 1,50 metro ou mais de 1,80 metro. Independentemente da sua posição entre esses valores, o seu tamanho é Médio.",
+        "a": "pt",
+        "d": "Tamanho",
+        "b": "B1FE7F0F4A37B7F5EE79CD46968D1917",
+        "f": true,
+        "uuid": "5F0F9E39AF7E511FB72A2A1D38EDAA63"
+      }
+    },
+    {
+      "a": {
+        "b": "8oj93cnh2snjfng82lpa0utn52",
+        "c": "",
+        "a": "7FD02117AB38BBC453A4C3337CA2DBBA",
+        "uuid": "6au88dp0ihre3ikeoc6qitkmb1"
+      },
+      "b": {
+        "c": false,
+        "e": "Seu deslocamento base de caminhada é 9 metros.",
+        "a": "pt",
+        "d": "Deslocamento",
+        "b": "B1FE7F0F4A37B7F5EE79CD46968D1917",
+        "f": true,
+        "uuid": "7FD02117AB38BBC453A4C3337CA2DBBA"
+      }
+    },
+    {
+      "a": {
+        "b": "8oj93cnh2snjfng82lpa0utn52",
+        "c": "",
+        "a": "A46E47BE8CCB7AE50FB7B608B4AD0280",
+        "uuid": "kvpt8ijgbea1tr3fj50il0daf"
+      },
+      "b": {
+        "c": false,
+        "e": "Você pode falar, ler e escrever Comum e outro idioma adicional, à sua escolha. Os humanos normalmente aprendem os idiomas dos povos que convivem, incluindo dialetos obscuros. Eles gostam de rechear seu discurso com palavras emprestadas de outras línguas: xingamentos orcs, expressões musicais élficas, frases militares anãs e outros.",
+        "a": "pt",
+        "d": "Idiomas",
+        "b": "B1FE7F0F4A37B7F5EE79CD46968D1917",
+        "f": true,
+        "uuid": "A46E47BE8CCB7AE50FB7B608B4AD0280"
+      }
+    }
+  ],
+  "p": [
+    {
+      "a": {
+        "a": "8oj93cnh2snjfng82lpa0utn52",
+        "c": "",
+        "b": "53EF31A0D71C9A1D4849A23A8001A87C",
+        "uuid": "k2vle77860keg7m9t3ug45uf4c"
+      },
+      "b": {
+        "f": "Comum",
+        "b": false,
+        "d": "",
+        "a": "pt",
+        "c": "Comum",
+        "g": true,
+        "e": "Humanos",
+        "uuid": "53EF31A0D71C9A1D4849A23A8001A87C"
+      }
+    },
+    {
+      "a": {
+        "a": "8oj93cnh2snjfng82lpa0utn52",
+        "c": "",
+        "b": "7E47E0099B0DC5B64DF0D614D89997B3",
+        "uuid": "8r029l4bh0sqmoel6doh47gscg"
+      },
+      "b": {
+        "f": "Élfico",
+        "b": false,
+        "d": "O Élfico é um idioma fluido, com entonações sutis e gramática complexa. A literatura élfica é rica e diversa, e suas canções e poemas são famosos entre outras raças. Muitos bardos aprendem essa língua para que possam adicionar canções élficas ao seu repertório.",
+        "a": "pt",
+        "c": "Élfico",
+        "g": true,
+        "e": "Elfos",
+        "uuid": "7E47E0099B0DC5B64DF0D614D89997B3"
+      }
+    },
+    {
+      "a": {
+        "a": "8oj93cnh2snjfng82lpa0utn52",
+        "c": "",
+        "b": "725D943A24203D13B3315E5DF4F95D33",
+        "uuid": "8b5pqkn2p9ooqnsa07kbmguh8r"
+      },
+      "b": {
+        "f": "Anão",
+        "b": false,
+        "d": "O idioma Anão é repleto de consoantes duras e sons guturais, e essa característica influencia, como um sotaque, qualquer outro idioma que o anão falar.",
+        "a": "pt",
+        "c": "Anão",
+        "g": true,
+        "e": "Anões",
+        "uuid": "725D943A24203D13B3315E5DF4F95D33"
+      }
+    }
+  ],
+  "r": [],
+  "l": [],
+  "j": [
+    {
+      "a": {
+        "a": "8oj93cnh2snjfng82lpa0utn52",
+        "c": "",
+        "uuid": "1abku1laod2ej546rvhh25n6ub",
+        "b": "7B92E9B419144479363E0D083CB7C9A0"
+      },
+      "b": {
+        "b": false,
+        "a": "pt",
+        "c": "Armas Simples",
+        "d": true,
+        "uuid": "7B92E9B419144479363E0D083CB7C9A0"
+      }
+    },
+    {
+      "a": {
+        "a": "8oj93cnh2snjfng82lpa0utn52",
+        "c": "",
+        "uuid": "qfkvpldlrpfls4fjjcrkbvc4hl",
+        "b": "B63828925A0BC13449559E59327DD503"
+      },
+      "b": {
+        "b": false,
+        "a": "pt",
+        "c": "Armas Marciais",
+        "d": true,
+        "uuid": "B63828925A0BC13449559E59327DD503"
+      }
+    }
+  ],
+  "s": [],
+  "h": [
+    {
+      "c": "8oj93cnh2snjfng82lpa0utn52",
+      "b": false,
+      "a": 0,
+      "uuid": "1267nm4e1dis0ss2qe7c3q54r7"
+    },
+    {
+      "c": "8oj93cnh2snjfng82lpa0utn52",
+      "b": false,
+      "a": 1,
+      "uuid": "b1sg40nih9jegffm2msg4olakl"
+    },
+    {
+      "c": "8oj93cnh2snjfng82lpa0utn52",
+      "b": false,
+      "a": 2,
+      "uuid": "a7ppp3rcdrke035mqa6516k9fq"
+    },
+    {
+      "c": "8oj93cnh2snjfng82lpa0utn52",
+      "b": false,
+      "a": 3,
+      "uuid": "5ml9qpir4v1futln033vhf7295"
+    },
+    {
+      "c": "8oj93cnh2snjfng82lpa0utn52",
+      "b": false,
+      "a": 4,
+      "uuid": "bg4p6lp42t6qkhdef37ev11tk2"
+    },
+    {
+      "c": "8oj93cnh2snjfng82lpa0utn52",
+      "b": false,
+      "a": 5,
+      "uuid": "vphihqjnatltqqg5dp7vfj17as"
+    }
+  ],
+  "g": [],
+  "c": [
+    {
+      "d": false,
+      "c": "",
+      "g": 0.0,
+      "a": "pt",
+      "b": "Humano",
+      "h": true,
+      "f": 0.0,
+      "e": false,
+      "uuid": "B1FE7F0F4A37B7F5EE79CD46968D1917"
+    }
+  ],
+  "f": [
+    {
+      "a": {
+        "f": "r34gnmg818qtr10sqnnfd6nscc",
+        "e": "8oj93cnh2snjfng82lpa0utn52",
+        "b": true,
+        "d": false,
+        "c": false,
+        "a": "ATHLETICS",
+        "uuid": "6003s6ggr6v4ca5b4mfc2qv6ro"
+      }
+    },
+    {
+      "a": {
+        "f": "t8maejq72dohcqc1dq1bsukh7t",
+        "e": "8oj93cnh2snjfng82lpa0utn52",
+        "b": false,
+        "d": false,
+        "c": false,
+        "a": "ACROBATICS",
+        "uuid": "rvj11a31ori9bn4d7jm8k1j9js"
+      }
+    },
+    {
+      "a": {
+        "f": "t8maejq72dohcqc1dq1bsukh7t",
+        "e": "8oj93cnh2snjfng82lpa0utn52",
+        "b": false,
+        "d": false,
+        "c": false,
+        "a": "STEALTH",
+        "uuid": "u2j6ebttjeqf4neik2gmq5g6fu"
+      }
+    },
+    {
+      "a": {
+        "f": "t8maejq72dohcqc1dq1bsukh7t",
+        "e": "8oj93cnh2snjfng82lpa0utn52",
+        "b": false,
+        "d": false,
+        "c": false,
+        "a": "SLEIGHT_OF_HAND",
+        "uuid": "j2821jp43qkf5tre70e7ftr0tu"
+      }
+    },
+    {
+      "a": {
+        "f": "vfs7tg9pp1m48v9eejgab38g1e",
+        "e": "8oj93cnh2snjfng82lpa0utn52",
+        "b": false,
+        "d": false,
+        "c": false,
+        "a": "ARCANA",
+        "uuid": "sq5cc41kilokpi63k9ov4l79i3"
+      }
+    },
+    {
+      "a": {
+        "f": "vfs7tg9pp1m48v9eejgab38g1e",
+        "e": "8oj93cnh2snjfng82lpa0utn52",
+        "b": false,
+        "d": false,
+        "c": false,
+        "a": "HISTORY",
+        "uuid": "fn7k0letkma0jttg8pqkvf9g1f"
+      }
+    },
+    {
+      "a": {
+        "f": "vfs7tg9pp1m48v9eejgab38g1e",
+        "e": "8oj93cnh2snjfng82lpa0utn52",
+        "b": false,
+        "d": false,
+        "c": false,
+        "a": "INVESTIGATION",
+        "uuid": "pnh173bk5cpbsk3gt7mopgv8k5"
+      }
+    },
+    {
+      "a": {
+        "f": "vfs7tg9pp1m48v9eejgab38g1e",
+        "e": "8oj93cnh2snjfng82lpa0utn52",
+        "b": false,
+        "d": false,
+        "c": false,
+        "a": "NATURE",
+        "uuid": "31uukpukmj6oduquo18orovght"
+      }
+    },
+    {
+      "a": {
+        "f": "vfs7tg9pp1m48v9eejgab38g1e",
+        "e": "8oj93cnh2snjfng82lpa0utn52",
+        "b": false,
+        "d": false,
+        "c": false,
+        "a": "RELIGION",
+        "uuid": "3oclm8kvj6610v9hfq95svqnuu"
+      }
+    },
+    {
+      "a": {
+        "f": "ek4nc2un553h46g6an7d2260je",
+        "e": "8oj93cnh2snjfng82lpa0utn52",
+        "b": false,
+        "d": false,
+        "c": false,
+        "a": "INSIGHT",
+        "uuid": "85aa47lpfv63ecgcp9n7838pck"
+      }
+    },
+    {
+      "a": {
+        "f": "ek4nc2un553h46g6an7d2260je",
+        "e": "8oj93cnh2snjfng82lpa0utn52",
+        "b": false,
+        "d": false,
+        "c": false,
+        "a": "ANIMAL_HANDLING",
+        "uuid": "4is204e5p5hpue6t4523d4et25"
+      }
+    },
+    {
+      "a": {
+        "f": "ek4nc2un553h46g6an7d2260je",
+        "e": "8oj93cnh2snjfng82lpa0utn52",
+        "b": false,
+        "d": false,
+        "c": false,
+        "a": "MEDICINE",
+        "uuid": "bp1rqi1s6dbic4h6jjvqhirki1"
+      }
+    },
+    {
+      "a": {
+        "f": "ek4nc2un553h46g6an7d2260je",
+        "e": "8oj93cnh2snjfng82lpa0utn52",
+        "b": false,
+        "d": false,
+        "c": false,
+        "a": "PERCEPTION",
+        "uuid": "7oc1c1ce5bjn2uq411t2s2nnfd"
+      }
+    },
+    {
+      "a": {
+        "f": "ek4nc2un553h46g6an7d2260je",
+        "e": "8oj93cnh2snjfng82lpa0utn52",
+        "b": true,
+        "d": false,
+        "c": false,
+        "a": "SURVIVAL",
+        "uuid": "kl2ikgaohdk3n0jlv71jihmprm"
+      }
+    },
+    {
+      "a": {
+        "f": "qjdmubsf5rhj4c62sb5drf0jor",
+        "e": "8oj93cnh2snjfng82lpa0utn52",
+        "b": false,
+        "d": false,
+        "c": false,
+        "a": "PERFORMANCE",
+        "uuid": "c6up5dm99ev3kmgke3jfutpd36"
+      }
+    },
+    {
+      "a": {
+        "f": "qjdmubsf5rhj4c62sb5drf0jor",
+        "e": "8oj93cnh2snjfng82lpa0utn52",
+        "b": false,
+        "d": false,
+        "c": false,
+        "a": "DECEPTION",
+        "uuid": "s5q0vkkq3is1jp8kct466l0rj7"
+      }
+    },
+    {
+      "a": {
+        "f": "qjdmubsf5rhj4c62sb5drf0jor",
+        "e": "8oj93cnh2snjfng82lpa0utn52",
+        "b": false,
+        "d": false,
+        "c": false,
+        "a": "INTIMIDATION",
+        "uuid": "v7vt0he177jicq7amj3ti1tj5q"
+      }
+    },
+    {
+      "a": {
+        "f": "qjdmubsf5rhj4c62sb5drf0jor",
+        "e": "8oj93cnh2snjfng82lpa0utn52",
+        "b": false,
+        "d": false,
+        "c": false,
+        "a": "PERSUASION",
+        "uuid": "p4sksma59hcbt1ljkhnpohkh7j"
+      }
+    }
+  ],
+  "t": [
+    {
+      "c": 0,
+      "d": "8oj93cnh2snjfng82lpa0utn52",
+      "a": 0,
+      "b": 0,
+      "uuid": "b89k4eeq2la6qgvd4pttjefbpd"
+    },
+    {
+      "c": 0,
+      "d": "8oj93cnh2snjfng82lpa0utn52",
+      "a": 1,
+      "b": 0,
+      "uuid": "i5ddrgi68qdafki25eot5inu60"
+    },
+    {
+      "c": 0,
+      "d": "8oj93cnh2snjfng82lpa0utn52",
+      "a": 2,
+      "b": 0,
+      "uuid": "j7k775o6ng9r76c43k6cfhvamo"
+    },
+    {
+      "c": 0,
+      "d": "8oj93cnh2snjfng82lpa0utn52",
+      "a": 3,
+      "b": 0,
+      "uuid": "j4l19vh7aarisobo9ekqvaqa7i"
+    },
+    {
+      "c": 0,
+      "d": "8oj93cnh2snjfng82lpa0utn52",
+      "a": 4,
+      "b": 0,
+      "uuid": "af9pmgjtkf39kespdjs0as7smh"
+    },
+    {
+      "c": 0,
+      "d": "8oj93cnh2snjfng82lpa0utn52",
+      "a": 5,
+      "b": 0,
+      "uuid": "s96lr9o7mq3h266canguk5poin"
+    },
+    {
+      "c": 0,
+      "d": "8oj93cnh2snjfng82lpa0utn52",
+      "a": 6,
+      "b": 0,
+      "uuid": "g94g094avmnhvv6qp7a3t55rvl"
+    },
+    {
+      "c": 0,
+      "d": "8oj93cnh2snjfng82lpa0utn52",
+      "a": 7,
+      "b": 0,
+      "uuid": "v1hb1lu5t4a2u4a0f7sa40cue8"
+    },
+    {
+      "c": 0,
+      "d": "8oj93cnh2snjfng82lpa0utn52",
+      "a": 8,
+      "b": 0,
+      "uuid": "9v55nccjgvl1uhqqrfr42va00h"
+    },
+    {
+      "c": 0,
+      "d": "8oj93cnh2snjfng82lpa0utn52",
+      "a": 9,
+      "b": 0,
+      "uuid": "kcp29a74pkf8v9gbja0h08jho6"
+    }
+  ]
+}

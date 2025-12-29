@@ -1,0 +1,66 @@
+{
+  "name": "Lyra, a Sombra Rápida",
+  "race": "Halfling Pés Leves",
+  "class": "Ladino",
+  "level": 5,
+  "alignment": "Caótico e Bom",
+  "background": "Criminoso",
+  "attributes": {
+    "strength": 8,
+    "dexterity": 18,
+    "constitution": 14,
+    "intelligence": 12,
+    "wisdom": 10,
+    "charisma": 16
+  },
+  "skills": ["Acrobacia", "Furtividade", "Enganação", "Intuição", "Prestidigitação", "Persuasão"],
+  "savingThrows": ["Destreza", "Inteligência"],
+  "armorClass": 16,
+  "initiative": 4,
+  "speed": 7.5,
+  "hitPoints": {
+    "current": 38,
+    "max": 38,
+    "temporary": 0
+  },
+  "attacks": [
+    {
+      "name": "Rapieira",
+      "bonus": "+7",
+      "damage": "1d8+4 perfurante"
+    },
+    {
+      "name": "Adaga (Arremesso)",
+      "bonus": "+7",
+      "damage": "1d4+4 perfurante"
+    }
+  ],
+  "spells": [],
+  "equipment": [
+    "Rapieira",
+    "Couro Batido",
+    "Duas adagas",
+    "Ferramentas de Ladrão",
+    "Mochila com equipamento de assaltante"
+  ],
+  "features": [
+    {
+      "name": "Ataque Furtivo (3d6)",
+      "description": "Uma vez por turno, você pode causar 3d6 de dano extra a uma criatura que você atingir com um ataque."
+    },
+    {
+      "name": "Ação Ardilosa",
+      "description": "Você pode usar uma ação bônus para Disparada, Desengajar ou Esconder-se."
+    },
+    {
+      "name": "Esquiva Sobrenatural",
+      "description": "Você pode usar sua reação para reduzir pela metade o dano de um ataque que você possa ver."
+    }
+  ],
+  "personality": {
+    "traits": "Eu sou sempre calma, não importa a situação. Nunca levanto minha voz ou deixo minhas emoções me controlarem.",
+    "ideals": "Liberdade. Correntes foram feitas para serem quebradas, assim como aqueles que as forjam.",
+    "bonds": "Eu estou tentando pagar uma dívida antiga que devo a um benfeitor gentil.",
+    "flaws": "Quando vejo algo valioso, não consigo pensar em mais nada a não ser em roubá-lo."
+  }
+}
