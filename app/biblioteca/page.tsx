@@ -8,8 +8,9 @@ import { searchMonsters, getMonsterTypes, MonsterDataExtended } from '@/lib/mons
 import { dndWeapons } from '@/lib/items-data';
 import { db } from '@/lib/firebase';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { srdBook } from '@/lib/srd-book-data';
 
-type TabType = 'grimorio' | 'bestiario' | 'itens' | 'notas';
+type TabType = 'grimorio' | 'bestiario' | 'itens' | 'regras' | 'notas';
 
 // Componente Grimório
 function GrimorioTab({ searchQuery }: { searchQuery: string }) {
@@ -334,6 +335,47 @@ function ItensTab({ searchQuery }: { searchQuery: string }) {
     );
 }
 
+// Componente Regras (SRD)
+function RegrasTab({ searchQuery }: { searchQuery: string }) {
+    const [selectedChapter, setSelectedChapter] = useState(srdBook.chapters[0]);
+
+    const filteredChapters = srdBook.chapters.filter(chapter =>
+        chapter.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        chapter.content.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+
+    return (
+        <div>
+            <h2 className="text-2xl font-bold font-cinzel text-rpg-gold mb-4">📕 {srdBook.title}</h2>
+            <p className="text-rpg-grey mb-6">{srdBook.description}</p>
+
+            <div className="grid md:grid-cols-4 gap-4">
+                <div className="space-y-2">
+                    {filteredChapters.map(chapter => (
+                        <button
+                            key={chapter.id}
+                            onClick={() => setSelectedChapter(chapter)}
+                            className={`w-full text-left p-3 rounded transition-all ${selectedChapter.id === chapter.id
+                                    ? 'bg-rpg-gold text-rpg-dark font-bold'
+                                    : 'bg-rpg-slate text-rpg-parchment hover:bg-rpg-slate/80 border border-rpg-gold/10'
+                                }`}
+                        >
+                            {chapter.title}
+                        </button>
+                    ))}
+                </div>
+
+                <div className="md:col-span-3 bg-rpg-slate border border-rpg-gold/20 rounded p-6 max-h-[600px] overflow-y-auto">
+                    <div
+                        className="prose prose-invert max-w-none"
+                        dangerouslySetInnerHTML={{ __html: selectedChapter.content }}
+                    />
+                </div>
+            </div>
+        </div>
+    );
+}
+
 // Componente Anotações do Mestre
 function NotasTab() {
     const { user } = useAuth();
@@ -453,6 +495,7 @@ export default function BibliotecaPage() {
                         { id: 'grimorio' as TabType, label: '📖 Grimório', icon: '✨' },
                         { id: 'bestiario' as TabType, label: '🐉 Bestiário', icon: '⚔️' },
                         { id: 'itens' as TabType, label: '⚗️ Itens', icon: '💎' },
+                        { id: 'regras' as TabType, label: '📕 Regras', icon: '⚖️' },
                         { id: 'notas' as TabType, label: '📜 Anotações', icon: '🖋️' }
                     ].map(tab => (
                         <button
@@ -486,6 +529,8 @@ export default function BibliotecaPage() {
                     {activeTab === 'bestiario' && <BestiarioTab searchQuery={searchQuery} />}
 
                     {activeTab === 'itens' && <ItensTab searchQuery={searchQuery} />}
+
+                    {activeTab === 'regras' && <RegrasTab searchQuery={searchQuery} />}
 
                     {activeTab === 'notas' && <NotasTab />}
                 </div>
