@@ -69,6 +69,8 @@ export default function SharedArenaPage() {
     // Effect management for players
     const [isEffectModalOpen, setIsEffectModalOpen] = useState(false);
     const [cooldowns, setCooldowns] = useState<{ [key: string]: number }>({});
+    const [customEffName, setCustomEffName] = useState('');
+    const [customEffDur, setCustomEffDur] = useState(10);
 
     useEffect(() => {
         if (!id) return;
@@ -519,22 +521,37 @@ export default function SharedArenaPage() {
                     </div>
 
                     <div className="border-t border-white/5 pt-4">
-                        <label className="block text-[10px] uppercase font-cinzel text-rpg-grey mb-2">Outro Efeito (Nome Personalizado)</label>
-                        <div className="flex gap-2">
-                            <input
-                                id="custom-effect-name"
-                                type="text"
-                                className="flex-grow bg-rpg-slate border border-white/10 p-2 rounded text-xs text-rpg-parchment outline-none focus:border-purple-500"
-                                placeholder="Ex: Pele de Árvore"
-                            />
+                        <label className="block text-[10px] uppercase font-cinzel text-rpg-grey mb-2">Efeito Personalizado</label>
+                        <div className="flex flex-col gap-2">
+                            <div className="flex gap-2">
+                                <input
+                                    type="text"
+                                    value={customEffName}
+                                    onChange={(e) => setCustomEffName(e.target.value)}
+                                    className="flex-grow bg-rpg-slate border border-white/10 p-2 rounded text-xs text-rpg-parchment outline-none focus:border-purple-500"
+                                    placeholder="Ex: Pele de Árvore"
+                                />
+                                <div className="w-20">
+                                    <input
+                                        type="number"
+                                        value={customEffDur}
+                                        onChange={(e) => setCustomEffDur(Number(e.target.value))}
+                                        className="w-full bg-rpg-slate border border-white/10 p-2 rounded text-xs text-rpg-parchment outline-none focus:border-purple-500 text-center"
+                                        placeholder="Rodadas"
+                                    />
+                                </div>
+                            </div>
                             <button
                                 onClick={() => {
-                                    const input = document.getElementById('custom-effect-name') as HTMLInputElement;
-                                    if (input.value) handlePlayerAddEffect(input.value, 10);
+                                    if (customEffName) {
+                                        handlePlayerAddEffect(customEffName, customEffDur);
+                                        setCustomEffName('');
+                                    }
                                 }}
-                                className="bg-purple-700 hover:bg-purple-600 text-white px-4 py-2 rounded text-[10px] font-bold uppercase transition-all"
+                                disabled={!customEffName || (cooldowns[customEffName] && Date.now() < cooldowns[customEffName])}
+                                className="bg-purple-700 hover:bg-purple-600 text-white px-4 py-2 rounded text-[10px] font-bold uppercase transition-all disabled:opacity-50"
                             >
-                                Adicionar
+                                Adicionar Efeito
                             </button>
                         </div>
                     </div>
