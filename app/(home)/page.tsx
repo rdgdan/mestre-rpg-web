@@ -199,8 +199,8 @@ export default function HomePage() {
               <Link href="/confrontos" className="text-red-400 hover:text-red-300 transition-colors font-bold font-cinzel text-lg flex items-center gap-2 border-b-2 border-transparent hover:border-red-400 text-shadow-sm">
                 <span className="text-2xl">⚔️</span> Confrontos
               </Link>
-              <Link href="/books" className="text-rpg-parchment/80 hover:text-rpg-gold transition-colors font-bold font-cinzel text-lg hidden sm:block">
-                Biblioteca
+              <Link href="/biblioteca" className="text-rpg-parchment/80 hover:text-rpg-gold transition-colors font-bold font-cinzel text-lg hidden sm:block">
+                📚 Biblioteca
               </Link>
               {user && (
                 <div className="flex items-center gap-4">
@@ -259,9 +259,9 @@ export default function HomePage() {
               >
                 🎲 Gerador de NPC
               </button>
-              <Link href="/books">
+              <Link href="/biblioteca">
                 <button className="bg-rpg-slate hover:bg-rpg-slate/80 text-rpg-parchment border border-rpg-gold/20 p-2 px-4 rounded font-bold font-cinzel text-sm transition-all shadow-md hover:border-rpg-gold">
-                  📜 Consultar Regras
+                  📚 Grande Biblioteca
                 </button>
               </Link>
             </div>

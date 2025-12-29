@@ -1,10 +1,13 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
 import { searchSpells, Spell } from '@/lib/spells-data';
 import { searchMonsters, getMonsterTypes, MonsterDataExtended } from '@/lib/monsters-search';
+import { dndWeapons } from '@/lib/items-data';
+import { db } from '@/lib/firebase';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
 
 type TabType = 'grimorio' | 'bestiario' | 'itens' | 'notas';
 
@@ -262,6 +265,147 @@ function BestiarioTab({ searchQuery }: { searchQuery: string }) {
     );
 }
 
+// Componente Itens
+function ItensTab({ searchQuery }: { searchQuery: string }) {
+    const [selectedItem, setSelectedItem] = useState<typeof dndWeapons[0] | null>(null);
+
+    const items = dndWeapons.filter(item =>
+        item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        item.damageType.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+
+    return (
+        <div>
+            <h2 className="text-2xl font-bold font-cinzel text-rpg-gold mb-4">⚗️ Enciclopédia de Armas</h2>
+
+            <div className="grid md:grid-cols-2 gap-4">
+                <div className="space-y-3 max-h-[600px] overflow-y-auto pr-2">
+                    {items.length === 0 ? (
+                        <p className="text-rpg-grey text-center py-8">Nenhum item encontrado.</p>
+                    ) : (
+                        items.map(item => (
+                            <div
+                                key={item.name}
+                                onClick={() => setSelectedItem(item)}
+                                className={`bg-rpg-slate border rounded p-4 cursor-pointer transition-all hover:border-rpg-gold/50 ${selectedItem?.name === item.name ? 'border-rpg-gold ring-1 ring-rpg-gold/30' : 'border-rpg-gold/10'
+                                    }`}
+                            >
+                                <h3 className="font-bold text-rpg-gold flex items-center gap-2">
+                                    ⚔️ {item.name}
+                                </h3>
+                                <p className="text-sm text-rpg-grey">
+                                    {item.damage} {item.damageType}
+                                </p>
+                            </div>
+                        ))
+                    )}
+                </div>
+
+                <div className="bg-rpg-slate border border-rpg-gold/20 rounded p-6 sticky top-4">
+                    {selectedItem ? (
+                        <div>
+                            <h3 className="text-2xl font-bold text-rpg-gold mb-2">{selectedItem.name}</h3>
+                            <div className="space-y-3 text-sm">
+                                <div>
+                                    <span className="font-bold text-rpg-gold">Dano:</span> {selectedItem.damage}
+                                </div>
+                                <div>
+                                    <span className="font-bold text-rpg-gold">Tipo:</span> {selectedItem.damageType}
+                                </div>
+                                <div className="pt-3 border-t border-rpg-gold/20">
+                                    <span className="font-bold text-rpg-gold">Propriedades:</span>
+                                    <ul className="list-disc list-inside mt-2 text-rpg-parchment">
+                                        {selectedItem.properties.map((prop, idx) => (
+                                            <li key={idx}>{prop}</li>
+                                        ))}
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                    ) : (
+                        <div className="text-center text-rpg-grey py-12">
+                            <p className="text-4xl mb-4">⚔️</p>
+                            <p>Selecione um item para ver os detalhes</p>
+                        </div>
+                    )}
+                </div>
+            </div>
+        </div>
+    );
+}
+
+// Componente Anotações do Mestre
+function NotasTab() {
+    const { user } = useAuth();
+    const [notes, setNotes] = useState('');
+    const [isSaving, setIsSaving] = useState(false);
+    const [lastSaved, setLastSaved] = useState<Date | null>(null);
+
+    useEffect(() => {
+        if (user) {
+            loadNotes();
+        }
+    }, [user]);
+
+    const loadNotes = async () => {
+        if (!user) return;
+        try {
+            const docRef = doc(db, 'master_notes', user.uid);
+            const docSnap = await getDoc(docRef);
+            if (docSnap.exists()) {
+                setNotes(docSnap.data().notes || '');
+                setLastSaved(docSnap.data().updatedAt?.toDate() || null);
+            }
+        } catch (error) {
+            console.error('Erro ao carregar anotações:', error);
+        }
+    };
+
+    const saveNotes = async () => {
+        if (!user) return;
+        setIsSaving(true);
+        try {
+            const docRef = doc(db, 'master_notes', user.uid);
+            await setDoc(docRef, {
+                notes,
+                updatedAt: new Date()
+            });
+            setLastSaved(new Date());
+        } catch (error) {
+            console.error('Erro ao salvar anotações:', error);
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
+    return (
+        <div>
+            <h2 className="text-2xl font-bold font-cinzel text-rpg-gold mb-4">📜 Anotações do Mestre</h2>
+            <p className="text-rpg-grey mb-6">Registre o Lore do seu mundo, Regras da Casa e notas de sessões.</p>
+            <textarea
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                placeholder="Digite suas anotações aqui..."
+                className="w-full bg-rpg-slate border border-rpg-gold/20 rounded p-4 text-rpg-parchment placeholder-rpg-grey min-h-[400px] focus:border-rpg-gold focus:outline-none transition-all font-mono text-sm"
+            />
+            <div className="mt-4 flex items-center justify-between">
+                <button
+                    onClick={saveNotes}
+                    disabled={isSaving}
+                    className="bg-rpg-gold text-rpg-dark px-6 py-2 rounded font-bold hover:scale-105 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                    {isSaving ? '💾 Salvando...' : '💾 Salvar Anotações'}
+                </button>
+                {lastSaved && (
+                    <span className="text-sm text-rpg-grey">
+                        Última atualização: {lastSaved.toLocaleString('pt-BR')}
+                    </span>
+                )}
+            </div>
+        </div>
+    );
+}
+
 export default function BibliotecaPage() {
     const { user } = useAuth();
     const [activeTab, setActiveTab] = useState<TabType>('grimorio');
@@ -287,8 +431,9 @@ export default function BibliotecaPage() {
             <header className="bg-rpg-panel p-4 shadow-lg border-b-2 border-rpg-gold/30 sticky top-0 z-30 backdrop-blur-sm">
                 <div className="container mx-auto flex justify-between items-center">
                     <div className="flex items-center gap-4">
-                        <Link href="/" className="text-rpg-gold hover:text-rpg-gold-light transition-all text-2xl">
-                            ⚔️
+                        <Link href="/" className="text-rpg-gold hover:text-rpg-gold-light transition-all text-2xl flex items-center gap-2 group">
+                            <span className="group-hover:-translate-x-1 transition-transform">←</span>
+                            <span>⚔️</span>
                         </Link>
                         <div>
                             <h1 className="text-2xl font-bold font-cinzel text-rpg-gold text-shadow-md">📚 A Grande Biblioteca</h1>
@@ -340,26 +485,9 @@ export default function BibliotecaPage() {
 
                     {activeTab === 'bestiario' && <BestiarioTab searchQuery={searchQuery} />}
 
-                    {activeTab === 'itens' && (
-                        <div>
-                            <h2 className="text-2xl font-bold font-cinzel text-rpg-gold mb-4">⚗️ Enciclopédia de Itens</h2>
-                            <p className="text-rpg-grey">Em breve: Base de dados de armas, armaduras e itens mágicos.</p>
-                        </div>
-                    )}
+                    {activeTab === 'itens' && <ItensTab searchQuery={searchQuery} />}
 
-                    {activeTab === 'notas' && (
-                        <div>
-                            <h2 className="text-2xl font-bold font-cinzel text-rpg-gold mb-4">📜 Anotações do Mestre</h2>
-                            <p className="text-rpg-grey mb-6">Registre o Lore do seu mundo, Regras da Casa e notas de sessões.</p>
-                            <textarea
-                                placeholder="Digite suas anotações aqui..."
-                                className="w-full bg-rpg-slate border border-rpg-gold/20 rounded p-4 text-rpg-parchment placeholder-rpg-grey min-h-[300px] focus:border-rpg-gold focus:outline-none transition-all"
-                            />
-                            <button className="mt-4 bg-rpg-gold text-rpg-dark px-6 py-2 rounded font-bold hover:scale-105 transition-all">
-                                💾 Salvar Anotações
-                            </button>
-                        </div>
-                    )}
+                    {activeTab === 'notas' && <NotasTab />}
                 </div>
             </section>
         </div>
