@@ -62,11 +62,11 @@ export default function CharacterListPage() {
       setCharacters([]);
     }
   }, [user]);
-  
+
   const handleImportClick = () => {
     fileInputRef.current?.click();
   };
-  
+
   const handleFileImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
     if (!user) {
       alert("Você precisa estar logado para importar um personagem.");
@@ -85,12 +85,12 @@ export default function CharacterListPage() {
       if (jsonFiles.length === 0) {
         throw new Error("Arquivo JSON não encontrado no .rpg");
       }
-      
+
       const jsonFile = jsonFiles[0];
 
       const jsonData = JSON.parse(await jsonFile.async("string"));
       const characterData = mapImportedDataToCharacter(jsonData, user.uid, ''); // Passa imageUrl vazia
-      
+
       const newCharDoc = await addDoc(collection(db, 'personagens'), characterData);
       console.log("Personagem importado com sucesso! ID:", newCharDoc.id);
       alert("Personagem importado com sucesso!");
@@ -100,14 +100,14 @@ export default function CharacterListPage() {
       alert(`Não foi possível importar o personagem. Verifique o console para mais detalhes.`);
     } finally {
       setIsLoading(false);
-       if(fileInputRef.current) {
+      if (fileInputRef.current) {
         fileInputRef.current.value = "";
       }
     }
   };
 
   const handleCreateCharacter = () => {
-      router.push(`/personagem/novo`);
+    router.push(`/personagem/novo`);
   };
 
   const handleDeleteCharacter = async (e: React.MouseEvent<HTMLButtonElement>, id: string) => {
@@ -123,87 +123,93 @@ export default function CharacterListPage() {
       alert("Não foi possível apagar o personagem. Tente novamente.");
     }
   };
-  
+
   if (isLoading && characters.length === 0) {
     return (
-        <div className="bg-gray-900 text-white min-h-screen p-8">
-            <div className="max-w-4xl mx-auto text-center">
-                <h1 className="text-4xl font-serif text-yellow-400 mb-4">Carregando Salão...</h1>
-                <p className="text-gray-400">Buscando seus heróis no plano astral...</p>
-            </div>
+      <div className="bg-gray-900 text-white min-h-screen p-8">
+        <div className="max-w-4xl mx-auto text-center">
+          <h1 className="text-4xl font-serif text-yellow-400 mb-4">Carregando Salão...</h1>
+          <p className="text-gray-400">Buscando seus heróis no plano astral...</p>
         </div>
+      </div>
     );
   }
 
   return (
-    <div className="bg-gray-900 text-white min-h-screen p-4 sm:p-6 md:p-8">
-       {isLoading && (
-        <div className="fixed top-0 left-0 w-full h-full bg-black bg-opacity-70 flex justify-center items-center z-50">
+    <div className="bg-rpg-dark text-rpg-parchment min-h-screen p-4 sm:p-6 md:p-8 bg-[url('https://www.transparenttextures.com/patterns/dark-matter.png')]">
+      {isLoading && (
+        <div className="fixed top-0 left-0 w-full h-full bg-black/80 backdrop-blur-sm flex justify-center items-center z-50">
           <div className="text-center">
-            <p className="text-2xl font-serif text-yellow-400 mb-2">Importando Aventureiro...</p>
-            <p className="text-gray-300">Abrindo o portal e trazendo os dados...</p>
+            <p className="text-3xl font-cinzel text-rpg-gold mb-2 text-shadow-lg animate-pulse">Invocando Aventureiro...</p>
+            <p className="text-rpg-grey font-medieval text-lg">Abrindo o portal e trazendo os dados do plano astral...</p>
           </div>
         </div>
       )}
-      <div className="max-w-4xl mx-auto">
-        <header className="flex flex-col sm:flex-row justify-between items-center mb-8 gap-4">
-            <Link href="/" legacyBehavior>
-                <a className="text-sm text-yellow-400 hover:underline">&larr; Voltar ao Painel</a>
-            </Link>
-          <h1 className="text-4xl font-serif text-yellow-400 text-center sm:text-left">Salão de Personagens</h1>
+      <div className="max-w-6xl mx-auto">
+        <header className="flex flex-col sm:flex-row justify-between items-center mb-10 gap-6 border-b-2 border-rpg-gold/20 pb-6">
+          <Link href="/" legacyBehavior>
+            <a className="text-sm text-rpg-gold hover:text-rpg-gold-light hover:underline font-medieval tracking-widest uppercase">&larr; Retornar à Taverna</a>
+          </Link>
+          <h1 className="text-5xl font-bold font-cinzel text-rpg-gold text-center sm:text-left text-shadow-md">Salão dos Heróis</h1>
           <div className="flex flex-col sm:flex-row gap-4 w-full sm:w-auto">
-             <input
+            <input
               type="file"
               ref={fileInputRef}
               onChange={handleFileImport}
               className="hidden"
               accept=".rpg"
             />
-            <button 
+            <button
               onClick={handleImportClick}
-              className="bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 px-6 rounded shadow-lg transition-all duration-200 transform hover:scale-105 w-full sm:w-auto"
+              className="bg-rpg-slate hover:bg-rpg-slate/80 text-rpg-parchment border border-rpg-gold/30 font-bold py-3 px-6 rounded shadow-lg transition-all duration-200 transform hover:scale-105 w-full sm:w-auto font-cinzel hover:shadow-glow-gold"
             >
-              Importar Personagem
+              Importar Lenda
             </button>
-            <button 
+            <button
               onClick={handleCreateCharacter}
-              className="bg-yellow-600 hover:bg-yellow-500 text-white font-bold py-3 px-6 rounded shadow-lg transition-all duration-200 transform hover:scale-105 w-full sm:w-auto"
+              className="bg-rpg-gold hover:bg-rpg-gold/80 text-rpg-dark font-bold py-3 px-6 rounded shadow-lg transition-all duration-200 transform hover:scale-105 w-full sm:w-auto font-cinzel hover:shadow-glow-gold border border-rpg-gold/50"
             >
-              Criar Novo Personagem
+              Novo Herói
             </button>
           </div>
         </header>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
           {characters.map(char => (
             <Link key={char.id} href={`/personagem/${char.id}`} passHref legacyBehavior>
-                <a className="block bg-gray-800 p-6 rounded-lg shadow-lg border border-yellow-500/20 flex flex-col justify-between transition-all transform hover:-translate-y-1 hover:border-yellow-400 relative overflow-hidden cursor-pointer">
-                    {char.imageUrl && (
-                        <div className="absolute inset-0 bg-cover bg-center bg-no-repeat z-0 opacity-20" style={{ backgroundImage: `url(${char.imageUrl})` }}></div>
-                    )} 
-                    <div className="relative z-10 flex flex-col h-full">
-                        <div>
-                            <h2 className="text-2xl font-bold text-yellow-400 truncate">{char.name || "Personagem sem nome"}</h2>
-                            <p className="text-gray-400 capitalize">{(char.race || 'Raça')} {(char.class || 'Classe')} Nível {char.level || 1}</p>
-                        </div>
-                        <div className="flex justify-end gap-2 mt-auto pt-4">
-                            <button 
-                                onClick={(e) => handleDeleteCharacter(e, char.id)}
-                                className="bg-red-800 hover:bg-red-700 text-white font-semibold py-1 px-3 rounded-md text-sm transition-opacity opacity-70 hover:opacity-100 z-20"
-                            >
-                                Excluir
-                            </button>
-                        </div>
-                    </div>
-                </a>
+              <a className="block bg-rpg-panel p-0 rounded-lg shadow-xl border-2 border-rpg-gold/10 flex flex-col justify-between transition-all transform hover:-translate-y-2 hover:border-rpg-gold hover:shadow-glow-gold/40 relative overflow-hidden cursor-pointer group h-[300px]">
+                {char.imageUrl ? (
+                  <div className="absolute inset-0 bg-cover bg-center bg-no-repeat z-0 opacity-40 group-hover:opacity-50 transition-opacity duration-500" style={{ backgroundImage: `url(${char.imageUrl})` }}></div>
+                ) : (
+                  <div className="absolute inset-0 bg-gradient-to-br from-rpg-slate to-rpg-dark z-0 opacity-80"></div>
+                )}
+                <div className="absolute inset-0 bg-gradient-to-t from-black via-black/50 to-transparent z-10"></div>
+
+                <div className="relative z-20 flex flex-col h-full p-6">
+                  <div className="border-b border-white/10 pb-4 mb-2">
+                    <h2 className="text-3xl font-bold text-rpg-gold truncate font-medieval text-shadow-sm group-hover:text-rpg-gold-light transition-colors">{char.name || "Sem Nome"}</h2>
+                    <p className="text-rpg-parchment/90 font-cinzel text-sm tracking-widest uppercase mt-1">{(char.race || 'Raça')} &bull; {(char.class || 'Classe')} &bull; Nível {char.level || 1}</p>
+                  </div>
+
+                  <div className="flex justify-end gap-2 mt-auto pt-4 relative">
+                    <button
+                      onClick={(e) => handleDeleteCharacter(e, char.id)}
+                      className="bg-rpg-red/80 hover:bg-rpg-red text-white font-bold py-2 px-4 rounded border border-rpg-red/50 text-xs transition-all opacity-0 group-hover:opacity-100 transform translate-y-2 group-hover:translate-y-0 font-cinzel shadow-md hover:shadow-glow-red"
+                      title="Apagar Herói Permanentemente"
+                    >
+                      Exilar
+                    </button>
+                  </div>
+                </div>
+              </a>
             </Link>
           ))}
-           {characters.length === 0 && !isLoading && (
-              <div className="col-span-full text-center bg-gray-800/50 border border-dashed border-gray-600 rounded-lg p-12 mt-10">
-                  <h3 className="text-2xl font-serif text-gray-400">O Salão está vazio</h3>
-                  <p className="text-gray-500 mt-2">Você pode criar um personagem do zero ou importar um arquivo .rpg!</p>
-              </div>
-            )}
+          {characters.length === 0 && !isLoading && (
+            <div className="col-span-full text-center bg-rpg-panel border-2 border-dashed border-rpg-grey/30 rounded-lg p-16 mt-4">
+              <h3 className="text-3xl font-cinzel text-rpg-grey mb-4">O Salão está vazio...</h3>
+              <p className="text-rpg-parchment/60 font-medieval text-lg max-w-xl mx-auto">Nenhum herói descansa aqui no momento. Você pode <strong className="text-rpg-gold">criar um personagem</strong> do zero ou <strong className="text-rpg-gold">importar</strong> um arquivo antigo.</p>
+            </div>
+          )}
         </div>
       </div>
     </div>

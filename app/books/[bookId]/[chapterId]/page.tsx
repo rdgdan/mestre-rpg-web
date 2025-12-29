@@ -30,23 +30,23 @@ const ChapterPage = ({ params }: ChapterPageParams) => {
   }
 
   return (
-    <div className="min-h-screen bg-background-start text-text">
-      <header className="bg-surface p-4 shadow-lg border-b-2 border-accent/20 sticky top-0 z-10">
+    <div className="min-h-screen bg-rpg-dark text-rpg-parchment bg-[url('https://www.transparenttextures.com/patterns/dark-matter.png')]">
+      <header className="bg-rpg-panel p-4 shadow-lg border-b-2 border-rpg-gold/30 sticky top-0 z-10 backdrop-blur-sm">
         <div className="container mx-auto">
           <div className="flex justify-between items-center">
             <div>
-              <Link href={`/books/${srdBook.id}`} className="text-primary hover:underline font-serif">← Voltar ao Índice</Link>
-              <h1 className="text-3xl font-bold font-serif text-accent mt-1">{chapter.title}</h1>
+              <Link href={`/books/${srdBook.id}`} className="text-rpg-gold hover:text-rpg-gold-light hover:underline font-medieval tracking-wider">← Voltar ao Índice</Link>
+              <h1 className="text-3xl font-bold font-cinzel text-rpg-gold mt-1 text-shadow-md">{chapter.title}</h1>
             </div>
-            <Link href="/" className="bg-primary hover:bg-primary/80 p-2 px-4 rounded font-bold font-serif text-text transition-all transform hover:scale-105 shadow-md">
-                Home
+            <Link href="/" className="bg-rpg-gold hover:bg-rpg-gold/80 p-2 px-4 rounded font-bold font-cinzel text-rpg-dark transition-all transform hover:scale-105 shadow-md hover:shadow-glow-gold border border-rpg-gold/50">
+              Home
             </Link>
           </div>
         </div>
       </header>
       <main className="container mx-auto p-4 sm:p-8">
-        <div 
-          className="bg-surface/80 rounded-lg border border-text/10 shadow-xl p-6 lg:p-8 prose prose-invert max-w-none prose-h2:text-accent prose-h3:text-accent/90 prose-strong:text-text prose-a:text-primary hover:prose-a:text-primary/80"
+        <div
+          className="bg-rpg-panel rounded-lg border-2 border-rpg-gold/10 shadow-2xl p-6 lg:p-8 prose prose-invert max-w-none prose-h2:text-rpg-gold prose-h2:font-cinzel prose-h3:text-rpg-parchment prose-h3:font-cinzel prose-strong:text-rpg-gold prose-a:text-rpg-gold hover:prose-a:text-rpg-gold-light prose-p:font-medieval prose-p:text-lg prose-p:leading-relaxed shadow-black/50"
           dangerouslySetInnerHTML={{ __html: chapter.content }}
         />
       </main>

@@ -1,35 +1,85 @@
-@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=MedievalSharp&display=swap');
-
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 :root {
-  --background-start-rgb: 20, 18, 24; /* Um roxo quase preto */
-  --background-end-rgb: 10, 8, 14; /* Um tom ainda mais escuro */
-  --surface-rgb: 31, 28, 38; /* A cor dos painéis, madeira escura */
-  --text-rgb: 242, 238, 222; /* Cor de pergaminho */
-  --primary-rgb: 140, 4, 18; /* Vermelho-sangue-de-dragão */
-  --accent-rgb: 218, 165, 32; /* Dourado */
+  --background-start-rgb: 18, 18, 18;
+  /* Dark Charcoal */
+  --background-end-rgb: 26, 26, 46;
+  /* Deep Slate */
+  --surface-rgb: 30, 30, 46;
+  /* Panel Color */
+  --text-rgb: 245, 245, 245;
+  /* Antique White */
+  --primary-rgb: 218, 165, 32;
+  /* Mythic Gold */
+  --secondary-rgb: 139, 0, 0;
+  /* Dragon Red */
+  --accent-rgb: 255, 215, 0;
+  /* Bright Gold */
 }
 
 body {
   color: rgb(var(--text-rgb));
-  background: linear-gradient(
-      to bottom,
-      transparent,
-      rgb(var(--background-end-rgb))
-    )
-    rgb(var(--background-start-rgb));
-  font-family: 'MedievalSharp', cursive;
+  background: linear-gradient(to bottom,
+      rgb(var(--background-start-rgb)),
+      rgb(var(--background-end-rgb)));
+  font-family: 'Lato', sans-serif;
+  min-height: 100vh;
 }
 
-h1, h2, h3, h4, h5, h6 {
-    font-family: 'Cinzel', serif;
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-family: 'Cinzel', serif;
 }
 
 @layer utilities {
   .text-balance {
     text-wrap: balance;
   }
+
+  .shadow-glow-gold {
+    box-shadow: 0 0 15px rgba(218, 165, 32, 0.4);
+  }
+
+  .shadow-glow-purple {
+    box-shadow: 0 0 15px rgba(147, 51, 234, 0.4);
+  }
+
+  .shadow-glow-red {
+    box-shadow: 0 0 15px rgba(185, 28, 28, 0.4);
+  }
+}
+
+@keyframes bounce-right {
+
+  0%,
+  100% {
+    transform: translateY(-50%) translateX(0);
+  }
+
+  50% {
+    transform: translateY(-50%) translateX(10px);
+  }
+}
+
+.animate-bounce-right {
+  animation: bounce-right 1.5s infinite;
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 5px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.1);
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #daa520;
+  border-radius: 10px;
 }

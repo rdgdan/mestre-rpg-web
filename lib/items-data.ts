@@ -26,6 +26,10 @@ export interface OtherEquipmentItem {
     id: string; // ID único para a instância do item no inventário
     name: string;
     quantity: number;
+    isEquipped?: boolean;
+    armorClass?: number;
+    type?: 'armor' | 'shield' | 'other';
+    description?: string;
 }
 
 export interface Inventory {

@@ -21,7 +21,7 @@ const ATTRIBUTE_MAP: { [key: string]: typeof ATTRIBUTE_KEYS[number] } = {
 
 const SKILL_MAP: { [key: string]: typeof SKILLS[number]['key'] } = {
   'acrobatics': 'acrobatics', 'acrobacia': 'acrobatics',
-  'animal handling': 'animalhandling', 'adestrar animais': 'animalhandling', 'lidar com animais': 'animalhandling',
+  'animal handling': 'animalHandling', 'adestrar animais': 'animalHandling', 'lidar com animais': 'animalHandling',
   'arcana': 'arcana', 'arcanismo': 'arcana',
   'athletics': 'athletics', 'atletismo': 'athletics',
   'deception': 'deception', 'enganação': 'deception', 'enganacao': 'deception',
@@ -35,14 +35,14 @@ const SKILL_MAP: { [key: string]: typeof SKILLS[number]['key'] } = {
   'performance': 'performance', 'atuação': 'performance', 'atuacao': 'performance',
   'persuasion': 'persuasion', 'persuasão': 'persuasion', 'persuasao': 'persuasion',
   'religion': 'religion', 'religião': 'religion', 'religiao': 'religion',
-  'sleight of hand': 'sleightofhand', 'prestidigitação': 'sleightofhand', 'prestidigitacao': 'sleightofhand',
+  'sleight of hand': 'sleightOfHand', 'prestidigitação': 'sleightOfHand', 'prestidigitacao': 'sleightOfHand',
   'stealth': 'stealth', 'furtividade': 'stealth',
   'survival': 'survival', 'sobrevivência': 'survival', 'sobrevivencia': 'survival',
 };
 
 const normalizeKey = (key: string): string => {
-    if (!key) return '';
-    return key.toLowerCase().replace(/\s+/g, '').replace(/_/g, '');
+  if (!key) return '';
+  return key.toLowerCase().replace(/\s+/g, '').replace(/_/g, '');
 }
 
 // --- Função Auxiliar para garantir que valores sejam numéricos ---
@@ -83,7 +83,7 @@ export function mapImportedDataToCharacter(data: any, ownerId: string, imageUrl:
       skills[mappedName] = !!skill.a.b;
     }
   });
-  
+
   // --- MAGIAS ---
   const spells = data.l?.map((spell: any) => ({
     name: spell.b?.d || 'Magia Desconhecida',

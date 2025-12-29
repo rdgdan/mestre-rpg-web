@@ -18,12 +18,12 @@ interface EquipmentModalProps {
     onAddNewGlobalItem: (itemName: string) => Promise<void>; // Função para criar um novo item no DB
 }
 
-const EquipmentModal: React.FC<EquipmentModalProps> = ({ 
-    isOpen, 
-    onClose, 
-    onSave, 
-    allEquipment, 
-    onAddNewGlobalItem 
+const EquipmentModal: React.FC<EquipmentModalProps> = ({
+    isOpen,
+    onClose,
+    onSave,
+    allEquipment,
+    onAddNewGlobalItem
 }) => {
     const [selectedItemName, setSelectedItemName] = useState('');
     const [quantity, setQuantity] = useState(1);
@@ -67,10 +67,10 @@ const EquipmentModal: React.FC<EquipmentModalProps> = ({
             return;
         }
 
-        onSave({ 
-            id: new Date().toISOString(), 
-            name: nameToSave, 
-            quantity 
+        onSave({
+            id: new Date().toISOString(),
+            name: nameToSave,
+            quantity
         });
         onClose();
     };
@@ -78,62 +78,62 @@ const EquipmentModal: React.FC<EquipmentModalProps> = ({
     if (!isOpen) return null;
 
     return (
-        <div className="fixed inset-0 bg-black bg-opacity-70 flex justify-center items-center z-50">
-            <div className="bg-slate-800 p-6 rounded-lg shadow-2xl w-full max-w-md">
-                <h2 className="text-2xl font-bold text-accent mb-4">Adicionar Equipamento</h2>
-                
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex justify-center items-center z-50">
+            <div className="bg-rpg-panel border-2 border-rpg-gold/30 p-6 rounded-lg shadow-2xl w-full max-w-md shadow-black/50">
+                <h2 className="text-2xl font-bold text-rpg-gold mb-4 font-cinzel border-b border-rpg-gold/20 pb-2">Adicionar Equipamento</h2>
+
                 {isCreatingNew ? (
                     <div className="space-y-4">
-                        <label className="block text-sm font-semibold text-slate-300">Nome do Novo Item</label>
-                        <input 
-                            type="text" 
+                        <label className="block text-sm font-bold text-rpg-gold font-medieval">Nome do Novo Item</label>
+                        <input
+                            type="text"
                             placeholder="Ex: Corda de Cânhamo (50 pés)"
                             value={newItemName}
                             onChange={(e) => setNewItemName(e.target.value)}
-                            className="w-full p-2 bg-slate-700 rounded-md"
+                            className="w-full p-2 bg-rpg-slate border border-rpg-gold/10 rounded-md text-rpg-parchment focus:outline-none focus:ring-2 focus:ring-rpg-gold font-medieval placeholder-rpg-grey/50"
                         />
-                         <a href="#" onClick={() => setIsCreatingNew(false)} className="text-sm text-primary hover:underline">Ou selecione um item existente</a>
+                        <a href="#" onClick={() => setIsCreatingNew(false)} className="text-sm text-rpg-gold hover:text-rpg-gold-light hover:underline font-medieval">Ou selecione um item existente</a>
                     </div>
                 ) : (
                     <div className="space-y-4">
                         <div>
-                            <label className="block text-sm font-semibold text-slate-300">Pesquisar Item</label>
+                            <label className="block text-sm font-bold text-rpg-gold font-medieval mb-1">Pesquisar Item</label>
                             <input
                                 type="text"
                                 placeholder="Comece a digitar para buscar..."
                                 value={searchTerm}
                                 onChange={e => setSearchTerm(e.target.value)}
-                                className="w-full p-2 bg-slate-700 rounded-md"
+                                className="w-full p-2 bg-rpg-slate border border-rpg-gold/10 rounded-md text-rpg-parchment focus:outline-none focus:ring-2 focus:ring-rpg-gold font-medieval placeholder-rpg-grey/50"
                             />
                             {searchTerm && (
-                                <div className="mt-2 bg-slate-900 border border-slate-700 rounded-md max-h-40 overflow-y-auto">
+                                <div className="mt-2 bg-rpg-slate border border-rpg-gold/20 rounded-md max-h-40 overflow-y-auto custom-scrollbar">
                                     {filteredEquipment.length > 0 ? filteredEquipment.map(item => (
-                                        <div key={item.name} onClick={() => { setSelectedItemName(item.name); setSearchTerm(''); }} className="p-2 hover:bg-primary hover:text-slate-900 cursor-pointer">
+                                        <div key={item.name} onClick={() => { setSelectedItemName(item.name); setSearchTerm(''); }} className="p-2 hover:bg-rpg-gold/20 hover:text-rpg-gold cursor-pointer text-rpg-parchment font-medieval border-b border-rpg-gold/5 last:border-0 transition-colors">
                                             {item.name}
                                         </div>
-                                    )) : <div className="p-2 text-slate-400">Nenhum item encontrado.</div>}
+                                    )) : <div className="p-2 text-rpg-grey italic font-medieval">Nenhum item encontrado.</div>}
                                 </div>
                             )}
-                            {selectedItemName && <p className='mt-2 text-slate-300'>Selecionado: <strong class='text-white'>{selectedItemName}</strong></p>}
+                            {selectedItemName && <p className='mt-2 text-rpg-grey font-medieval'>Selecionado: <strong className='text-rpg-gold text-lg'>{selectedItemName}</strong></p>}
                         </div>
-                        <a href="#" onClick={() => setIsCreatingNew(true)} className="text-sm text-primary hover:underline">+ Criar novo item não listado</a>
+                        <a href="#" onClick={() => setIsCreatingNew(true)} className="text-sm text-rpg-gold hover:text-rpg-gold-light hover:underline font-medieval block text-right">+ Criar novo item não listado</a>
                     </div>
                 )}
 
                 <div className="mt-4">
-                    <label className="block text-sm font-semibold text-slate-300">Quantidade</label>
-                    <input 
+                    <label className="block text-sm font-bold text-rpg-gold font-medieval mb-1">Quantidade</label>
+                    <input
                         type="number"
                         value={quantity}
                         onChange={e => setQuantity(Math.max(1, parseInt(e.target.value, 10) || 1))}
-                        className="w-full p-2 bg-slate-700 rounded-md"
+                        className="w-full p-2 bg-rpg-slate border border-rpg-gold/10 rounded-md text-rpg-parchment focus:outline-none focus:ring-2 focus:ring-rpg-gold font-medieval text-center text-lg"
                     />
                 </div>
 
                 {/* Ações */}
-                <div className="flex justify-end gap-4 mt-6">
-                    <button onClick={onClose} className="px-4 py-2 text-sm font-medium rounded-md transition-all duration-200 bg-slate-600 text-slate-300 hover:bg-slate-500">Cancelar</button>
-                    <button onClick={handleSave} className="px-6 py-2 font-bold rounded-md transition-all duration-200 bg-primary text-slate-900 hover:bg-primary-dark shadow-lg">Salvar Item</button>
+                <div className="flex justify-end gap-4 mt-6 pt-4 border-t border-rpg-gold/10">
+                    <button onClick={onClose} className="px-4 py-2 text-sm font-medium rounded-md transition-all duration-200 bg-rpg-slate text-rpg-grey hover:bg-rpg-dark hover:text-rpg-parchment border border-rpg-grey/30">Cancelar</button>
+                    <button onClick={handleSave} className="px-6 py-2 font-bold rounded-md transition-all duration-200 bg-rpg-gold text-rpg-dark hover:bg-rpg-gold-light shadow-lg hover:shadow-glow-gold font-cinzel">Salvar Item</button>
                 </div>
             </div>
         </div>
