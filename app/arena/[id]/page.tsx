@@ -207,18 +207,24 @@ export default function SharedArenaPage() {
                                     </div>
 
                                     {/* HP BAR (Player View) */}
-                                    <div className="w-32 md:w-48 shrink-0">
-                                        <div className="flex justify-between items-center mb-1">
-                                            <span className="text-[10px] uppercase font-cinzel text-rpg-grey">{getHpStatusLabel(c)}</span>
-                                            {showFullHP && <span className="text-[10px] font-bold text-rpg-parchment">{c.hp}/{c.maxHp}</span>}
+                                    {(isHost || isPlayer) ? (
+                                        <div className="w-32 md:w-48 shrink-0">
+                                            <div className="flex justify-between items-center mb-1">
+                                                <span className="text-[10px] uppercase font-cinzel text-rpg-grey">{getHpStatusLabel(c)}</span>
+                                                {showFullHP && <span className="text-[10px] font-bold text-rpg-parchment">{c.hp}/{c.maxHp}</span>}
+                                            </div>
+                                            <div className="h-1.5 bg-black/40 rounded-full border border-white/5 overflow-hidden">
+                                                <div
+                                                    className={`h-full transition-all duration-500 ${c.hp / c.maxHp > 0.5 ? 'bg-green-600' : c.hp / c.maxHp > 0.2 ? 'bg-yellow-600' : 'bg-red-600'}`}
+                                                    style={{ width: `${(c.hp / c.maxHp) * 100}%` }}
+                                                ></div>
+                                            </div>
                                         </div>
-                                        <div className="h-1.5 bg-black/40 rounded-full border border-white/5 overflow-hidden">
-                                            <div
-                                                className={`h-full transition-all duration-500 ${c.hp / c.maxHp > 0.5 ? 'bg-green-600' : c.hp / c.maxHp > 0.2 ? 'bg-yellow-600' : 'bg-red-600'}`}
-                                                style={{ width: `${(c.hp / c.maxHp) * 100}%` }}
-                                            ></div>
+                                    ) : (
+                                        <div className="w-32 md:w-48 flex items-center justify-end">
+                                            <span className="text-[10px] font-cinzel text-rpg-grey italic tracking-widest bg-white/5 px-2 py-1 rounded">Status Desconhecido</span>
                                         </div>
-                                    </div>
+                                    )}
                                 </div>
                             </div>
                         );
