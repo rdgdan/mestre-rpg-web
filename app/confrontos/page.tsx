@@ -237,9 +237,50 @@ export default function ConfrontosPage() {
     useEffect(() => {
         if (!onlineSessionId || !user) return;
 
+        const sessionRef = doc(db, 'arenas_online', onlineSessionId);
+
+        // Listener para mudanças externas (Jogadores entrando)
+        const unsubscribe = onSnapshot(sessionRef, (docSnap) => {
+            if (docSnap.exists()) {
+                const data = docSnap.data();
+                // Só atualizamos os combatentes se houver uma mudança no tamanho da lista 
+                // ou se o hostId não for o atual (prevenindo loops se mudarmos algo local)
+                // Mas a forma mais segura é olhar se o dado de combatentes mudou.
+                // Para simplificar e evitar loops infinitos, vamos focar em novos combatentes adicionados por jogadores.
+                const cloudCombatants = data.combatants as Combatant[];
+
+                // Se um jogador adicionou alguém, a lista terá IDs que não temos localmente
+                const hasNewCombatants = cloudCombatants.some(cc => !combatants.some(lc => lc.id === cc.id));
+
+                if (hasNewCombatants) {
+                    // Manter a ordem de iniciativa se já estivermos em combate
+                    const merged = [...combatants];
+                    cloudCombatants.forEach(cc => {
+                        if (!merged.some(lc => lc.id === cc.id)) {
+                            merged.push(cc);
+                        }
+                    });
+
+                    if (phase === 'combat') {
+                        setCombatants(merged.sort((a, b) => b.initiative - a.initiative));
+                    } else {
+                        setCombatants(merged);
+                    }
+                }
+            }
+        });
+
+        return () => unsubscribe();
+    }, [onlineSessionId, user, combatants, phase]);
+
+    // Enviar atualizações do Mestre para a nuvem
+    useEffect(() => {
+        if (!onlineSessionId || !user) return;
+
         const syncState = async () => {
             try {
                 const sessionRef = doc(db, 'arenas_online', onlineSessionId);
+                // Evitar loop: só atualizamos se formos o host e houver mudança local relevante
                 await updateDoc(sessionRef, {
                     phase: phase,
                     round: round,
@@ -251,7 +292,8 @@ export default function ConfrontosPage() {
             }
         };
 
-        syncState();
+        const timeout = setTimeout(syncState, 500); // Debounce leve
+        return () => clearTimeout(timeout);
     }, [phase, round, currentTurnIndex, combatants, onlineSessionId, user]);
 
     const finishCombat = () => {

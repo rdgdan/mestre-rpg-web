@@ -3,9 +3,10 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { db } from '@/lib/firebase';
-import { doc, onSnapshot } from 'firebase/firestore';
+import { db, auth } from '@/lib/firebase';
+import { doc, onSnapshot, updateDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import { useAuth } from '@/context/AuthContext';
+import Modal from '@/components/Modal';
 
 // --- Tipos ---
 type CombatantType = 'player' | 'monster' | 'npc';
@@ -30,6 +31,15 @@ interface Combatant {
     statusEffects: StatusEffect[];
     class?: string;
     level?: number;
+    ownerId?: string;
+}
+
+interface PlayerCharacter {
+    id: string;
+    name: string;
+    hp: number;
+    class: string;
+    level: number;
 }
 
 interface ArenaSession {
@@ -48,6 +58,13 @@ export default function SharedArenaPage() {
     const [session, setSession] = useState<ArenaSession | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+
+    // Join Battle states
+    const [isJoinModalOpen, setIsJoinModalOpen] = useState(false);
+    const [myCharacters, setMyCharacters] = useState<PlayerCharacter[]>([]);
+    const [selectedCharId, setSelectedCharId] = useState('');
+    const [joinInitiative, setJoinInitiative] = useState<number>(0);
+    const [isJoining, setIsJoining] = useState(false);
 
     useEffect(() => {
         if (!id) return;
@@ -69,6 +86,79 @@ export default function SharedArenaPage() {
 
         return () => unsubscribe();
     }, [id]);
+
+    const handleJoinBattle = async () => {
+        if (!user || !session || !selectedCharId) return;
+
+        const char = myCharacters.find(c => c.id === selectedCharId);
+        if (!char) return;
+
+        setIsJoining(true);
+        try {
+            const newCombatant: Combatant = {
+                id: Math.random().toString(36).substr(2, 9),
+                externalId: char.id,
+                name: char.name,
+                type: 'player',
+                hp: char.hp,
+                maxHp: char.hp,
+                ac: 10,
+                cr: `Lvl ${char.level}`,
+                xp: 0,
+                initiative: joinInitiative,
+                statusEffects: [],
+                class: char.class,
+                level: char.level,
+                ownerId: user.uid
+            };
+
+            const sessionRef = doc(db, 'arenas_online', id as string);
+            const updatedCombatants = [...session.combatants, newCombatant];
+
+            // Se já estiver em combate, reordenar a iniciativa no banco
+            if (session.phase === 'combat') {
+                updatedCombatants.sort((a, b) => b.initiative - a.initiative);
+            }
+
+            await updateDoc(sessionRef, {
+                combatants: updatedCombatants
+            });
+
+            setIsJoinModalOpen(false);
+            alert("Você entrou na batalha!");
+        } catch (err) {
+            console.error("Erro ao entrar no combate:", err);
+            alert("Não foi possível entrar no combate.");
+        } finally {
+            setIsJoining(false);
+        }
+    };
+
+    const openJoinModal = async () => {
+        if (!user) {
+            alert("Faça login para participar com seu personagem!");
+            return;
+        }
+        setIsJoinModalOpen(true);
+        try {
+            const q = query(collection(db, 'personagens'), where('ownerId', '==', user.uid));
+            const snap = await getDocs(q);
+            const chars: PlayerCharacter[] = [];
+            snap.forEach(doc => {
+                const d = doc.data();
+                chars.push({
+                    id: doc.id,
+                    name: d.name || 'Sem Nome',
+                    hp: d.currentHp || (d.hp?.max || 10),
+                    class: d.class || '',
+                    level: d.level || 1
+                });
+            });
+            setMyCharacters(chars);
+        } catch (err) {
+            console.error("Erro ao carregar personagens:", err);
+        }
+    };
 
     if (loading) {
         return (
@@ -143,7 +233,12 @@ export default function SharedArenaPage() {
                         </div>
                     </div>
                     <div className="hidden md:block">
-                        <span className="text-xs text-rpg-grey font-medieval">A sincronização é automática. Fique atento!</span>
+                        <button
+                            onClick={openJoinModal}
+                            className="bg-rpg-gold hover:bg-rpg-gold-light text-rpg-dark px-4 py-1.5 rounded font-bold font-cinzel text-sm shadow-glow-gold/20 flex items-center gap-2 transition-all hover:scale-105"
+                        >
+                            <span>➕</span> Participar do Combate
+                        </button>
                     </div>
                 </div>
             </section>
@@ -230,7 +325,69 @@ export default function SharedArenaPage() {
                         );
                     })}
                 </div>
+
+                {/* Mobile Button */}
+                <div className="md:hidden fixed bottom-6 right-6 z-40">
+                    <button
+                        onClick={openJoinModal}
+                        className="bg-rpg-gold text-rpg-dark p-4 rounded-full shadow-2xl animate-bounce border-2 border-rpg-dark"
+                        title="Participar do Combate"
+                    >
+                        ➕
+                    </button>
+                </div>
             </main>
+
+            {/* MODAL JOIN */}
+            <Modal isOpen={isJoinModalOpen} onClose={() => setIsJoinModalOpen(false)} title="Convocação de Herói">
+                <div className="space-y-6">
+                    <div>
+                        <label className="block text-rpg-gold text-xs uppercase font-cinzel mb-2">Escolha seu Personagem</label>
+                        <select
+                            value={selectedCharId}
+                            onChange={(e) => setSelectedCharId(e.target.value)}
+                            className="w-full bg-rpg-slate border border-rpg-gold/20 p-3 rounded font-medieval text-rpg-parchment focus:border-rpg-gold outline-none"
+                        >
+                            <option value="">-- Selecione seu herói --</option>
+                            {myCharacters.map(c => (
+                                <option key={c.id} value={c.id}>{c.name} (Lvl {c.level} {c.class})</option>
+                            ))}
+                        </select>
+                        {myCharacters.length === 0 && (
+                            <p className="text-[10px] text-red-400 mt-2 font-medieval">Você não possui personagens criados.</p>
+                        )}
+                    </div>
+
+                    <div>
+                        <label className="block text-rpg-gold text-xs uppercase font-cinzel mb-2">Iniciativa da Rodada</label>
+                        <input
+                            type="number"
+                            value={joinInitiative}
+                            onChange={(e) => setJoinInitiative(Number(e.target.value))}
+                            className="w-full bg-rpg-slate border border-rpg-gold/10 p-3 rounded font-medieval text-rpg-parchment focus:border-rpg-gold outline-none text-2xl text-center font-bold"
+                            placeholder="Resultado do dado..."
+                        />
+                    </div>
+
+                    <div className="pt-4 flex justify-end gap-3 border-t border-white/10">
+                        <button
+                            type="button"
+                            onClick={() => setIsJoinModalOpen(false)}
+                            className="p-3 px-6 font-medieval text-rpg-grey hover:text-white"
+                        >
+                            Cancelar
+                        </button>
+                        <button
+                            type="button"
+                            onClick={handleJoinBattle}
+                            disabled={!selectedCharId || isJoining}
+                            className="bg-rpg-gold hover:bg-rpg-gold-light text-rpg-dark p-3 px-8 rounded font-bold font-cinzel shadow-glow-gold/20 transition-all disabled:opacity-50"
+                        >
+                            {isJoining ? 'Entrando...' : 'Entrar na Arena'}
+                        </button>
+                    </div>
+                </div>
+            </Modal>
         </div>
     );
 }
