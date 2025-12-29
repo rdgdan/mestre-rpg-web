@@ -104,7 +104,15 @@ export function mapImportedDataToCharacter(data: any, ownerId: string, imageUrl:
   });
 
   // --- MAGIAS ---
-  const spells = data.l?.map((spell: any) => ({
+  // Algumas classes (como Bruxo) podem ter magias em nós diferentes (e.g., Pact Magic em 'w')
+  const rawSpells = [...(data.l || []), ...(data.w || [])];
+
+  // Debug para desenvolvedor se necessário (visível no console do navegador)
+  if (rawSpells.length === 0 && (data.l || data.w)) {
+    console.warn("Mapeador: Nós de magia encontrados mas nenhum item processado.", { l: data.l, w: data.w });
+  }
+
+  const spells = rawSpells.map((spell: any) => ({
     name: spell.b?.d || 'Magia Desconhecida',
     description: spell.b?.e || 'Sem descrição.',
     level: safeParseInt(spell.b?.c, 0),
@@ -114,7 +122,7 @@ export function mapImportedDataToCharacter(data: any, ownerId: string, imageUrl:
     components: spell.b?.i || '',
     duration: spell.b?.j || '',
     prepared: !!spell.a?.d || false,
-  })) || [];
+  }));
 
   // --- INVENTÁRIO INTELIGENTE ---
   const weapons: Weapon[] = [];
