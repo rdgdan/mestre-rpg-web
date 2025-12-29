@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
 import { db } from '@/lib/firebase';
-import { collection, query, where, onSnapshot, doc, updateDoc, increment } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, doc, updateDoc, increment, setDoc } from 'firebase/firestore';
 import Modal from '@/components/Modal';
 import { dndMonsters, MonsterData } from '@/lib/monsters-data';
 import { npcTemplates, NPCTemplate } from '@/lib/npc-combatants-data';
@@ -59,6 +59,8 @@ export default function ConfrontosPage() {
     const [currentTurnIndex, setCurrentTurnIndex] = useState(0);
     const [round, setRound] = useState(1);
     const [expandedId, setExpandedId] = useState<string | null>(null);
+    const [onlineSessionId, setOnlineSessionId] = useState<string | null>(null);
+    const [isCreatingSession, setIsCreatingSession] = useState(false);
 
     // --- Estados de Modais ---
     const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -191,6 +193,66 @@ export default function ConfrontosPage() {
             setPhase('preparation');
         }
     };
+
+    const createOnlineSession = async () => {
+        if (!user) {
+            alert("Você precisa estar logado para criar uma sessão online.");
+            return;
+        }
+        if (combatants.length === 0) {
+            alert("Adicione pelo menos um combatente antes de iniciar uma sessão online.");
+            return;
+        }
+
+        setIsCreatingSession(true);
+        try {
+            const shortId = Math.random().toString(36).substring(2, 8).toUpperCase();
+            const sessionRef = doc(db, 'arenas_online', shortId);
+
+            await setDoc(sessionRef, {
+                id: shortId,
+                hostId: user.uid,
+                hostName: user.displayName || 'Mestre',
+                phase: phase,
+                round: round,
+                turnIndex: currentTurnIndex,
+                combatants: combatants.map(c => ({
+                    ...c,
+                    // Garante que não enviamos funções ou dados não-seriáveis
+                })),
+                createdAt: new Date().toISOString()
+            });
+
+            setOnlineSessionId(shortId);
+            alert(`Sessão Online criada! ID: ${shortId}. Use o link para convidar seus jogadores.`);
+        } catch (err) {
+            console.error("Erro ao criar sessão online:", err);
+            alert("Não foi possível criar a sessão online.");
+        } finally {
+            setIsCreatingSession(false);
+        }
+    };
+
+    // Sincronizar estado local com o Firestore se uma sessão online estiver ativa
+    useEffect(() => {
+        if (!onlineSessionId || !user) return;
+
+        const syncState = async () => {
+            try {
+                const sessionRef = doc(db, 'arenas_online', onlineSessionId);
+                await updateDoc(sessionRef, {
+                    phase: phase,
+                    round: round,
+                    turnIndex: currentTurnIndex,
+                    combatants: combatants
+                });
+            } catch (err) {
+                console.error("Erro ao sincronizar sessão online:", err);
+            }
+        };
+
+        syncState();
+    }, [phase, round, currentTurnIndex, combatants, onlineSessionId, user]);
 
     const finishCombat = () => {
         const defeatedEnemies = combatants.filter(c => (c.type === 'monster' || c.type === 'npc') && c.hp === 0);
@@ -395,6 +457,29 @@ export default function ConfrontosPage() {
                         >
                             + Adicionar
                         </button>
+                        {onlineSessionId ? (
+                            <div className="flex items-center gap-2 bg-green-900/30 border border-green-500/30 p-1 px-3 rounded">
+                                <span className="text-[10px] font-cinzel text-green-400">ONLINE: {onlineSessionId}</span>
+                                <button
+                                    onClick={() => {
+                                        const url = `${window.location.origin}/arena/${onlineSessionId}`;
+                                        navigator.clipboard.writeText(url);
+                                        alert("Link de convite copiado!");
+                                    }}
+                                    className="bg-green-600 hover:bg-green-500 text-white text-[10px] px-2 py-0.5 rounded font-bold"
+                                >
+                                    Copiar Link
+                                </button>
+                            </div>
+                        ) : (
+                            <button
+                                onClick={createOnlineSession}
+                                disabled={isCreatingSession || combatants.length === 0}
+                                className="bg-sky-600 hover:bg-sky-500 disabled:opacity-50 text-white p-2 px-4 rounded font-bold font-cinzel text-sm transition-all shadow-glow-sky/20"
+                            >
+                                {isCreatingSession ? 'Gerando...' : '🌐 Iniciar Sessão Online'}
+                            </button>
+                        )}
                         <Link href="/" className="text-rpg-grey hover:text-rpg-parchment flex items-center gap-2 font-medieval">
                             <span>&larr;</span> Sair
                         </Link>
