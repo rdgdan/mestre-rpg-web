@@ -6,6 +6,8 @@ import { useAuth } from '@/context/AuthContext';
 import { db } from '@/lib/firebase';
 import { collection, query, where, onSnapshot } from 'firebase/firestore';
 import Modal from '@/components/Modal';
+import { dndMonsters, MonsterData } from '@/lib/monsters-data';
+import { npcTemplates, NPCTemplate } from '@/lib/npc-combatants-data';
 
 // --- Tipos ---
 
@@ -24,6 +26,8 @@ interface Combatant {
     type: CombatantType;
     hp: number;
     maxHp: number;
+    ac: number;
+    cr: string;
     initiative: number;
     statusEffects: StatusEffect[];
     // Detalhes extras do banco
@@ -66,6 +70,8 @@ export default function ConfrontosPage() {
         name: '',
         type: 'monster' as CombatantType,
         hp: 10,
+        ac: 10,
+        cr: '0',
         initiative: '' as string | number,
         playerId: ''
     });
@@ -197,7 +203,9 @@ export default function ConfrontosPage() {
                     level: p.level,
                     equipment: p.equipment,
                     spells: p.spells,
-                    abilities: p.abilities
+                    abilities: p.abilities,
+                    ac: 10, // Default for players if not in ref
+                    cr: `Lvl ${p.level}`
                 };
             }
         }
@@ -216,6 +224,8 @@ export default function ConfrontosPage() {
             type: newCombatant.type,
             hp,
             maxHp: hp,
+            ac: newCombatant.ac || 10,
+            cr: newCombatant.cr || '0',
             initiative: initiativeValue,
             statusEffects: [],
             ...extraData
@@ -477,9 +487,20 @@ export default function ConfrontosPage() {
                                                         target="_blank"
                                                         className="text-rpg-gold hover:text-rpg-gold-light bg-rpg-gold/5 p-1 rounded border border-rpg-gold/20 flex items-center gap-1 text-[10px] uppercase font-bold px-2 transition-all hover:bg-rpg-gold/10"
                                                     >
-                                                        👁️ Ver Ficha
+                                                        👁️ Ficha
                                                     </Link>
                                                 )}
+
+                                                <div className="flex gap-2 ml-auto">
+                                                    <div className="flex flex-col items-center justify-center bg-rpg-panel border border-rpg-gold/20 rounded px-2 min-w-[40px]">
+                                                        <span className="text-[8px] text-rpg-grey uppercase font-cinzel">CA</span>
+                                                        <span className="text-xs font-bold text-rpg-gold">{c.ac}</span>
+                                                    </div>
+                                                    <div className="flex flex-col items-center justify-center bg-rpg-panel border border-white/5 rounded px-2 min-w-[40px]">
+                                                        <span className="text-[8px] text-rpg-grey uppercase font-cinzel">CR</span>
+                                                        <span className="text-xs font-bold text-rpg-parchment">{c.cr}</span>
+                                                    </div>
+                                                </div>
                                             </div>
 
                                             {/* Detalhes Extra no Combat */}
@@ -689,40 +710,107 @@ export default function ConfrontosPage() {
                                 </div>
                             </div>
                         ) : (
-                            <>
-                                <div className="col-span-1 sm:col-span-2">
-                                    <label className="block text-rpg-gold text-xs uppercase font-cinzel mb-1">Nome</label>
-                                    <input
-                                        type="text"
-                                        className="w-full bg-rpg-slate border border-white/10 p-3 rounded font-medieval text-rpg-parchment focus:border-rpg-gold outline-none"
-                                        placeholder="Dragão Vermelho, Grito de Guerra..."
-                                        value={newCombatant.name}
-                                        onChange={(e) => setNewCombatant({ ...newCombatant, name: e.target.value })}
-                                        required
-                                    />
-                                </div>
+                            <div className="col-span-1 sm:col-span-2 space-y-4">
                                 <div>
-                                    <label className="block text-rpg-gold text-xs uppercase font-cinzel mb-1">Vida Total (HP)</label>
-                                    <input
-                                        type="number"
+                                    <label className="block text-rpg-gold text-xs uppercase font-cinzel mb-1">
+                                        Selecionar da Biblioteca ({newCombatant.type === 'monster' ? 'Monstros' : 'NPCs'})
+                                    </label>
+                                    <select
                                         className="w-full bg-rpg-slate border border-white/10 p-3 rounded font-medieval text-rpg-parchment focus:border-rpg-gold outline-none"
-                                        value={newCombatant.hp}
-                                        onChange={(e) => setNewCombatant({ ...newCombatant, hp: Number(e.target.value) })}
-                                        required
-                                    />
+                                        onChange={(e) => {
+                                            if (newCombatant.type === 'monster') {
+                                                const m = dndMonsters.find(dm => dm.name === e.target.value);
+                                                if (m) {
+                                                    setNewCombatant({
+                                                        ...newCombatant,
+                                                        name: m.name,
+                                                        hp: m.hp,
+                                                        ac: m.ac,
+                                                        cr: m.challenge
+                                                    });
+                                                }
+                                            } else {
+                                                const n = npcTemplates.find(nt => nt.name === e.target.value);
+                                                if (n) {
+                                                    setNewCombatant({
+                                                        ...newCombatant,
+                                                        name: n.name,
+                                                        hp: n.hp,
+                                                        ac: n.ac,
+                                                        cr: n.challenge
+                                                    });
+                                                }
+                                            }
+                                        }}
+                                        defaultValue=""
+                                    >
+                                        <option value="" disabled>-- Escolha um {newCombatant.type === 'monster' ? 'Monstro' : 'NPC'} --</option>
+                                        {newCombatant.type === 'monster'
+                                            ? dndMonsters.map(m => (
+                                                <option key={m.name} value={m.name}>{m.name} (CR {m.challenge} • {m.hp} HP)</option>
+                                            ))
+                                            : npcTemplates.map(n => (
+                                                <option key={n.name} value={n.name}>{n.name} (CR {n.challenge} • {n.hp} HP)</option>
+                                            ))
+                                        }
+                                    </select>
                                 </div>
-                                <div>
-                                    <label className="block text-rpg-gold text-xs uppercase font-cinzel mb-1">Iniciativa {phase !== 'preparation' && <span className="text-red-500">*</span>}</label>
-                                    <input
-                                        type="number"
-                                        className="w-full bg-rpg-slate border border-white/10 p-3 rounded font-medieval text-rpg-parchment focus:border-rpg-gold outline-none"
-                                        value={newCombatant.initiative}
-                                        onChange={(e) => setNewCombatant({ ...newCombatant, initiative: e.target.value })}
-                                        required={phase !== 'preparation'}
-                                        placeholder={phase !== 'preparation' ? "Número..." : "0"}
-                                    />
+
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                    <div className="col-span-1 sm:col-span-2">
+                                        <label className="block text-rpg-gold text-xs uppercase font-cinzel mb-1">Nome Personalizado</label>
+                                        <input
+                                            type="text"
+                                            className="w-full bg-rpg-slate border border-white/10 p-3 rounded font-medieval text-rpg-parchment focus:border-rpg-gold outline-none"
+                                            placeholder="Nome..."
+                                            value={newCombatant.name}
+                                            onChange={(e) => setNewCombatant({ ...newCombatant, name: e.target.value })}
+                                            required
+                                        />
+                                    </div>
+                                    <div className="col-span-1">
+                                        <label className="block text-rpg-gold text-xs uppercase font-cinzel mb-1">Vida Total (HP)</label>
+                                        <input
+                                            type="number"
+                                            className="w-full bg-rpg-slate border border-white/10 p-3 rounded font-medieval text-rpg-parchment focus:border-rpg-gold outline-none"
+                                            value={newCombatant.hp}
+                                            onChange={(e) => setNewCombatant({ ...newCombatant, hp: Number(e.target.value) })}
+                                            required
+                                        />
+                                    </div>
+                                    <div className="col-span-1">
+                                        <label className="block text-rpg-gold text-xs uppercase font-cinzel mb-1">Classe de Armadura (CA)</label>
+                                        <input
+                                            type="number"
+                                            className="w-full bg-rpg-slate border border-white/10 p-3 rounded font-medieval text-rpg-parchment focus:border-rpg-gold outline-none"
+                                            value={newCombatant.ac}
+                                            onChange={(e) => setNewCombatant({ ...newCombatant, ac: Number(e.target.value) })}
+                                            required
+                                        />
+                                    </div>
+                                    <div className="col-span-1">
+                                        <label className="block text-rpg-gold text-xs uppercase font-cinzel mb-1">Nível de Desafio (CR)</label>
+                                        <input
+                                            type="text"
+                                            className="w-full bg-rpg-slate border border-white/10 p-3 rounded font-medieval text-rpg-parchment focus:border-rpg-gold outline-none"
+                                            value={newCombatant.cr}
+                                            onChange={(e) => setNewCombatant({ ...newCombatant, cr: e.target.value })}
+                                            placeholder="Ex: 1/4, 5, etc"
+                                        />
+                                    </div>
+                                    <div className="col-span-1">
+                                        <label className="block text-rpg-gold text-xs uppercase font-cinzel mb-1">Iniciativa {phase !== 'preparation' && <span className="text-red-500">*</span>}</label>
+                                        <input
+                                            type="number"
+                                            className="w-full bg-rpg-slate border border-white/10 p-3 rounded font-medieval text-rpg-parchment focus:border-rpg-gold outline-none"
+                                            value={newCombatant.initiative}
+                                            onChange={(e) => setNewCombatant({ ...newCombatant, initiative: e.target.value })}
+                                            required={phase !== 'preparation'}
+                                            placeholder={phase !== 'preparation' ? "Número..." : "0"}
+                                        />
+                                    </div>
                                 </div>
-                            </>
+                            </div>
                         )}
                     </div>
 

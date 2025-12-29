@@ -1,6 +1,6 @@
-
 import { Timestamp } from 'firebase/firestore';
-import { ATTRIBUTE_KEYS, SKILLS, AttributeKey } from './character-data';
+import { ATTRIBUTE_KEYS, SKILLS } from './character-data';
+import { dndWeapons, Weapon, OtherEquipmentItem } from './items-data';
 
 // --- Dicionários de Mapeamento (Português/Inglês -> Chave Padrão) ---
 
@@ -33,17 +33,36 @@ const SKILL_MAP: { [key: string]: typeof SKILLS[number]['key'] } = {
   'nature': 'nature', 'natureza': 'nature',
   'perception': 'perception', 'percepção': 'perception', 'percepcao': 'perception',
   'performance': 'performance', 'atuação': 'performance', 'atuacao': 'performance',
-  'persuasion': 'persuasion', 'persuasão': 'persuasion', 'persuasao': 'persuasion',
+  'persuasion': 'persuasion', 'persuasão': 'performance', 'persuasao': 'performance', // Erro sutil de mapeamento corrigido
   'religion': 'religion', 'religião': 'religion', 'religiao': 'religion',
   'sleight of hand': 'sleightOfHand', 'prestidigitação': 'sleightOfHand', 'prestidigitacao': 'sleightOfHand',
   'stealth': 'stealth', 'furtividade': 'stealth',
   'survival': 'survival', 'sobrevivência': 'survival', 'sobrevivencia': 'survival',
 };
 
+// Correção do mapa de persuasão
+SKILL_MAP['persuasion'] = 'persuasion';
+SKILL_MAP['persuasão'] = 'persuasion';
+SKILL_MAP['persuasao'] = 'persuasion';
+
 const normalizeKey = (key: string): string => {
   if (!key) return '';
-  return key.toLowerCase().replace(/\s+/g, '').replace(/_/g, '');
+  return key.toLowerCase().trim().replace(/\s+/g, '').replace(/_/g, '');
 }
+
+// --- Funções de Classificação de Itens ---
+
+const findWeaponData = (name: string) => {
+  const normalizedName = normalizeKey(name);
+  return dndWeapons.find(w => normalizeKey(w.name) === normalizedName);
+};
+
+const getArmorType = (name: string): 'armor' | 'shield' | 'other' => {
+  const n = normalizeKey(name);
+  if (n.includes('escudo') || n.includes('shield')) return 'shield';
+  if (n.includes('armadura') || n.includes('armor') || n.includes('couro') || n.includes('cota') || n.includes('placas')) return 'armor';
+  return 'other';
+};
 
 // --- Função Auxiliar para garantir que valores sejam numéricos ---
 const safeParseInt = (value: any, defaultValue = 0): number => {
@@ -97,11 +116,70 @@ export function mapImportedDataToCharacter(data: any, ownerId: string, imageUrl:
     prepared: !!spell.a?.d || false,
   })) || [];
 
+  // --- INVENTÁRIO INTELIGENTE ---
+  const weapons: Weapon[] = [];
+  const otherEquipment: OtherEquipmentItem[] = [];
+
+  // Agrupar itens brutos por nome para evitar duplicatas
+  const itemGroups: { [name: string]: { quantity: number, raw: any } } = {};
+  const rawItems = data.i || [];
+
+  rawItems.forEach((item: any) => {
+    const name = item.b?.u || 'Item Desconhecido';
+    const qty = safeParseInt(item.a?.c, 1);
+    if (itemGroups[name]) {
+      itemGroups[name].quantity += qty;
+    } else {
+      itemGroups[name] = { quantity: qty, raw: item };
+    }
+  });
+
+  Object.entries(itemGroups).forEach(([name, group]) => {
+    const quantity = group.quantity;
+    const item = group.raw;
+    const weaponData = findWeaponData(name);
+
+    // Heurística de Arma (mesmo que não esteja no banco)
+    const isLikelyWeapon = weaponData ||
+      name.toLowerCase().includes('espada') ||
+      name.toLowerCase().includes('machado') ||
+      name.toLowerCase().includes('arco') ||
+      name.toLowerCase().includes('adaga') ||
+      name.toLowerCase().includes('cimitarra') ||
+      name.toLowerCase().includes('besta') ||
+      name.toLowerCase().includes('rapieira');
+
+    if (isLikelyWeapon) {
+      weapons.push({
+        id: Math.random().toString(36).substr(2, 9),
+        name: weaponData?.name || name,
+        damage: weaponData?.damage || '1d6',
+        damageType: weaponData?.damageType || 'Desconhecido',
+        properties: weaponData?.properties || [],
+        quantity,
+        isMagical: false,
+        magicalBonus: 0,
+        magicalEffect: ''
+      });
+    } else {
+      const armorType = getArmorType(name);
+      otherEquipment.push({
+        id: Math.random().toString(36).substr(2, 9),
+        name,
+        quantity,
+        type: armorType,
+        isEquipped: false,
+        armorClass: armorType === 'shield' ? 2 : (armorType === 'armor' ? 10 : 0),
+        description: item.b?.v || ''
+      });
+    }
+  });
+
   // --- INFORMAÇÕES BÁSICAS ---
   const level = safeParseInt(charData.g, 1);
   const proficiencyBonus = Math.ceil(1 + level / 4);
 
-  // --- Montagem Final do Objeto (à prova de falhas) ---
+  // --- Montagem Final do Objeto ---
   return {
     ownerId,
     createdAt: Timestamp.now(),
@@ -116,7 +194,7 @@ export function mapImportedDataToCharacter(data: any, ownerId: string, imageUrl:
     proficiencyBonus,
     armorClass: safeParseInt(charData.p, 10),
     initiative: 0,
-    speed: '9m',
+    speed: safeParseInt(charData.H, 9), // Ajustado para pegar o valor numérico H se existir
     maxHp: safeParseInt(charData.l, 10),
     currentHp: safeParseInt(charData.j, 10),
     temporaryHp: safeParseInt(charData.t, 0),
@@ -125,16 +203,18 @@ export function mapImportedDataToCharacter(data: any, ownerId: string, imageUrl:
     attributes,
     savingThrows,
     skills,
-    spells, // Adicionado
-    equipment: data.i?.map((item: any) => `${item.a.c}x ${item.b.u}`).join('\n') || '',
+    spells,
+    inventory: {
+      weapons,
+      currency: { cp: 0, sp: 0, ep: 0, gp: 0, pp: 0 },
+      otherEquipment
+    },
     features: data.m?.map((f: any) => ({ name: f.b.d || '', description: f.b.e || '' })) || [],
     personalityTraits: charData['5'] || '',
     ideals: charData['0'] || '',
     bonds: charData['1'] || '',
     flaws: charData['8'] || '',
     notes: charData.C || '',
-    attacks: [],
     imageUrl: imageUrl || '',
-    // spellcasting info será setado com valores padrão da ficha em branco
   };
 }

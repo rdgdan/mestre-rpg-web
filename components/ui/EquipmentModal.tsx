@@ -16,6 +16,7 @@ interface EquipmentModalProps {
     onSave: (item: OtherEquipmentItem) => void;
     allEquipment: EquipmentData[]; // Lista de todos os equipamentos do DB
     onAddNewGlobalItem: (itemName: string) => Promise<void>; // Função para criar um novo item no DB
+    itemToEdit?: OtherEquipmentItem | null; // Novo prop para edição
 }
 
 const EquipmentModal: React.FC<EquipmentModalProps> = ({
@@ -23,7 +24,8 @@ const EquipmentModal: React.FC<EquipmentModalProps> = ({
     onClose,
     onSave,
     allEquipment,
-    onAddNewGlobalItem
+    onAddNewGlobalItem,
+    itemToEdit
 }) => {
     const [selectedItemName, setSelectedItemName] = useState('');
     const [quantity, setQuantity] = useState(1);
@@ -32,15 +34,23 @@ const EquipmentModal: React.FC<EquipmentModalProps> = ({
     const [newItemName, setNewItemName] = useState('');
 
     useEffect(() => {
-        // Resetar o estado quando o modal for aberto
+        // Resetar ou popular o estado quando o modal for aberto
         if (isOpen) {
-            setSelectedItemName('');
-            setQuantity(1);
-            setSearchTerm('');
-            setIsCreatingNew(false);
-            setNewItemName('');
+            if (itemToEdit) {
+                setSelectedItemName(itemToEdit.name);
+                setQuantity(itemToEdit.quantity);
+                setSearchTerm('');
+                setIsCreatingNew(false);
+                setNewItemName('');
+            } else {
+                setSelectedItemName('');
+                setQuantity(1);
+                setSearchTerm('');
+                setIsCreatingNew(false);
+                setNewItemName('');
+            }
         }
-    }, [isOpen]);
+    }, [isOpen, itemToEdit]);
 
     const filteredEquipment = searchTerm
         ? allEquipment.filter(item => item.name.toLowerCase().includes(searchTerm.toLowerCase()))
@@ -68,7 +78,8 @@ const EquipmentModal: React.FC<EquipmentModalProps> = ({
         }
 
         onSave({
-            id: new Date().toISOString(),
+            ...itemToEdit, // Preserva campos como isEquipped, armorClass, etc.
+            id: itemToEdit?.id || new Date().toISOString(),
             name: nameToSave,
             quantity
         });
@@ -80,7 +91,9 @@ const EquipmentModal: React.FC<EquipmentModalProps> = ({
     return (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex justify-center items-center z-50">
             <div className="bg-rpg-panel border-2 border-rpg-gold/30 p-6 rounded-lg shadow-2xl w-full max-w-md shadow-black/50">
-                <h2 className="text-2xl font-bold text-rpg-gold mb-4 font-cinzel border-b border-rpg-gold/20 pb-2">Adicionar Equipamento</h2>
+                <h2 className="text-2xl font-bold text-rpg-gold mb-4 font-cinzel border-b border-rpg-gold/20 pb-2">
+                    {itemToEdit ? 'Editar Equipamento' : 'Adicionar Equipamento'}
+                </h2>
 
                 {isCreatingNew ? (
                     <div className="space-y-4">

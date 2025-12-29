@@ -556,7 +556,14 @@ export default function CharacterSheetPage() {
                 {isSelectionModalOpen && modalConfig && <SelectionModal isOpen={isSelectionModalOpen} onClose={() => setSelectionModalOpen(false)} title={modalConfig.title} items={modalConfig.type === 'class' ? classes : (modalConfig.type === 'race' ? races : weapons.map(w => w.name))} onSelectItem={handleSelectItem} onAddItem={modalConfig.type === 'weapon' ? async () => { handleOpenWeaponModal(null); } : undefined} isLoading={isDbDataLoading} />}
                 <WeaponModal isOpen={isWeaponModalOpen} onClose={() => setWeaponModalOpen(false)} onSave={handleSaveWeapon} weaponToEdit={weaponToEdit} />
                 {/* PASSO 6: Renderizar o novo modal */}
-                <EquipmentModal isOpen={isEquipmentModalOpen} onClose={() => setEquipmentModalOpen(false)} onSave={handleSaveEquipment} allEquipment={allEquipment} onAddNewGlobalItem={handleAddNewGlobalItem} />
+                <EquipmentModal
+                    isOpen={isEquipmentModalOpen}
+                    onClose={() => setEquipmentModalOpen(false)}
+                    onSave={handleSaveEquipment}
+                    allEquipment={allEquipment}
+                    onAddNewGlobalItem={handleAddNewGlobalItem}
+                    itemToEdit={equipmentToEdit}
+                />
             </div>
         </div>
     );
