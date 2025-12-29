@@ -14,23 +14,143 @@ type TabType = 'grimorio' | 'bestiario' | 'itens' | 'regras' | 'notas';
 
 // Componente Grimório
 function GrimorioTab({ searchQuery }: { searchQuery: string }) {
+    const { user } = useAuth();
     const [levelFilter, setLevelFilter] = useState<number | undefined>(undefined);
     const [schoolFilter, setSchoolFilter] = useState<string>('');
     const [classFilter, setClassFilter] = useState<string>('');
     const [selectedSpell, setSelectedSpell] = useState<Spell | null>(null);
+    const [customSpells, setCustomSpells] = useState<Spell[]>([]);
+    const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+    const [newSpell, setNewSpell] = useState({
+        name: '',
+        level: 0,
+        school: 'Evocação' as Spell['school'],
+        castingTime: '1 ação',
+        range: '',
+        components: '',
+        duration: '',
+        description: '',
+        classes: [] as string[]
+    });
 
-    const spells = searchSpells(searchQuery, {
+    useEffect(() => {
+        if (user) loadCustomSpells();
+    }, [user]);
+
+    const loadCustomSpells = async () => {
+        if (!user) return;
+        try {
+            const docRef = doc(db, 'custom_spells', user.uid);
+            const docSnap = await getDoc(docRef);
+            if (docSnap.exists()) {
+                setCustomSpells(docSnap.data().spells || []);
+            }
+        } catch (error) {
+            console.error('Erro ao carregar magias:', error);
+        }
+    };
+
+    const saveCustomSpell = async () => {
+        if (!user || !newSpell.name) return;
+        try {
+            const spell: Spell = {
+                ...newSpell,
+                id: `custom-${Date.now()}`,
+                concentration: false
+            };
+            const updatedSpells = [...customSpells, spell];
+            await setDoc(doc(db, 'custom_spells', user.uid), { spells: updatedSpells });
+            setCustomSpells(updatedSpells);
+            setIsAddModalOpen(false);
+            setNewSpell({ name: '', level: 0, school: 'Evocação', castingTime: '1 ação', range: '', components: '', duration: '', description: '', classes: [] });
+        } catch (error) {
+            console.error('Erro ao salvar magia:', error);
+        }
+    };
+
+    const allSpells = [...searchSpells(searchQuery, {
         level: levelFilter,
         school: schoolFilter || undefined,
         class: classFilter || undefined
-    });
+    }), ...customSpells.filter(spell =>
+        spell.name.toLowerCase().includes(searchQuery.toLowerCase())
+    )];
 
     const schools = ['Abjuração', 'Adivinhação', 'Conjuração', 'Encantamento', 'Evocação', 'Ilusão', 'Necromancia', 'Transmutação'];
     const classes = ['Mago', 'Feiticeiro', 'Clérigo', 'Paladino', 'Druida', 'Bardo', 'Bruxo', 'Patrulheiro'];
 
     return (
         <div>
-            <h2 className="text-2xl font-bold font-cinzel text-rpg-gold mb-4">✨ Grimório de Magias</h2>
+            <div className="flex justify-between items-center mb-4">
+                <h2 className="text-2xl font-bold font-cinzel text-rpg-gold">✨ Grimório de Magias</h2>
+                <button
+                    onClick={() => setIsAddModalOpen(true)}
+                    className="bg-rpg-gold text-rpg-dark px-4 py-2 rounded font-bold hover:scale-105 transition-all text-sm"
+                >
+                    + Adicionar Magia
+                </button>
+            </div>
+
+            {/* Modal de Adicionar Magia */}
+            {isAddModalOpen && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70">
+                    <div className="bg-rpg-panel border-2 border-rpg-gold/30 rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+                        <div className="sticky top-0 bg-rpg-panel border-b border-rpg-gold/20 p-4 flex justify-between items-center">
+                            <h3 className="text-xl font-bold font-cinzel text-rpg-gold">Nova Magia Customizada</h3>
+                            <button onClick={() => setIsAddModalOpen(false)} className="text-rpg-grey hover:text-rpg-gold text-2xl">×</button>
+                        </div>
+                        <div className="p-6 space-y-4">
+                            <input
+                                type="text"
+                                placeholder="Nome da Magia"
+                                value={newSpell.name}
+                                onChange={(e) => setNewSpell({ ...newSpell, name: e.target.value })}
+                                className="w-full bg-rpg-slate border border-rpg-gold/20 rounded px-3 py-2 text-rpg-parchment"
+                            />
+                            <div className="grid grid-cols-2 gap-4">
+                                <select
+                                    value={newSpell.level}
+                                    onChange={(e) => setNewSpell({ ...newSpell, level: parseInt(e.target.value) })}
+                                    className="bg-rpg-slate border border-rpg-gold/20 rounded px-3 py-2 text-rpg-parchment"
+                                >
+                                    {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map(l => <option key={l} value={l}>{l === 0 ? 'Truque' : `Nível ${l}`}</option>)}
+                                </select>
+                                <select
+                                    value={newSpell.school}
+                                    onChange={(e) => setNewSpell({ ...newSpell, school: e.target.value as Spell['school'] })}
+                                    className="bg-rpg-slate border border-rpg-gold/20 rounded px-3 py-2 text-rpg-parchment"
+                                >
+                                    {schools.map(s => <option key={s} value={s}>{s}</option>)}
+                                </select>
+                            </div>
+                            <input
+                                type="text"
+                                placeholder="Tempo de Conjuração (ex: 1 ação)"
+                                value={newSpell.castingTime}
+                                onChange={(e) => setNewSpell({ ...newSpell, castingTime: e.target.value })}
+                                className="w-full bg-rpg-slate border border-rpg-gold/20 rounded px-3 py-2 text-rpg-parchment"
+                            />
+                            <input
+                                type="text"
+                                placeholder="Alcance (ex: 18 metros)"
+                                value={newSpell.range}
+                                onChange={(e) => setNewSpell({ ...newSpell, range: e.target.value })}
+                                className="w-full bg-rpg-slate border border-rpg-gold/20 rounded px-3 py-2 text-rpg-parchment"
+                            />
+                            <textarea
+                                placeholder="Descrição da magia..."
+                                value={newSpell.description}
+                                onChange={(e) => setNewSpell({ ...newSpell, description: e.target.value })}
+                                className="w-full bg-rpg-slate border border-rpg-gold/20 rounded px-3 py-2 text-rpg-parchment min-h-[120px]"
+                            />
+                            <div className="flex gap-2">
+                                <button onClick={saveCustomSpell} className="bg-rpg-gold text-rpg-dark px-6 py-2 rounded font-bold hover:scale-105 transition-all">Salvar</button>
+                                <button onClick={() => setIsAddModalOpen(false)} className="bg-rpg-slate text-rpg-parchment px-6 py-2 rounded hover:bg-rpg-slate/80">Cancelar</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* Filtros */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
@@ -80,10 +200,10 @@ function GrimorioTab({ searchQuery }: { searchQuery: string }) {
             {/* Lista de Magias */}
             <div className="grid md:grid-cols-2 gap-4">
                 <div className="space-y-3 max-h-[600px] overflow-y-auto pr-2">
-                    {spells.length === 0 ? (
+                    {allSpells.length === 0 ? (
                         <p className="text-rpg-grey text-center py-8">Nenhuma magia encontrada.</p>
                     ) : (
-                        spells.map(spell => (
+                        allSpells.map(spell => (
                             <div
                                 key={spell.id}
                                 onClick={() => setSelectedSpell(spell)}
@@ -356,8 +476,8 @@ function RegrasTab({ searchQuery }: { searchQuery: string }) {
                             key={chapter.id}
                             onClick={() => setSelectedChapter(chapter)}
                             className={`w-full text-left p-3 rounded transition-all ${selectedChapter.id === chapter.id
-                                    ? 'bg-rpg-gold text-rpg-dark font-bold'
-                                    : 'bg-rpg-slate text-rpg-parchment hover:bg-rpg-slate/80 border border-rpg-gold/10'
+                                ? 'bg-rpg-gold text-rpg-dark font-bold'
+                                : 'bg-rpg-slate text-rpg-parchment hover:bg-rpg-slate/80 border border-rpg-gold/10'
                                 }`}
                         >
                             {chapter.title}
