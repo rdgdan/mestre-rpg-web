@@ -1,7 +1,7 @@
 
 "use client";
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { doc, getDoc, setDoc, getDocs, collection, writeBatch, addDoc } from 'firebase/firestore';
@@ -105,7 +105,7 @@ export default function CharacterSheetPage() {
     const [weaponSearchTerm, setWeaponSearchTerm] = useState('');
     const [equipmentSearchTerm, setEquipmentSearchTerm] = useState('');
 
-    const debouncedSave = useCallback(debounce(async (charToSave: Character) => {
+    const debouncedSave = useMemo(() => debounce(async (charToSave: Character) => {
         if (!user || !charToSave.id || charToSave.id === 'novo') return;
         try {
             const docRef = doc(db, 'personagens', charToSave.id);
@@ -175,18 +175,26 @@ export default function CharacterSheetPage() {
         fetchGameData();
     }, []);
 
+    const characterLoaded = useRef(false);
+
     useEffect(() => {
-        if (loadingAuth || !user || (id === 'novo' && character)) return;
+        if (loadingAuth || !user || characterLoaded.current) return;
+
+        // Se for novo, só criamos se ainda não tiver um character (evita loop se o user recarregar)
+        if (id === 'novo' && character) return;
+
         const loadChar = async () => {
             setIsLoading(true);
             try {
                 if (id === 'novo') {
                     setCharacter(createBlankCharacter(user.uid));
+                    characterLoaded.current = true;
                 } else {
                     const docRef = doc(db, 'personagens', id);
                     const docSnap = await getDoc(docRef);
                     if (docSnap.exists() && docSnap.data().ownerId === user.uid) {
                         setCharacter(hydrateCharacter(docSnap.data() as Partial<Character>, docSnap.id));
+                        characterLoaded.current = true;
                     } else {
                         setError("Ficha não encontrada ou acesso negado.");
                         router.push('/personagens');
@@ -196,7 +204,7 @@ export default function CharacterSheetPage() {
             finally { setIsLoading(false); }
         }
         loadChar();
-    }, [id, user, loadingAuth, router]);
+    }, [id, user, loadingAuth, router, character]); // Agora character é dependência, mas o ref impede loop
 
     // --- Lógica de Gerenciamento do Personagem (nested changes, etc.) --- 
     const handleFieldChange = (field: keyof Omit<Character, 'attributes' | 'skills' | 'inventory'>, value: any) => {

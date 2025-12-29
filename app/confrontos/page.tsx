@@ -1034,7 +1034,7 @@ export default function ConfrontosPage() {
                                     </div>
                                 ))}
                             </div>
-                            <p className="text-[9px] text-rpg-grey mt-2 italic leading-tight">* "Reviver" colocará o personagem com 1 HP na ficha. "Óbito" manterá o status de 0 HP.</p>
+                            <p className="text-[9px] text-rpg-grey mt-2 italic leading-tight">* &quot;Reviver&quot; colocará o personagem com 1 HP na ficha. &quot;Óbito&quot; manterá o status de 0 HP.</p>
                         </div>
                     )}
 
