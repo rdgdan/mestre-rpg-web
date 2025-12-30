@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
 import { searchSpells, Spell } from '@/lib/spells-data';
@@ -33,7 +33,7 @@ function GrimorioTab({ searchQuery }: { searchQuery: string }) {
         classes: [] as string[]
     });
 
-    const loadCustomSpells = React.useCallback(async () => {
+    const loadCustomSpells = useCallback(async () => {
         if (!user) return;
         try {
             const docRef = doc(db, 'custom_spells', user.uid);
@@ -503,7 +503,7 @@ function NotasTab() {
     const [isSaving, setIsSaving] = useState(false);
     const [lastSaved, setLastSaved] = useState<Date | null>(null);
 
-    const loadNotes = React.useCallback(async () => {
+    const loadNotes = useCallback(async () => {
         if (!user) return;
         try {
             const docRef = doc(db, 'master_notes', user.uid);

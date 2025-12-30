@@ -24,12 +24,17 @@ const BLANK_WEAPON: Omit<Weapon, 'id'> = {
 };
 
 const WeaponModal: React.FC<WeaponModalProps> = ({ isOpen, onClose, onSave, weaponToEdit }) => {
-    const [weapon, setWeapon] = useState<Weapon>({ id: new Date().toISOString(), ...BLANK_WEAPON });
+    type WeaponEdit = Omit<Weapon, 'quantity' | 'magicalBonus'> & { quantity: number | ''; magicalBonus: number | '' };
+    const [weapon, setWeapon] = useState<WeaponEdit>({ id: new Date().toISOString(), ...BLANK_WEAPON });
 
     useEffect(() => {
         if (isOpen) {
             if (weaponToEdit) {
-                setWeapon({ ...weaponToEdit, quantity: weaponToEdit.quantity === 0 ? '' : weaponToEdit.quantity, magicalBonus: weaponToEdit.magicalBonus === 0 ? '' : weaponToEdit.magicalBonus });
+                setWeapon({
+                    ...weaponToEdit,
+                    quantity: weaponToEdit.quantity === 0 ? '' : weaponToEdit.quantity,
+                    magicalBonus: weaponToEdit.magicalBonus === 0 ? '' : weaponToEdit.magicalBonus
+                });
             } else {
                 setWeapon({ id: new Date().toISOString(), ...BLANK_WEAPON });
             }
@@ -64,7 +69,7 @@ const WeaponModal: React.FC<WeaponModalProps> = ({ isOpen, onClose, onSave, weap
     };
 
     const handleSave = () => {
-        const weaponToSave = {
+        const weaponToSave: Weapon = {
             ...weapon,
             quantity: weapon.quantity === '' ? 1 : weapon.quantity,
             magicalBonus: weapon.magicalBonus === '' ? 0 : weapon.magicalBonus
