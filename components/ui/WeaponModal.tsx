@@ -29,8 +29,7 @@ const WeaponModal: React.FC<WeaponModalProps> = ({ isOpen, onClose, onSave, weap
     useEffect(() => {
         if (isOpen) {
             if (weaponToEdit) {
-                // Garante que a quantidade seja pelo menos 1 ao editar
-                setWeapon({ ...weaponToEdit, quantity: weaponToEdit.quantity || 1 });
+                setWeapon({ ...weaponToEdit, quantity: weaponToEdit.quantity === 0 ? '' : weaponToEdit.quantity, magicalBonus: weaponToEdit.magicalBonus === 0 ? '' : weaponToEdit.magicalBonus });
             } else {
                 setWeapon({ id: new Date().toISOString(), ...BLANK_WEAPON });
             }
@@ -38,10 +37,21 @@ const WeaponModal: React.FC<WeaponModalProps> = ({ isOpen, onClose, onSave, weap
     }, [weaponToEdit, isOpen]);
 
     const handleChange = (field: keyof Weapon, value: any) => {
-        // Garante que a quantidade nunca seja menor que 1
         if (field === 'quantity') {
-            const numValue = parseInt(value, 10);
-            value = isNaN(numValue) || numValue < 1 ? 1 : numValue;
+            if (value === '') {
+                value = '';
+            } else {
+                const numValue = parseInt(value, 10);
+                value = isNaN(numValue) || numValue < 1 ? 1 : numValue;
+            }
+        }
+        if (field === 'magicalBonus') {
+            if (value === '') {
+                value = '';
+            } else {
+                const numValue = parseInt(value, 10);
+                value = isNaN(numValue) ? 0 : numValue;
+            }
         }
         setWeapon(prev => ({ ...prev, [field]: value }));
     };
@@ -54,7 +64,12 @@ const WeaponModal: React.FC<WeaponModalProps> = ({ isOpen, onClose, onSave, weap
     };
 
     const handleSave = () => {
-        onSave(weapon);
+        const weaponToSave = {
+            ...weapon,
+            quantity: weapon.quantity === '' ? 1 : weapon.quantity,
+            magicalBonus: weapon.magicalBonus === '' ? 0 : weapon.magicalBonus
+        };
+        onSave(weaponToSave);
     };
 
     if (!isOpen) return null;
@@ -69,7 +84,7 @@ const WeaponModal: React.FC<WeaponModalProps> = ({ isOpen, onClose, onSave, weap
                         {/* CAMPO DE QUANTIDADE */}
                         <div className="md:col-span-1">
                             <label className="block text-sm font-bold text-rpg-gold font-medieval mb-1">Qtd.</label>
-                            <input type="number" value={weapon.quantity} onChange={e => handleChange('quantity', e.target.value)} className="w-full p-2 bg-rpg-slate border border-rpg-gold/10 rounded-md text-rpg-parchment focus:outline-none focus:ring-2 focus:ring-rpg-gold font-medieval text-center" />
+                            <input type="number" value={weapon.quantity === 0 ? '' : weapon.quantity} onChange={e => handleChange('quantity', e.target.value)} className="w-full p-2 bg-rpg-slate border border-rpg-gold/10 rounded-md text-rpg-parchment focus:outline-none focus:ring-2 focus:ring-rpg-gold font-medieval text-center" />
                         </div>
                         <div className="md:col-span-3">
                             <label className="block text-sm font-bold text-rpg-gold font-medieval mb-1">Nome da Arma</label>
@@ -116,7 +131,7 @@ const WeaponModal: React.FC<WeaponModalProps> = ({ isOpen, onClose, onSave, weap
                             <div className="space-y-3 pl-8 animate-fade-in">
                                 <div>
                                     <label className="block text-sm font-bold text-rpg-gold font-medieval mb-1">Bônus Mágico (+)</label>
-                                    <input type="number" value={weapon.magicalBonus} onChange={e => handleChange('magicalBonus', parseInt(e.target.value, 10) || 0)} className="w-full p-2 bg-rpg-slate border border-rpg-gold/10 rounded-md text-rpg-parchment focus:outline-none focus:ring-2 focus:ring-rpg-gold font-medieval" />
+                                    <input type="number" value={weapon.magicalBonus === 0 ? '' : weapon.magicalBonus} onChange={e => handleChange('magicalBonus', e.target.value)} className="w-full p-2 bg-rpg-slate border border-rpg-gold/10 rounded-md text-rpg-parchment focus:outline-none focus:ring-2 focus:ring-rpg-gold font-medieval" />
                                 </div>
                                 <div>
                                     <label className="block text-sm font-bold text-rpg-gold font-medieval mb-1">Efeitos Mágicos</label>

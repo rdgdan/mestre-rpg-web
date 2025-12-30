@@ -156,8 +156,16 @@ export default function SharedArenaPage() {
             // Reordenar a iniciativa no banco
             updatedCombatants.sort((a, b) => b.initiative - a.initiative);
 
+            // Sanitiza combatentes
+            const sanitizedCombatants = updatedCombatants.map(c => {
+                const clean = { ...c };
+                Object.keys(clean).forEach(key => {
+                    if (clean[key] === undefined) delete clean[key];
+                });
+                return clean;
+            });
             await updateDoc(sessionRef, {
-                combatants: updatedCombatants
+                combatants: sanitizedCombatants
             });
 
             setIsJoinModalOpen(false);
@@ -221,8 +229,15 @@ export default function SharedArenaPage() {
             myCombatant.statusEffects = [...myCombatant.statusEffects, newEffect];
             updatedCombatants[myCombatantIndex] = myCombatant;
 
+            const sanitizedCombatants = updatedCombatants.map(c => {
+                const clean = { ...c };
+                Object.keys(clean).forEach(key => {
+                    if (clean[key] === undefined) delete clean[key];
+                });
+                return clean;
+            });
             await updateDoc(sessionRef, {
-                combatants: updatedCombatants
+                combatants: sanitizedCombatants
             });
 
             setCooldowns(prev => ({ ...prev, [effectName]: Date.now() + 2000 }));
@@ -256,8 +271,15 @@ export default function SharedArenaPage() {
                 return c;
             });
 
+            const sanitizedCombatants = updatedCombatants.map(c => {
+                const clean = { ...c };
+                Object.keys(clean).forEach(key => {
+                    if (clean[key] === undefined) delete clean[key];
+                });
+                return clean;
+            });
             await updateDoc(sessionRef, {
-                combatants: updatedCombatants
+                combatants: sanitizedCombatants
             });
         } catch (err) {
             console.error("Erro ao remover efeito:", err);
@@ -301,10 +323,17 @@ export default function SharedArenaPage() {
             return c;
         });
 
+        const sanitizedCombatants = updatedCombatants.map(c => {
+            const clean = { ...c };
+            Object.keys(clean).forEach(key => {
+                if (clean[key] === undefined) delete clean[key];
+            });
+            return clean;
+        });
         await updateDoc(sessionRef, {
             turnIndex: nextIndex,
             round: nextRound,
-            combatants: updatedCombatants,
+            combatants: sanitizedCombatants,
             phase: 'combat'
         });
     };
@@ -320,8 +349,15 @@ export default function SharedArenaPage() {
             return c;
         });
 
+        const sanitizedCombatants = updatedCombatants.map(c => {
+            const clean = { ...c };
+            Object.keys(clean).forEach(key => {
+                if (clean[key] === undefined) delete clean[key];
+            });
+            return clean;
+        });
         await updateDoc(sessionRef, {
-            combatants: updatedCombatants
+            combatants: sanitizedCombatants
         });
     };
 

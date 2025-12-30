@@ -20,9 +20,12 @@ export const EditableField = ({ initialValue, onSave, label, isTextarea = false,
 
   const handleSave = () => {
     // Salva apenas se o valor mudou
-    if (value !== initialValue) {
-      // Converte para número se o valor inicial era um número
-      const newValue = typeof initialValue === 'number' ? Number(value) : value;
+    let newValue = value;
+    if (typeof initialValue === 'number') {
+      // Se campo vazio, considera zero
+      newValue = value === '' ? 0 : Number(value);
+    }
+    if (newValue !== initialValue) {
       onSave(newValue);
     }
     setIsEditing(false);
@@ -39,8 +42,8 @@ export const EditableField = ({ initialValue, onSave, label, isTextarea = false,
 
   if (isEditing) {
     const commonProps = {
-      value: value,
-      onChange: (e: any) => setValue(e.target.value),
+      value: typeof initialValue === 'number' && (value === 0 || value === '') ? '' : value,
+      onChange: (e: any) => setValue(typeof initialValue === 'number' ? (e.target.value === '' ? '' : e.target.value) : e.target.value),
       onBlur: handleSave,
       onKeyDown: handleKeyDown,
       autoFocus: true,
@@ -52,7 +55,9 @@ export const EditableField = ({ initialValue, onSave, label, isTextarea = false,
   return (
     <div onClick={() => setIsEditing(true)} className={`cursor-pointer hover:bg-rpg-gold/10 p-1 rounded-md transition-colors duration-200 ${className}`}>
       {label && <strong className="font-cinzel text-rpg-gold text-xs uppercase tracking-wider">{label}: </strong>}
-      <span className={!value ? 'text-rpg-grey italic font-medieval' : 'text-rpg-parchment font-medieval'}>{value || (label ? '-' : 'Clique para editar')}</span>
+      <span className={(!value || value === 0) ? 'text-rpg-grey italic font-medieval' : 'text-rpg-parchment font-medieval'}>
+        {(!value || value === 0) ? (label ? '-' : 'Clique para editar') : value}
+      </span>
     </div>
   );
 };

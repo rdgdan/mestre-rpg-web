@@ -81,7 +81,7 @@ const EquipmentModal: React.FC<EquipmentModalProps> = ({
             ...itemToEdit, // Preserva campos como isEquipped, armorClass, etc.
             id: itemToEdit?.id || new Date().toISOString(),
             name: nameToSave,
-            quantity
+            quantity: quantity === '' ? 1 : quantity
         });
         onClose();
     };
@@ -137,8 +137,8 @@ const EquipmentModal: React.FC<EquipmentModalProps> = ({
                     <label className="block text-sm font-bold text-rpg-gold font-medieval mb-1">Quantidade</label>
                     <input
                         type="number"
-                        value={quantity}
-                        onChange={e => setQuantity(Math.max(1, parseInt(e.target.value, 10) || 1))}
+                        value={quantity === 0 ? '' : quantity}
+                        onChange={e => setQuantity(e.target.value === '' ? '' : Math.max(1, parseInt(e.target.value, 10) || 1))}
                         className="w-full p-2 bg-rpg-slate border border-rpg-gold/10 rounded-md text-rpg-parchment focus:outline-none focus:ring-2 focus:ring-rpg-gold font-medieval text-center text-lg"
                     />
                 </div>
