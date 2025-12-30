@@ -156,12 +156,17 @@ export default function SharedArenaPage() {
             // Reordenar a iniciativa no banco
             updatedCombatants.sort((a, b) => b.initiative - a.initiative);
 
-            // Sanitiza combatentes
+            // Sanitiza combatentes e efeitos
             const sanitizedCombatants = updatedCombatants.map(c => {
                 const clean = { ...c };
+                // Remove campos undefined
                 Object.keys(clean).forEach(key => {
                     if (clean[key] === undefined) delete clean[key];
                 });
+                // Garante statusEffects sempre array e limpo
+                clean.statusEffects = Array.isArray(clean.statusEffects)
+                    ? clean.statusEffects.filter(e => e && e.id && e.name && typeof e.duration === 'number')
+                    : [];
                 return clean;
             });
             // Debug: log combatants for undefined fields
@@ -242,6 +247,9 @@ export default function SharedArenaPage() {
                 Object.keys(clean).forEach(key => {
                     if (clean[key] === undefined) delete clean[key];
                 });
+                clean.statusEffects = Array.isArray(clean.statusEffects)
+                    ? clean.statusEffects.filter(e => e && e.id && e.name && typeof e.duration === 'number')
+                    : [];
                 return clean;
             });
             // Debug: log combatants for undefined fields
@@ -292,6 +300,9 @@ export default function SharedArenaPage() {
                 Object.keys(clean).forEach(key => {
                     if (clean[key] === undefined) delete clean[key];
                 });
+                clean.statusEffects = Array.isArray(clean.statusEffects)
+                    ? clean.statusEffects.filter(e => e && e.id && e.name && typeof e.duration === 'number')
+                    : [];
                 return clean;
             });
             // Debug: log combatants for undefined fields
@@ -357,6 +368,9 @@ export default function SharedArenaPage() {
             Object.keys(clean).forEach(key => {
                 if (clean[key] === undefined) delete clean[key];
             });
+            clean.statusEffects = Array.isArray(clean.statusEffects)
+                ? clean.statusEffects.filter(e => e && e.id && e.name && typeof e.duration === 'number')
+                : [];
             return clean;
         });
         // Debug: log combatants for undefined fields
@@ -396,6 +410,9 @@ export default function SharedArenaPage() {
             Object.keys(clean).forEach(key => {
                 if (clean[key] === undefined) delete clean[key];
             });
+            clean.statusEffects = Array.isArray(clean.statusEffects)
+                ? clean.statusEffects.filter(e => e && e.id && e.name && typeof e.duration === 'number')
+                : [];
             return clean;
         });
         // Debug: log combatants for undefined fields
