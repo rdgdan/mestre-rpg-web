@@ -169,14 +169,6 @@ export default function SharedArenaPage() {
                     : [];
                 return clean;
             });
-            // Debug: log combatants for undefined fields
-            sanitizedCombatants.forEach((c, i) => {
-                Object.entries(c).forEach(([k, v]) => {
-                    if (v === undefined) {
-                        console.error(`Combatant[${i}] undefined field:`, k, c);
-                    }
-                });
-            });
             await updateDoc(sessionRef, {
                 combatants: sanitizedCombatants
             });
@@ -252,14 +244,6 @@ export default function SharedArenaPage() {
                     : [];
                 return clean;
             });
-            // Debug: log combatants for undefined fields
-            sanitizedCombatants.forEach((c, i) => {
-                Object.entries(c).forEach(([k, v]) => {
-                    if (v === undefined) {
-                        console.error(`Combatant[${i}] undefined field:`, k, c);
-                    }
-                });
-            });
             await updateDoc(sessionRef, {
                 combatants: sanitizedCombatants
             });
@@ -304,14 +288,6 @@ export default function SharedArenaPage() {
                     ? clean.statusEffects.filter(e => e && e.id && e.name && typeof e.duration === 'number')
                     : [];
                 return clean;
-            });
-            // Debug: log combatants for undefined fields
-            sanitizedCombatants.forEach((c, i) => {
-                Object.entries(c).forEach(([k, v]) => {
-                    if (v === undefined) {
-                        console.error(`Combatant[${i}] undefined field:`, k, c);
-                    }
-                });
             });
             await updateDoc(sessionRef, {
                 combatants: sanitizedCombatants
@@ -373,14 +349,6 @@ export default function SharedArenaPage() {
                 : [];
             return clean;
         });
-        // Debug: log combatants for undefined fields
-        sanitizedCombatants.forEach((c, i) => {
-            Object.entries(c).forEach(([k, v]) => {
-                if (v === undefined) {
-                    console.error(`Combatant[${i}] undefined field:`, k, c);
-                }
-            });
-        });
         // Double-check: only host can update turn/round/phase
         if (user && user.uid === session.hostId) {
             await updateDoc(sessionRef, {
@@ -414,14 +382,6 @@ export default function SharedArenaPage() {
                 ? clean.statusEffects.filter(e => e && e.id && e.name && typeof e.duration === 'number')
                 : [];
             return clean;
-        });
-        // Debug: log combatants for undefined fields
-        sanitizedCombatants.forEach((c, i) => {
-            Object.entries(c).forEach(([k, v]) => {
-                if (v === undefined) {
-                    console.error(`Combatant[${i}] undefined field:`, k, c);
-                }
-            });
         });
         await updateDoc(sessionRef, {
             combatants: sanitizedCombatants
@@ -619,47 +579,39 @@ export default function SharedArenaPage() {
                                         </div>
                                     </div>
 
-                                    {/* HP BAR (Player View) */}
+                                    {/* HP BAR & Status */}
                                     <div className="flex items-center gap-3">
-                                        {/* HP só para host ou dono do personagem */}
                                         {showFullHP ? (
+                                            // VISÃO COMPLETA (Mestre ou Dono do Personagem)
                                             <div className="w-32 md:w-48 shrink-0">
-                                                                            {/* HP só para host ou dono do personagem */}
-                                                                            {showFullHP ? (
-                                                                                <div className="w-32 md:w-48 shrink-0">
-                                                                                    <div className="flex justify-between items-center mb-1">
-                                                                                        <span className="text-[10px] uppercase font-cinzel text-rpg-grey">{getHpStatusLabel(c)}</span>
-                                                                                        <span className="text-[10px] font-bold text-rpg-parchment">{c.hp}/{c.maxHp}</span>
-                                                                                    </div>
-                                                                                    <div className="h-1.5 bg-black/40 rounded-full border border-white/5 overflow-hidden">
-                                                                                        <div
-                                                                                            className={`h-full transition-all duration-500 ${c.hp / c.maxHp > 0.5 ? 'bg-green-600' : c.hp / c.maxHp > 0.2 ? 'bg-yellow-600' : 'bg-red-600'}`}
-                                                                                            style={{ width: `${(c.hp / c.maxHp) * 100}%` }}
-                                                                                        ></div>
-                                                                                    </div>
-                                                                                    {/* Botões de HP só para host */}
-                                                                                    {isHost && (
-                                                                                        <div className="flex items-center bg-black/40 rounded border border-white/10 overflow-hidden mt-2">
-                                                                                            <button
-                                                                                                onClick={() => handleHostUpdateHp(c.id, -1)}
-                                                                                                className="px-2 py-1 text-red-500 hover:bg-red-500/10 transition-all font-bold"
-                                                                                            >
-                                                                                                -
-                                                                                            </button>
-                                                                                            <button
-                                                                                                onClick={() => handleHostUpdateHp(c.id, 1)}
-                                                                                                className="px-2 py-1 text-green-500 hover:bg-green-500/10 transition-all font-bold border-l border-white/10"
-                                                                                            >
-                                                                                                +
-                                                                                            </button>
-                                                                                        </div>
-                                                                                    )}
-                                                                                </div>
-                                                                            ) : (
-                                                                                <div className="w-32 md:w-48 flex items-center justify-end">
-                                                                                    <span className="text-[10px] font-cinzel text-rpg-grey italic tracking-widest bg-white/5 px-2 py-1 rounded">Status Desconhecido</span>
-                                                                                </div>
-                                                                            )}
+                                                <div className="flex justify-between items-center mb-1">
+                                                    <span className="text-[10px] uppercase font-cinzel text-rpg-grey">{getHpStatusLabel(c)}</span>
+                                                    <span className="text-[10px] font-bold text-rpg-parchment">{c.hp}/{c.maxHp}</span>
+                                                </div>
+                                                <div className="h-1.5 bg-black/40 rounded-full border border-white/5 overflow-hidden">
+                                                    <div
+                                                        className={`h-full transition-all duration-500 ${c.hp / c.maxHp > 0.5 ? 'bg-green-600' : c.hp / c.maxHp > 0.2 ? 'bg-yellow-600' : 'bg-red-600'}`}
+                                                        style={{ width: `${(c.hp / c.maxHp) * 100}%` }}
+                                                    ></div>
+                                                </div>
+                                                {/* Botões de HP só para host */}
+                                                {isHost && (
+                                                    <div className="flex items-center bg-black/40 rounded border border-white/10 overflow-hidden mt-2">
+                                                        <button onClick={() => handleHostUpdateHp(c.id, -1)} className="px-2 py-1 text-red-500 hover:bg-red-500/10 transition-all font-bold">-</button>
+                                                        <button onClick={() => handleHostUpdateHp(c.id, 1)} className="px-2 py-1 text-green-500 hover:bg-green-500/10 transition-all font-bold border-l border-white/10">+</button>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        ) : (
+                                            // VISÃO LIMITADA (Jogador vendo Monstro/NPC/Outro Jogador)
+                                            <div className="w-32 md:w-48 flex items-center justify-end">
+                                                <span className="text-sm font-cinzel text-rpg-grey italic tracking-widest bg-rpg-slate/50 px-3 py-1 rounded-md border border-white/10">
+                                                    {getHpStatusLabel(c)}
+                                                </span>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
                             </div>
                         );
                     })}
