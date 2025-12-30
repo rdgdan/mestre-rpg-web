@@ -495,26 +495,31 @@ export default function SharedArenaPage() {
                         <div className="flex flex-col border-l border-white/10 pl-8">
                             <span className="text-[10px] text-rpg-grey uppercase font-cinzel tracking-widest">Turno de</span>
                             <div className="flex items-center gap-3">
-                                {isHost && (
-                                    <button
-                                        onClick={() => handleHostAdvanceTurn('prev')}
-                                        className="text-rpg-gold hover:text-white transition-all scale-125"
-                                        title="Turno Anterior"
-                                    >
-                                        ◀
-                                    </button>
-                                )}
-                                <span className="text-xl font-bold text-rpg-parchment font-medieval">
-                                    {currentCombatant?.name || "Aguardando"}
-                                </span>
-                                {isHost && (
-                                    <button
-                                        onClick={() => handleHostAdvanceTurn('next')}
-                                        className="text-rpg-gold hover:text-white transition-all scale-125"
-                                        title="Próximo Turno"
-                                    >
-                                        ▶
-                                    </button>
+                                {/* Botões de turno só para host */}
+                                {isHost ? (
+                                    <>
+                                        <button
+                                            onClick={() => handleHostAdvanceTurn('prev')}
+                                            className="text-rpg-gold hover:text-white transition-all scale-125"
+                                            title="Turno Anterior"
+                                        >
+                                            ◀
+                                        </button>
+                                        <span className="text-xl font-bold text-rpg-parchment font-medieval">
+                                            {currentCombatant?.name || "Aguardando"}
+                                        </span>
+                                        <button
+                                            onClick={() => handleHostAdvanceTurn('next')}
+                                            className="text-rpg-gold hover:text-white transition-all scale-125"
+                                            title="Próximo Turno"
+                                        >
+                                            ▶
+                                        </button>
+                                    </>
+                                ) : (
+                                    <span className="text-xl font-bold text-rpg-parchment font-medieval">
+                                        {currentCombatant?.name || "Aguardando"}
+                                    </span>
                                 )}
                             </div>
                             {/* Feedback para jogadores não-host */}
@@ -616,11 +621,12 @@ export default function SharedArenaPage() {
 
                                     {/* HP BAR (Player View) */}
                                     <div className="flex items-center gap-3">
-                                        {(isHost || isPlayer) ? (
+                                        {/* HP só para host ou dono do personagem */}
+                                        {showFullHP ? (
                                             <div className="w-32 md:w-48 shrink-0">
                                                 <div className="flex justify-between items-center mb-1">
                                                     <span className="text-[10px] uppercase font-cinzel text-rpg-grey">{getHpStatusLabel(c)}</span>
-                                                    {showFullHP && <span className="text-[10px] font-bold text-rpg-parchment">{c.hp}/{c.maxHp}</span>}
+                                                    <span className="text-[10px] font-bold text-rpg-parchment">{c.hp}/{c.maxHp}</span>
                                                 </div>
                                                 <div className="h-1.5 bg-black/40 rounded-full border border-white/5 overflow-hidden">
                                                     <div
