@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { db, auth } from '@/lib/firebase';
+import { db } from '@/lib/firebase';
 import { doc, onSnapshot, updateDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import { useAuth } from '@/context/AuthContext';
 import Modal from '@/components/Modal';
@@ -510,7 +510,7 @@ export default function SharedArenaPage() {
                         const isCurrent = index === session.turnIndex;
                         const isPlayer = c.type === 'player';
                         const isOwnHero = user && c.ownerId === user.uid;
-                        const showFullHP = isHost || isOwnHero;
+                        const showFullHP = isHost || (isOwnHero && c.type === 'player');
 
                         return (
                             <div
