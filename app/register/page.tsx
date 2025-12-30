@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { createUserWithEmailAndPassword, GoogleAuthProvider, signInWithPopup, updateProfile } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
 import Link from 'next/link';
@@ -12,6 +12,10 @@ export default function RegisterPage() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const redirectUrl = searchParams.get('redirect') || '/';
+  const redirectParam = searchParams.get('redirect');
+  const loginLink = redirectParam ? `/login?redirect=${encodeURIComponent(redirectParam)}` : '/login';
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -25,7 +29,7 @@ export default function RegisterPage() {
       await updateProfile(userCredential.user, {
         displayName: name
       });
-      router.push('/');
+      router.push(redirectUrl);
     } catch (error: any) {
       let friendlyMessage = "Ocorreu um erro ao criar a conta.";
       if (error.code === 'auth/email-already-in-use') {
@@ -39,7 +43,7 @@ export default function RegisterPage() {
     const provider = new GoogleAuthProvider();
     try {
       await signInWithPopup(auth, provider);
-      router.push('/');
+      router.push(redirectUrl);
     } catch (error: any) {
       setError("Não foi possível fazer login com o Google. Tente novamente.");
     }
@@ -96,7 +100,7 @@ export default function RegisterPage() {
           </button>
         </form>
         <div className="mt-8 text-center">
-          <p className="font-medieval text-rpg-grey">Já tem uma conta? <Link href="/login" className="text-rpg-gold hover:text-rpg-gold-light hover:underline font-bold transition-colors">Entre na Taverna</Link></p>
+          <p className="font-medieval text-rpg-grey">Já tem uma conta? <Link href={loginLink} className="text-rpg-gold hover:text-rpg-gold-light hover:underline font-bold transition-colors">Entre na Taverna</Link></p>
         </div>
       </div>
     </div>

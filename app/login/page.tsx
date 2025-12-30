@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { signInWithEmailAndPassword, GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
 import Link from 'next/link';
@@ -11,13 +11,17 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const redirectUrl = searchParams.get('redirect') || '/';
+  const redirectParam = searchParams.get('redirect');
+  const registerLink = redirectParam ? `/register?redirect=${encodeURIComponent(redirectParam)}` : '/register';
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
     try {
       await signInWithEmailAndPassword(auth, email, password);
-      router.push('/');
+      router.push(redirectUrl);
     } catch (error: any) {
       let friendlyMessage = "Ocorreu um erro ao tentar fazer login. Verifique suas credenciais.";
       if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password') {
@@ -31,7 +35,7 @@ export default function LoginPage() {
     const provider = new GoogleAuthProvider();
     try {
       await signInWithPopup(auth, provider);
-      router.push('/');
+      router.push(redirectUrl);
     } catch (error: any) {
       setError("Não foi possível fazer login com o Google. Tente novamente.");
     }
@@ -96,7 +100,7 @@ export default function LoginPage() {
           </button>
         </div>
         <div className="mt-8 text-center">
-          <p className="font-medieval text-rpg-grey">Não tem um grimório? <Link href="/register" className="text-rpg-gold hover:text-rpg-gold-light hover:underline font-bold transition-colors">Crie uma conta</Link></p>
+          <p className="font-medieval text-rpg-grey">Não tem um grimório? <Link href={registerLink} className="text-rpg-gold hover:text-rpg-gold-light hover:underline font-bold transition-colors">Crie uma conta</Link></p>
         </div>
       </div>
     </div>

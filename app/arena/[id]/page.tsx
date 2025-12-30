@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter, usePathname } from 'next/navigation';
 import { db } from '@/lib/firebase';
 import { doc, onSnapshot, updateDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import { useAuth } from '@/context/AuthContext';
@@ -54,7 +54,10 @@ interface ArenaSession {
 
 export default function SharedArenaPage() {
     const { id } = useParams();
-    const { user } = useAuth();
+    const router = useRouter();
+    const pathname = usePathname();
+    // @ts-ignore
+    const { user, loading: authLoading } = useAuth();
     const [session, setSession] = useState<ArenaSession | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -83,6 +86,14 @@ export default function SharedArenaPage() {
         if (percent > 25) return '🟨 Ferido';
         return '🟥 Nas Últimas';
     };
+
+    // Proteção de Rota: Redirecionar para login se não estiver autenticado
+    useEffect(() => {
+        if (authLoading === false && !user) {
+            const returnUrl = encodeURIComponent(pathname || `/arena/${id}`);
+            router.push(`/login?redirect=${returnUrl}`);
+        }
+    }, [user, authLoading, router, pathname, id]);
 
     useEffect(() => {
         if (!id) return;
@@ -389,7 +400,7 @@ export default function SharedArenaPage() {
     };
 
 
-    if (loading) {
+    if (loading || authLoading) {
         return (
             <div className="min-h-screen bg-rpg-dark flex items-center justify-center font-cinzel text-rpg-gold animate-pulse">
                 Carregando visão da taverna...
@@ -420,12 +431,15 @@ export default function SharedArenaPage() {
                         <Link href="/" className="text-rpg-gold hover:text-rpg-gold-light transition-all text-2xl">⚔️</Link>
                         <div>
                             <h1 className="text-2xl font-bold font-cinzel text-rpg-gold text-shadow-md">Campo de Batalha</h1>
-                            <p className="text-[10px] text-rpg-grey uppercase tracking-widest leading-none">Mestre: {session.hostName}</p>
+                            <p className="text-[10px] text-rpg-grey uppercase tracking-widest leading-none">Mestre: {session.hostName} {isHost && <span className="text-green-500 font-bold ml-1">(VOCÊ)</span>}</p>
                         </div>
                     </div>
                     <div className="flex items-center gap-3">
                         <div className="bg-black/40 border border-rpg-gold/20 px-3 py-1 rounded text-xs font-cinzel text-rpg-gold">
                             ID: {session.id}
+                        </div>
+                        <div className={`px-3 py-1 rounded text-[10px] font-bold font-cinzel border uppercase ${isHost ? 'bg-green-900/30 text-green-400 border-green-500/30' : 'bg-blue-900/30 text-blue-400 border-blue-500/30'}`}>
+                            {isHost ? 'Modo Mestre' : 'Modo Jogador'}
                         </div>
                         <button
                             className="bg-rpg-gold/10 hover:bg-rpg-gold/20 border border-rpg-gold/40 text-rpg-gold text-[10px] px-3 py-1 rounded font-bold uppercase transition-all"
@@ -510,7 +524,7 @@ export default function SharedArenaPage() {
                         const isCurrent = index === session.turnIndex;
                         const isPlayer = c.type === 'player';
                         const isOwnHero = user && c.ownerId === user.uid;
-                        const showFullHP = isHost || (isOwnHero && c.type === 'player');
+                        const showFullHP = (isHost === true) || (c.type === 'player' && isOwnHero === true);
 
                         return (
                             <div
