@@ -9,6 +9,26 @@ import Modal from '@/components/Modal';
 import { dndMonsters, MonsterData } from '@/lib/monsters-data';
 import { npcTemplates, NPCTemplate } from '@/lib/npc-combatants-data';
 
+// Função utilitária para rolar 1d20
+function rollD20() {
+    return Math.floor(Math.random() * 20) + 1;
+}
+
+// Função para obter modificador de Destreza (default 0)
+function getDexMod(combatant: Combatant) {
+    // Se houver atributo de destreza, usar, senão 0
+    if (combatant && typeof combatant.dexterity === 'number') {
+        return Math.floor((combatant.dexterity - 10) / 2);
+    }
+    // Tenta buscar por nome nos monstros/NPCs
+    const monster = dndMonsters.find(m => m.name === combatant.name);
+    if (monster && typeof monster.dexterity === 'number') {
+        return Math.floor((monster.dexterity - 10) / 2);
+    }
+    // NPCs não têm destreza definida, default 0
+    return 0;
+}
+
 // --- Tipos ---
 
 type CombatantType = 'player' | 'monster' | 'npc';
@@ -56,6 +76,22 @@ export default function ConfrontosPage() {
     // --- Estados Principais ---
     const [phase, setPhase] = useState<'preparation' | 'initiative' | 'combat'>('preparation');
     const [combatants, setCombatants] = useState<Combatant[]>([]);
+        // Função para rolar iniciativa automática para monstros e NPCs sem valor definido
+        function rollInitiativeForMonstersAndNPCs() {
+            setCombatants(prev => prev.map(c => {
+                if ((c.type === 'monster' || c.type === 'npc') && (!c.initiative || c.initiative === 0)) {
+                    // Tenta buscar modificador de destreza do monstro (se existir)
+                    let dexMod = 0;
+                    const monster = dndMonsters.find(m => m.name === c.name);
+                    if (monster && typeof monster.dexterity === 'number') {
+                        dexMod = Math.floor((monster.dexterity - 10) / 2);
+                    }
+                    // NPCs: default 0
+                    return { ...c, initiative: rollD20() + dexMod };
+                }
+                return c;
+            }));
+        }
     const [currentTurnIndex, setCurrentTurnIndex] = useState(0);
     const [round, setRound] = useState(1);
     const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -584,6 +620,12 @@ export default function ConfrontosPage() {
                                     className="text-rpg-grey hover:text-white font-medieval px-4"
                                 >
                                     &larr; Voltar
+                                </button>
+                                <button
+                                    onClick={rollInitiativeForMonstersAndNPCs}
+                                    className="bg-sky-700 hover:bg-sky-600 text-white p-3 px-8 rounded font-bold font-cinzel transition-all mr-2"
+                                >
+                                    🎲 Rolar Iniciativa Monstros/NPCs
                                 </button>
                                 <button
                                     onClick={startCombat}

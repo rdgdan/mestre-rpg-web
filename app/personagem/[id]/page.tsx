@@ -20,7 +20,11 @@ import { Weapon, OtherEquipmentItem, dndWeapons, dndEquipments } from '@/lib/ite
 import { dndClasses, dndRaces } from '@/lib/dnd-data';
 import SelectionModal from '@/components/ui/SelectionModal';
 import WeaponModal from '@/components/ui/WeaponModal';
-import EquipmentModal from '@/components/ui/EquipmentModal'; // PASSO 1: Importar o novo modal
+import EquipmentModal from '@/components/ui/EquipmentModal';
+import SpellModal from '@/components/ui/SpellModal';
+import SpellSelectModal from '@/components/ui/SpellSelectModal';
+
+// ...existing code...
 
 // --- Componentes Auxiliares (sem alterações) ---
 const StatBlock = ({ label, value }: { label: string; value: string | number }) => (
@@ -79,6 +83,34 @@ function debounce<F extends (...args: any[]) => any>(func: F, waitFor: number) {
 
 // --- Componente Principal --- 
 export default function CharacterSheetPage() {
+            // --- Magias: Modal de seleção ---
+            const [isSpellSelectOpen, setSpellSelectOpen] = useState(false);
+        // --- Magias ---
+        const [isSpellModalOpen, setSpellModalOpen] = useState(false);
+        const [spellToEdit, setSpellToEdit] = useState(null);
+        // Adicionar ou editar magia (sem duplicar)
+        // Adiciona magia ao grimório sem duplicar
+        const handleSaveSpell = (spell) => {
+            updateCharacter(char => {
+                const filtered = (char.spells || []).filter(s => s.name.trim().toLowerCase() !== spell.name.trim().toLowerCase());
+                return { ...char, spells: [...filtered, spell] };
+            });
+            setSpellModalOpen(false);
+            setSpellToEdit(null);
+            setSpellSelectOpen(false);
+        };
+
+        const handleEditSpell = (spell) => {
+            setSpellToEdit(spell);
+            setSpellModalOpen(true);
+        };
+
+        const handleRemoveSpell = (spellName) => {
+            updateCharacter(char => ({
+                ...char,
+                spells: (char.spells || []).filter(s => s.name.trim().toLowerCase() !== spellName.trim().toLowerCase())
+            }));
+        };
     const [user, loadingAuth] = useAuthState(auth);
     const [character, setCharacter] = useState<Character | null>(null);
     const [isLoading, setIsLoading] = useState(true);
@@ -510,6 +542,15 @@ export default function CharacterSheetPage() {
                                 <StatBlock label="CD de Resistência" value={character.spellcasting?.saveDc || 0} />
                                 <StatBlock label="Bônus de Ataque" value={`+${character.spellcasting?.attackBonus || 0}`} />
                             </div>
+                            <div className="flex justify-end mb-2">
+                                <button onClick={() => setSpellSelectOpen(true)} className="px-4 py-2 rounded bg-rpg-gold text-rpg-dark font-bold hover:bg-rpg-gold-light">+ Adicionar Magia</button>
+                            </div>
+                                                        <SpellSelectModal
+                                                            isOpen={isSpellSelectOpen}
+                                                            onClose={() => setSpellSelectOpen(false)}
+                                                            onSelect={spell => handleSaveSpell(spell)}
+                                                            onCreate={() => { setSpellSelectOpen(false); setSpellToEdit(null); setSpellModalOpen(true); }}
+                                                        />
                             <div className="bg-rpg-panel border border-rpg-gold/10 p-4 rounded-lg shadow-md min-h-[400px]">
                                 <h3 className="text-xl font-bold text-rpg-gold mb-4 font-cinzel border-b border-rpg-gold/10 pb-2">Lista de Magias</h3>
                                 {character.spells && character.spells.length > 0 ? (
@@ -521,6 +562,10 @@ export default function CharacterSheetPage() {
                                                     <span className="text-xs text-purple-300 uppercase tracking-widest font-bold">Nível {spell.level}</span>
                                                 </div>
                                                 <p className="text-sm text-rpg-grey mt-1">{spell.description}</p>
+                                                <div className="flex gap-2 mt-2">
+                                                    <button onClick={() => handleEditSpell(spell)} className="px-3 py-1 text-xs font-medium bg-rpg-slate/50 border border-rpg-grey/30 hover:border-rpg-gold text-rpg-grey hover:text-rpg-parchment rounded-md transition-colors">Editar</button>
+                                                    <button onClick={() => handleRemoveSpell(spell.name)} className="px-3 py-1 text-xs font-medium bg-rpg-red/20 border border-rpg-red/30 hover:bg-rpg-red/40 text-red-200 rounded-md transition-colors">Remover</button>
+                                                </div>
                                             </div>
                                         ))}
                                     </div>
@@ -528,6 +573,12 @@ export default function CharacterSheetPage() {
                                     <p className="text-rpg-grey text-center py-20 italic">O grimório está vazio.</p>
                                 )}
                             </div>
+                            <SpellModal
+                                isOpen={isSpellModalOpen}
+                                onClose={() => { setSpellModalOpen(false); setSpellToEdit(null); }}
+                                onSave={handleSaveSpell}
+                                spellToEdit={spellToEdit}
+                            />
                         </div>
                     )}
 
