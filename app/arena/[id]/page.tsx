@@ -640,6 +640,23 @@ export default function SharedArenaPage() {
                                                 <span className="text-[10px] font-cinzel text-rpg-grey italic tracking-widest bg-white/5 px-2 py-1 rounded">Status Desconhecido</span>
                                             </div>
                                         )}
+                                        {/* Botões de HP só para host */}
+                                        {isHost && (
+                                            <div className="flex items-center bg-black/40 rounded border border-white/10 overflow-hidden">
+                                                <button
+                                                    onClick={() => handleHostUpdateHp(c.id, -1)}
+                                                    className="px-2 py-1 text-red-500 hover:bg-red-500/10 transition-all font-bold"
+                                                >
+                                                    -
+                                                </button>
+                                                <button
+                                                    onClick={() => handleHostUpdateHp(c.id, 1)}
+                                                    className="px-2 py-1 text-green-500 hover:bg-green-500/10 transition-all font-bold border-l border-white/10"
+                                                >
+                                                    +
+                                                </button>
+                                            </div>
+                                        )}
 
                                         {isHost && (
                                             <div className="flex items-center bg-black/40 rounded border border-white/10 overflow-hidden">
