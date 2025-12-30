@@ -364,11 +364,19 @@ export default function SharedArenaPage() {
                         <div className="bg-black/40 border border-rpg-gold/20 px-3 py-1 rounded text-xs font-cinzel text-rpg-gold">
                             ID: {session.id}
                         </div>
-                        {isHost && (
-                            <Link href="/confrontos" className="bg-rpg-gold/10 hover:bg-rpg-gold/20 border border-rpg-gold/40 text-rpg-gold text-[10px] px-3 py-1 rounded font-bold uppercase transition-all">
-                                Painel do Mestre
-                            </Link>
-                        )}
+                        <button
+                            className="bg-rpg-gold/10 hover:bg-rpg-gold/20 border border-rpg-gold/40 text-rpg-gold text-[10px] px-3 py-1 rounded font-bold uppercase transition-all"
+                            onClick={async () => {
+                                if (isHost && session) {
+                                    const sessionRef = doc(db, 'arenas_online', session.id);
+                                    await updateDoc(sessionRef, { phase: 'preparation' });
+                                    await import('firebase/firestore').then(({ deleteDoc }) => deleteDoc(sessionRef));
+                                }
+                                window.location.href = '/';
+                            }}
+                        >
+                            Sair da Batalha
+                        </button>
                     </div>
                 </div>
             </header>
@@ -409,12 +417,14 @@ export default function SharedArenaPage() {
                         </div>
                     </div>
                     <div className="hidden md:block">
-                        <button
-                            onClick={openJoinModal}
-                            className="bg-rpg-gold hover:bg-rpg-gold-light text-rpg-dark px-4 py-1.5 rounded font-bold font-cinzel text-sm shadow-glow-gold/20 flex items-center gap-2 transition-all hover:scale-105"
-                        >
-                            <span>➕</span> Participar do Combate
-                        </button>
+                        {session.phase !== 'combat' && (
+                            <button
+                                onClick={openJoinModal}
+                                className="bg-rpg-gold hover:bg-rpg-gold-light text-rpg-dark px-4 py-1.5 rounded font-bold font-cinzel text-sm shadow-glow-gold/20 flex items-center gap-2 transition-all hover:scale-105"
+                            >
+                                <span>➕</span> Participar do Combate
+                            </button>
+                        )}
                     </div>
                 </div>
             </section>
@@ -541,13 +551,15 @@ export default function SharedArenaPage() {
 
                 {/* Mobile Button */}
                 <div className="md:hidden fixed bottom-6 right-6 z-40">
-                    <button
-                        onClick={openJoinModal}
-                        className="bg-rpg-gold text-rpg-dark p-4 rounded-full shadow-2xl animate-bounce border-2 border-rpg-dark"
-                        title="Participar do Combate"
-                    >
-                        ➕
-                    </button>
+                    {session.phase !== 'combat' && (
+                        <button
+                            onClick={openJoinModal}
+                            className="bg-rpg-gold text-rpg-dark p-4 rounded-full shadow-2xl animate-bounce border-2 border-rpg-dark"
+                            title="Participar do Combate"
+                        >
+                            ➕
+                        </button>
+                    )}
                 </div>
             </main>
 
