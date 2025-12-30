@@ -287,7 +287,12 @@ export default function SharedArenaPage() {
     };
 
     const handleHostAdvanceTurn = async (direction: 'next' | 'prev') => {
-        if (!isHost || !session || session.combatants.length === 0) return;
+        // Extra guard: block any non-host from ever updating turn/round, even if they try to call this function
+        if (!isHost) {
+            alert('Apenas o mestre pode avançar o turno.');
+            return;
+        }
+        if (!session || session.combatants.length === 0) return;
 
         const sessionRef = doc(db, 'arenas_online', id as string);
         let nextIndex = session.turnIndex;
@@ -330,12 +335,17 @@ export default function SharedArenaPage() {
             });
             return clean;
         });
-        await updateDoc(sessionRef, {
-            turnIndex: nextIndex,
-            round: nextRound,
-            combatants: sanitizedCombatants,
-            phase: 'combat'
-        });
+        // Double-check: only host can update turn/round/phase
+        if (user && user.uid === session.hostId) {
+            await updateDoc(sessionRef, {
+                turnIndex: nextIndex,
+                round: nextRound,
+                combatants: sanitizedCombatants,
+                phase: 'combat'
+            });
+        } else {
+            alert('Apenas o mestre pode avançar o turno.');
+        }
     };
 
     const handleHostUpdateHp = async (combatantId: string, delta: number) => {
@@ -450,6 +460,12 @@ export default function SharedArenaPage() {
                                     </button>
                                 )}
                             </div>
+                            {/* Feedback para jogadores não-host */}
+                            {!isHost && (
+                                <div className="mt-2 text-xs text-rpg-grey italic flex items-center gap-2">
+                                    <span>⏳ Aguardando o mestre avançar o turno...</span>
+                                </div>
+                            )}
                         </div>
                     </div>
                     <div className="hidden md:block">
