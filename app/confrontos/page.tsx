@@ -320,12 +320,22 @@ export default function ConfrontosPage() {
         const syncState = async () => {
             try {
                 const sessionRef = doc(db, 'arenas_online', onlineSessionId);
-                // Evitar loop: só atualizamos se formos o host e houver mudança local relevante
+                // Sanitiza combatentes e efeitos
+                const sanitizedCombatants = combatants.map(c => {
+                    const clean = { ...c };
+                    Object.keys(clean).forEach(key => {
+                        if (clean[key] === undefined) delete clean[key];
+                    });
+                    clean.statusEffects = Array.isArray(clean.statusEffects)
+                        ? clean.statusEffects.filter(e => e && e.id && e.name && typeof e.duration === 'number')
+                        : [];
+                    return clean;
+                });
                 await updateDoc(sessionRef, {
                     phase: phase,
                     round: round,
                     turnIndex: currentTurnIndex,
-                    combatants: combatants
+                    combatants: sanitizedCombatants
                 });
             } catch (err) {
                 console.error("Erro ao sincronizar sessão online:", err);
@@ -353,6 +363,15 @@ export default function ConfrontosPage() {
         setFallenHeroesStatus(casualties);
 
         setIsXPModalOpen(true);
+
+        // Se for sessão online, encerra após XP
+        if (onlineSessionId && user) {
+            setTimeout(async () => {
+                const sessionRef = doc(db, 'arenas_online', onlineSessionId);
+                await import('firebase/firestore').then(({ deleteDoc }) => deleteDoc(sessionRef));
+                console.log('Sessão online encerrada automaticamente após o fim do combate.');
+            }, 3000); // 3 segundos para garantir XP distribuído
+        }
     };
 
     const handleAwardXP = async () => {
