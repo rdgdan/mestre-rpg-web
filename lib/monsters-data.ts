@@ -6,6 +6,7 @@ export interface MonsterData {
     challenge: string;
     type: string;
     xp: number;
+    dexterity?: number;
 }
 
 export const dndMonsters: MonsterData[] = [

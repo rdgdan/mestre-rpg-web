@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
 import { db } from '@/lib/firebase';
-import { collection, query, where, onSnapshot, doc, updateDoc, increment, setDoc } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, doc, updateDoc, increment, setDoc, deleteDoc } from 'firebase/firestore';
 import Modal from '@/components/Modal';
 import { dndMonsters, MonsterData } from '@/lib/monsters-data';
 import { npcTemplates, NPCTemplate } from '@/lib/npc-combatants-data';
@@ -51,6 +51,7 @@ interface Combatant {
     xp: number;
     initiative: number;
     statusEffects: StatusEffect[];
+    dexterity?: number;
     // Detalhes extras do banco
     class?: string;
     level?: number;
@@ -252,10 +253,13 @@ export default function ConfrontosPage() {
                 phase: phase,
                 round: round,
                 turnIndex: currentTurnIndex,
-                combatants: combatants.map(c => ({
-                    ...c,
-                    // Garante que não enviamos funções ou dados não-seriáveis
-                })),
+                combatants: combatants.map(c => {
+                    const clean = { ...c };
+                    Object.keys(clean).forEach(key => {
+                        if (clean[key] === undefined) delete clean[key];
+                    });
+                    return clean;
+                }),
                 createdAt: new Date().toISOString()
             });
 
@@ -561,6 +565,21 @@ export default function ConfrontosPage() {
                         <Link href="/" className="text-rpg-grey hover:text-rpg-parchment flex items-center gap-2 font-medieval">
                             <span>&larr;</span> Sair
                         </Link>
+                        {onlineSessionId && user && (
+                            <button
+                                className="bg-red-700 hover:bg-red-800 text-white px-4 py-1 rounded font-bold font-cinzel text-sm ml-2"
+                                onClick={async () => {
+                                    try {
+                                        const sessionRef = doc(db, 'arenas_online', onlineSessionId);
+                                        await deleteDoc(sessionRef);
+                                    } catch (err) {
+                                        console.error('Erro ao apagar sessão online:', err);
+                                    }
+                                }}
+                            >
+                                Apagar Sessão Online
+                            </button>
+                        )}
                     </div>
                 </div>
             </header>
