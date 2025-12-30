@@ -33,11 +33,7 @@ function GrimorioTab({ searchQuery }: { searchQuery: string }) {
         classes: [] as string[]
     });
 
-    useEffect(() => {
-        if (user) loadCustomSpells();
-    }, [user]);
-
-    const loadCustomSpells = async () => {
+    const loadCustomSpells = React.useCallback(async () => {
         if (!user) return;
         try {
             const docRef = doc(db, 'custom_spells', user.uid);
@@ -48,7 +44,11 @@ function GrimorioTab({ searchQuery }: { searchQuery: string }) {
         } catch (error) {
             console.error('Erro ao carregar magias:', error);
         }
-    };
+    }, [user]);
+
+    useEffect(() => {
+        if (user) loadCustomSpells();
+    }, [user, loadCustomSpells]);
 
     const saveCustomSpell = async () => {
         if (!user || !newSpell.name) return;
@@ -503,13 +503,7 @@ function NotasTab() {
     const [isSaving, setIsSaving] = useState(false);
     const [lastSaved, setLastSaved] = useState<Date | null>(null);
 
-    useEffect(() => {
-        if (user) {
-            loadNotes();
-        }
-    }, [user]);
-
-    const loadNotes = async () => {
+    const loadNotes = React.useCallback(async () => {
         if (!user) return;
         try {
             const docRef = doc(db, 'master_notes', user.uid);
@@ -521,7 +515,13 @@ function NotasTab() {
         } catch (error) {
             console.error('Erro ao carregar anotações:', error);
         }
-    };
+    }, [user]);
+
+    useEffect(() => {
+        if (user) {
+            loadNotes();
+        }
+    }, [user, loadNotes]);
 
     const saveNotes = async () => {
         if (!user) return;

@@ -28,7 +28,7 @@ const EquipmentModal: React.FC<EquipmentModalProps> = ({
     itemToEdit
 }) => {
     const [selectedItemName, setSelectedItemName] = useState('');
-    const [quantity, setQuantity] = useState(1);
+    const [quantity, setQuantity] = useState<string | number>(1);
     const [searchTerm, setSearchTerm] = useState('');
     const [isCreatingNew, setIsCreatingNew] = useState(false);
     const [newItemName, setNewItemName] = useState('');
@@ -81,7 +81,7 @@ const EquipmentModal: React.FC<EquipmentModalProps> = ({
             ...itemToEdit, // Preserva campos como isEquipped, armorClass, etc.
             id: itemToEdit?.id || new Date().toISOString(),
             name: nameToSave,
-            quantity: quantity === '' ? 1 : quantity
+            quantity: typeof quantity === 'string' ? 1 : quantity
         });
         onClose();
     };
