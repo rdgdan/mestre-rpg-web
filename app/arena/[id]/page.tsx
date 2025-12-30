@@ -164,6 +164,14 @@ export default function SharedArenaPage() {
                 });
                 return clean;
             });
+            // Debug: log combatants for undefined fields
+            sanitizedCombatants.forEach((c, i) => {
+                Object.entries(c).forEach(([k, v]) => {
+                    if (v === undefined) {
+                        console.error(`Combatant[${i}] undefined field:`, k, c);
+                    }
+                });
+            });
             await updateDoc(sessionRef, {
                 combatants: sanitizedCombatants
             });
@@ -236,6 +244,14 @@ export default function SharedArenaPage() {
                 });
                 return clean;
             });
+            // Debug: log combatants for undefined fields
+            sanitizedCombatants.forEach((c, i) => {
+                Object.entries(c).forEach(([k, v]) => {
+                    if (v === undefined) {
+                        console.error(`Combatant[${i}] undefined field:`, k, c);
+                    }
+                });
+            });
             await updateDoc(sessionRef, {
                 combatants: sanitizedCombatants
             });
@@ -277,6 +293,14 @@ export default function SharedArenaPage() {
                     if (clean[key] === undefined) delete clean[key];
                 });
                 return clean;
+            });
+            // Debug: log combatants for undefined fields
+            sanitizedCombatants.forEach((c, i) => {
+                Object.entries(c).forEach(([k, v]) => {
+                    if (v === undefined) {
+                        console.error(`Combatant[${i}] undefined field:`, k, c);
+                    }
+                });
             });
             await updateDoc(sessionRef, {
                 combatants: sanitizedCombatants
@@ -335,6 +359,14 @@ export default function SharedArenaPage() {
             });
             return clean;
         });
+        // Debug: log combatants for undefined fields
+        sanitizedCombatants.forEach((c, i) => {
+            Object.entries(c).forEach(([k, v]) => {
+                if (v === undefined) {
+                    console.error(`Combatant[${i}] undefined field:`, k, c);
+                }
+            });
+        });
         // Double-check: only host can update turn/round/phase
         if (user && user.uid === session.hostId) {
             await updateDoc(sessionRef, {
@@ -365,6 +397,14 @@ export default function SharedArenaPage() {
                 if (clean[key] === undefined) delete clean[key];
             });
             return clean;
+        });
+        // Debug: log combatants for undefined fields
+        sanitizedCombatants.forEach((c, i) => {
+            Object.entries(c).forEach(([k, v]) => {
+                if (v === undefined) {
+                    console.error(`Combatant[${i}] undefined field:`, k, c);
+                }
+            });
         });
         await updateDoc(sessionRef, {
             combatants: sanitizedCombatants
