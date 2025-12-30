@@ -304,7 +304,8 @@ export default function SharedArenaPage() {
         await updateDoc(sessionRef, {
             turnIndex: nextIndex,
             round: nextRound,
-            combatants: updatedCombatants
+            combatants: updatedCombatants,
+            phase: 'combat'
         });
     };
 
