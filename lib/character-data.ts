@@ -1,6 +1,6 @@
 
 // lib/character-data.ts
-import { Inventory, OtherEquipmentItem } from './items-data';
+import { Inventory, OtherEquipmentItem, parseDamageString } from './items-data';
 import { Spell } from './spells-data';
 
 export const ATTRIBUTE_KEYS = ['strength', 'dexterity', 'constitution', 'intelligence', 'wisdom', 'charisma'] as const;
@@ -191,7 +191,7 @@ export function calculateComputedStats(character: Omit<Character, 'proficiencyBo
         } else {
             // Full/Half/Third casters
             Object.entries(maxSlots).forEach(([lvl, count]) => {
-                const current = existingSlots[lvl]?.current !== undefined ? existingSlots[lvl].current : count; // Inicia cheio se não existir
+                const current = existingSlots[lvl]?.current !== undefined ? Number(existingSlots[lvl].current) : count; // Inicia cheio se não existir
                 mergedSlots[lvl] = {
                     current: Math.min(current, count),
                     max: count
@@ -296,6 +296,14 @@ export function hydrateCharacter(partialData: Partial<Character> & { equipment?:
                 let damage = b.damage || '';
                 if (!damage && raw.c && Array.isArray(raw.c) && raw.c.length > 0) {
                     damage = `${raw.c.length}d${raw.c[0].a}`;
+                }
+
+                // Normalizar string de dano (ex: 1d06 -> 1d6)
+                if (damage) {
+                    const parsed = parseDamageString(damage);
+                    if (!parsed.isCustomDamage) {
+                        damage = `${parsed.diceQty}${parsed.diceType}${parsed.diceBonus ? '+' + parsed.diceBonus : ''}`;
+                    }
                 }
 
                 return {
