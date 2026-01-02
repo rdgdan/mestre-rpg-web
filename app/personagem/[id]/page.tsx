@@ -260,11 +260,27 @@ export default function CharacterSheetPage() {
 
                             const enrichedWeapons = (hydratedChar.inventory.weapons || []).map(w => {
                                 if (!w || !w.name) return w;
-                                if (w.damage && w.weight !== undefined) return w;
+                                // Se for customizado, não tenta enriquecer para não perder edição do usuário
+                                if (w.isCustomDamage) return w;
+
+                                // Tenta validar se já tem dados críticos. Se tiver damageType, assume que está ok, 
+                                // MAS se o nome bater com global, pode ser melhor enriquecer para garantir peso e regras novas?
+                                // Vamos priorizar o banco global se não for customizado.
+
                                 const match = globalItems.find(gi => gi.name.toLowerCase() === w.name.toLowerCase() && gi.itemType === 'WEAPON');
                                 if (match) {
                                     needsUpdate = true;
-                                    return { ...w, ...match, id: w.id };
+                                    // Sobrescreve dados do import com dados oficiais, exceto IDs e Qtd
+                                    // Mantém magical bonus se tiver
+                                    return {
+                                        ...w,
+                                        ...match,
+                                        id: w.id,
+                                        quantity: w.quantity,
+                                        isMagical: w.isMagical || match.isMagical, // Preserva magia se o usuário marcou? Ou o banco manda? Banco manda default false.
+                                        magicalBonus: w.magicalBonus,
+                                        magicalEffect: w.magicalEffect
+                                    };
                                 }
                                 return w;
                             });
@@ -817,8 +833,8 @@ export default function CharacterSheetPage() {
                                                                         handleNestedChange(`spellcasting.slots.${level}.current`, Math.max(0, Math.min(newCurrent, slotData.max)));
                                                                     }}
                                                                     className={`w-6 h-6 rounded-full border flex items-center justify-center transition-all duration-300 ${isAvailable
-                                                                            ? 'bg-purple-600 border-purple-400 shadow-[0_0_10px_rgba(147,51,234,0.5)] scale-100 hover:bg-purple-500'
-                                                                            : 'bg-gray-800 border-gray-700 opacity-50 scale-90 hover:opacity-80'
+                                                                        ? 'bg-purple-600 border-purple-400 shadow-[0_0_10px_rgba(147,51,234,0.5)] scale-100 hover:bg-purple-500'
+                                                                        : 'bg-gray-800 border-gray-700 opacity-50 scale-90 hover:opacity-80'
                                                                         } ${isReadOnly ? 'cursor-not-allowed opacity-70' : 'cursor-pointer'}`}
                                                                     title={isAvailable ? "Gastar Slot" : "Recuperar Slot"}
                                                                 >
