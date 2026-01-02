@@ -777,8 +777,9 @@ export default function CharacterSheetPage() {
                                         );
                                     }
 
-                                    // Agrupar magias por nível
-                                    const groupedSpells = character.spells.reduce((acc, spell) => {
+                                    // Agrupar magias por nível com verificação de segurança
+                                    const validSpells = (character.spells || []).filter(s => s && typeof s === 'object');
+                                    const groupedSpells = validSpells.reduce((acc, spell) => {
                                         const level = spell.level || 0;
                                         if (!acc[level]) acc[level] = [];
                                         acc[level].push(spell);
@@ -815,7 +816,7 @@ export default function CharacterSheetPage() {
 
                                                 {isExpanded && (
                                                     <div className="p-4 grid grid-cols-1 md:grid-cols-2 gap-4 animate-fade-in">
-                                                        {spells.sort((a, b) => a.name.localeCompare(b.name)).map((spell, idx) => (
+                                                        {spells.sort((a, b) => (a.name || '').localeCompare(b.name || '')).map((spell, idx) => (
                                                             <div key={spell.id || idx} className="bg-rpg-slate/40 p-3 rounded-lg border border-rpg-gold/5 hover:border-purple-500/30 transition-all group relative">
                                                                 <div className="flex justify-between items-center mb-1">
                                                                     <div className="flex items-center gap-2">
