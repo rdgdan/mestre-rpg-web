@@ -304,7 +304,7 @@ export default function CharacterSheetPage() {
             finally { setIsLoading(false); }
         };
         loadChar();
-    }, [id, user, loadingAuth, router, character]);
+    }, [id, user, loadingAuth, router, character, debouncedSave]);
 
     // Monitoramento de Level Up
     useEffect(() => {
