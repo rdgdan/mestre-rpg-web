@@ -3,5 +3,7 @@ export interface Campaign {
   name: string;
   description: string;
   ownerId: string;
-  createdAt: any; // O Firestore Timestamp pode ser complexo, 'any' simplifica por agora
+  createdAt: any;
+  nextSession?: string;
+  quickNotes?: string;
 }

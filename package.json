@@ -9,6 +9,7 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@google/generative-ai": "^0.24.1",
     "@types/jszip": "^3.4.0",
     "autoprefixer": "^10.4.23",
     "firebase": "^12.7.0",

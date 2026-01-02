@@ -6,7 +6,7 @@ import { useAuth } from '@/context/AuthContext';
 import { auth, db } from '@/lib/firebase';
 import { signOut, updateProfile } from 'firebase/auth';
 import { useRouter } from 'next/navigation';
-import { addDoc, collection, query, where, onSnapshot, orderBy, limit } from 'firebase/firestore';
+import { addDoc, collection, query, where, onSnapshot, doc, updateDoc, deleteDoc } from 'firebase/firestore';
 import Modal from '@/components/Modal';
 import { Campaign } from '@/types/campaign';
 import { npcProfessions, npcAppearances, npcPersonalities } from '@/lib/npcData';
@@ -37,9 +37,10 @@ export default function HomePage() {
   const [isCampaignModalOpen, setIsCampaignModalOpen] = useState(false);
   const [isNpcModalOpen, setIsNpcModalOpen] = useState(false);
 
-  // States para Formulário de Campanha
+  // States para Formulário de Campanha (Criação e Edição)
   const [campaignName, setCampaignName] = useState('');
   const [campaignDescription, setCampaignDescription] = useState('');
+  const [editingCampaignId, setEditingCampaignId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   // States para Listas (Campanhas e Personagens)
@@ -52,7 +53,7 @@ export default function HomePage() {
   const [selectedProfession, setSelectedProfession] = useState('Aleatória');
   const [generatedNpcs, setGeneratedNpcs] = useState<NPC[]>([]);
 
-  // States para Edição de Nome
+  // States para Edição de Nome do Usuário
   const [isEditingName, setIsEditingName] = useState(false);
   const [newName, setNewName] = useState(user?.displayName || '');
 
@@ -60,7 +61,7 @@ export default function HomePage() {
     if (user) {
       setIsLoading(true);
 
-      // Query de Campanhas (Removido orderBy desc para evitar falha por falta de índice)
+      // Query de Campanhas
       const qCampaigns = query(
         collection(db, 'campaigns'),
         where('ownerId', '==', user.uid)
@@ -87,7 +88,6 @@ export default function HomePage() {
         querySnapshot.forEach((doc) => {
           campaignsData.push({ id: doc.id, ...doc.data() } as Campaign);
         });
-        // Ordenação manual client-side se necessário
         setCampaigns(campaignsData.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0)));
         campaignsLoaded = true;
         checkLoading();
@@ -130,33 +130,80 @@ export default function HomePage() {
     }
   };
 
+  const handleOpenNewCampaign = () => {
+    setEditingCampaignId(null);
+    setCampaignName('');
+    setCampaignDescription('');
+    setError(null);
+    setIsCampaignModalOpen(true);
+  };
+
+  const handleOpenEditCampaign = (campaign: Campaign, e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setEditingCampaignId(campaign.id);
+    setCampaignName(campaign.name);
+    setCampaignDescription(campaign.description);
+    setError(null);
+    setIsCampaignModalOpen(true);
+  };
+
   const handleSaveCampaign = async (e: FormEvent) => {
     e.preventDefault();
     if (!user) {
-      setError("Você precisa estar logado para criar uma campanha.");
+      setError("Você precisa estar logado.");
       return;
     }
     if (!campaignName.trim()) {
-      setError("O nome da campanha não pode ficar em branco.");
+      setError("O nome da campanha é obrigatório.");
       return;
     }
 
     try {
-      await addDoc(collection(db, 'campaigns'), {
-        name: campaignName,
-        description: campaignDescription,
-        ownerId: user.uid,
-        createdAt: new Date(),
-      });
+      if (editingCampaignId) {
+        // Atualizar existente
+        const campaignRef = doc(db, 'campaigns', editingCampaignId);
+        await updateDoc(campaignRef, {
+          name: campaignName,
+          description: campaignDescription,
+          updatedAt: new Date()
+        });
+      } else {
+        // Criar nova
+        await addDoc(collection(db, 'campaigns'), {
+          name: campaignName,
+          description: campaignDescription,
+          ownerId: user.uid,
+          createdAt: new Date(),
+        });
+      }
+
       setCampaignName('');
       setCampaignDescription('');
+      setEditingCampaignId(null);
       setError(null);
       setIsCampaignModalOpen(false);
     } catch (error) {
       console.error("Erro ao salvar campanha:", error);
-      setError("Não foi possível salvar a campanha. Tente novamente.");
+      setError("Erro ao salvar. Tente novamente.");
     }
-  }
+  };
+
+  const handleDeleteCampaign = async (campaignId: string, campaignName: string, e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    if (!confirm(`Tem certeza que deseja apagar a campanha "${campaignName}"? Esta ação não pode ser desfeita.`)) {
+      return;
+    }
+
+    try {
+      await deleteDoc(doc(db, 'campaigns', campaignId));
+    } catch (error) {
+      console.error("Erro ao excluir campanha:", error);
+      alert("Erro ao excluir campanha.");
+    }
+  };
 
   const handleGenerateNpcs = (e: FormEvent) => {
     e.preventDefault();
@@ -176,12 +223,11 @@ export default function HomePage() {
     try {
       await updateProfile(user, { displayName: newName });
       setIsEditingName(false);
-      // O Firebase Auth atualiza o objeto user localmente, mas o estado do React no useAuth pode demorar. 
-      // Em alguns casos recarregar a página ou forçar um update é necessário se o provider não reagir.
       window.location.reload();
     } catch (err) {
       console.error("Erro ao atualizar nome:", err);
-      alert("Não foi possível atualizar o nome.");
+      const errorMessage = err instanceof Error ? err.message : "Erro desconhecido";
+      alert(`Não foi possível atualizar o nome: ${errorMessage}`);
     }
   };
 
@@ -272,7 +318,7 @@ export default function HomePage() {
                   🏰 Campanhas
                 </h2>
                 <button
-                  onClick={() => setIsCampaignModalOpen(true)}
+                  onClick={handleOpenNewCampaign}
                   className="bg-rpg-gold hover:bg-rpg-gold/80 text-rpg-dark p-2 px-3 sm:px-4 rounded font-bold font-cinzel text-[10px] sm:text-sm transition-all shadow-lg hover:shadow-glow-gold border border-rpg-gold/50 flex-shrink-0 active:scale-95"
                 >
                   + Nova
@@ -284,17 +330,39 @@ export default function HomePage() {
               ) : campaigns.length > 0 ? (
                 <div className="space-y-4">
                   {campaigns.map(campaign => (
-                    <div key={campaign.id} className="bg-rpg-panel rounded-lg border border-rpg-gold/10 p-5 hover:border-rpg-gold/40 transition-all cursor-pointer group shadow-sm hover:shadow-md relative overflow-hidden">
-                      <div className="absolute top-0 right-0 w-24 h-24 bg-gradient-to-bl from-rpg-gold/5 to-transparent rounded-bl-full pointer-events-none"></div>
-                      <h3 className="text-xl font-bold font-cinzel text-rpg-gold group-hover:text-rpg-gol-light mb-1">{campaign.name}</h3>
-                      <p className="text-rpg-parchment/70 font-medieval text-sm line-clamp-2">{campaign.description || "Sem descrição."}</p>
-                    </div>
+                    <Link href={`/campanha/${campaign.id}`} key={campaign.id} className="block">
+                      <div className="bg-rpg-panel rounded-lg border border-rpg-gold/10 p-5 hover:border-rpg-gold/40 transition-all cursor-pointer group shadow-sm hover:shadow-md relative overflow-hidden flex justify-between items-start">
+                        <div className="absolute top-0 right-0 w-24 h-24 bg-gradient-to-bl from-rpg-gold/5 to-transparent rounded-bl-full pointer-events-none"></div>
+
+                        <div className="flex-grow pr-4">
+                          <h3 className="text-xl font-bold font-cinzel text-rpg-gold group-hover:text-rpg-light mb-1">{campaign.name}</h3>
+                          <p className="text-rpg-parchment/70 font-medieval text-sm line-clamp-2">{campaign.description || "Sem descrição."}</p>
+                        </div>
+
+                        <div className="flex flex-col gap-2 z-10 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+                          <button
+                            onClick={(e) => handleOpenEditCampaign(campaign, e)}
+                            className="text-rpg-grey hover:text-rpg-gold p-1 hover:bg-rpg-slate rounded transition-colors"
+                            title="Editar"
+                          >
+                            ✏️
+                          </button>
+                          <button
+                            onClick={(e) => handleDeleteCampaign(campaign.id, campaign.name, e)}
+                            className="text-rpg-grey hover:text-red-400 p-1 hover:bg-rpg-slate rounded transition-colors"
+                            title="Excluir"
+                          >
+                            🗑️
+                          </button>
+                        </div>
+                      </div>
+                    </Link>
                   ))}
                 </div>
               ) : (
                 <div className="text-center py-12 border-2 border-dashed border-rpg-grey/20 rounded-lg bg-rpg-panel/50">
                   <p className="text-rpg-grey font-medieval mb-2">Nenhuma campanha ativa.</p>
-                  <button onClick={() => setIsCampaignModalOpen(true)} className="text-rpg-gold hover:underline font-cinzel text-sm">Criar a primeira</button>
+                  <button onClick={handleOpenNewCampaign} className="text-rpg-gold hover:underline font-cinzel text-sm">Criar a primeira</button>
                 </div>
               )}
             </section>
@@ -347,8 +415,8 @@ export default function HomePage() {
         </footer>
       </div>
 
-      {/* Modal de Criação de Campanha */}
-      <Modal isOpen={isCampaignModalOpen} onClose={() => setIsCampaignModalOpen(false)} title="Nova Campanha">
+      {/* Modal de Criação/Edição de Campanha */}
+      <Modal isOpen={isCampaignModalOpen} onClose={() => setIsCampaignModalOpen(false)} title={editingCampaignId ? "Editar Campanha" : "Nova Campanha"}>
         <form onSubmit={handleSaveCampaign} className="space-y-6">
           {error && <p className="bg-rpg-red/20 border border-rpg-red/40 text-red-200 p-3 rounded-md text-center font-medieval">{error}</p>}
           <div>
@@ -376,7 +444,7 @@ export default function HomePage() {
               type="submit"
               className="w-full sm:w-auto bg-rpg-gold hover:bg-rpg-gold/80 p-3 px-8 rounded font-bold font-cinzel text-base sm:text-lg text-rpg-dark transition-all transform hover:scale-[1.02] active:scale-95 shadow-lg hover:shadow-glow-gold border border-rpg-gold/50"
             >
-              Iniciar Saga
+              {editingCampaignId ? 'Salvar Alterações' : 'Iniciar Saga'}
             </button>
           </div>
         </form>
