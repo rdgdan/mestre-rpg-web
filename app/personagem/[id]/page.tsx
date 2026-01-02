@@ -218,7 +218,7 @@ export default function CharacterSheetPage() {
             setLevelUpModalOpen(true);
         }
         lastLevelRef.current = character.level;
-    }, [character?.level, isLoading]);
+    }, [character, isLoading]);
 
     const handleApplyLevelUp = (choices: { attributes: Record<string, number>; hpIncrease: number }) => {
         if (!character) return;

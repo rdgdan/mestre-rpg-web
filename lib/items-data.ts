@@ -39,6 +39,7 @@ export interface OtherEquipmentItem {
     isMagical?: boolean;
     magicalBonus?: number;
     magicalEffect?: string;
+    weight?: number;
 }
 
 export interface Inventory {
