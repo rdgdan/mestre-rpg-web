@@ -255,8 +255,20 @@ export default function CharacterSheetPage() {
                             hydratedChar.spells = enrichedSpells;
 
                             // Enriquecer itens se necessário
-                            const { fetchGlobalItems } = await import('@/lib/items-data');
-                            const globalItems = await fetchGlobalItems();
+                            const { fetchGlobalItems, dndWeapons, dndEquipments } = await import('@/lib/items-data');
+                            const firestoreItems = await fetchGlobalItems();
+
+                            const allWeapons = [
+                                ...firestoreItems.filter(i => i.itemType === 'WEAPON'),
+                                ...dndWeapons.map(w => ({ ...w, itemType: 'WEAPON' }))
+                            ];
+
+                            const allEquipment = [
+                                ...firestoreItems.filter(i => i.itemType !== 'WEAPON'),
+                                ...dndEquipments.map(e => ({ ...e, itemType: 'other', description: '' }))
+                            ];
+
+                            const normalizeStr = (str: string) => str ? str.normalize('NFC').trim().toLowerCase() : '';
 
                             const enrichedWeapons = (hydratedChar.inventory.weapons || []).map(w => {
                                 if (!w || !w.name) return w;
@@ -267,7 +279,7 @@ export default function CharacterSheetPage() {
                                 // MAS se o nome bater com global, pode ser melhor enriquecer para garantir peso e regras novas?
                                 // Vamos priorizar o banco global se não for customizado.
 
-                                const match = globalItems.find(gi => gi.name.toLowerCase() === w.name.toLowerCase() && gi.itemType === 'WEAPON');
+                                const match = allWeapons.find(gi => normalizeStr(gi.name) === normalizeStr(w.name));
                                 if (match) {
                                     needsUpdate = true;
                                     // Sobrescreve dados do import com dados oficiais, exceto IDs e Qtd
@@ -288,7 +300,7 @@ export default function CharacterSheetPage() {
                             const enrichedEquipment = (hydratedChar.inventory.otherEquipment || []).map(e => {
                                 if (!e || !e.name) return e;
                                 if (e.description && e.weight !== undefined && e.type !== 'other') return e;
-                                const match = globalItems.find(gi => gi.name.toLowerCase() === e.name.toLowerCase() && gi.itemType !== 'WEAPON');
+                                const match = allEquipment.find(gi => normalizeStr(gi.name) === normalizeStr(e.name));
                                 if (match) {
                                     needsUpdate = true;
                                     return {
