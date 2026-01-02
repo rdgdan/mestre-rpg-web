@@ -168,11 +168,42 @@ export function calculateComputedStats(character: Omit<Character, 'proficiencyBo
         const saveDc = 8 + proficiencyBonus + mod;
         const attackBonus = proficiencyBonus + mod;
 
+        // Calcular slots máximos baseados no nível e classe
+        const { getSpellSlots } = require('./level-progression');
+        const maxSlots = getSpellSlots(className, level);
+
+        // Mesclar slots atuais com máximos calculados
+        const mergedSlots: Record<string, { current: number; max: number }> = {};
+
+        // Se for Warlock, lida com Pact Magic
+        if (maxSlots.pact !== undefined) {
+            const pactLevel = maxSlots.pactLevel;
+            const totalPactSlots = maxSlots.pact;
+            // Slot de pacto é único e recuperável em curto descanso
+            const currentPact = existingSlots['pact']?.current !== undefined ? existingSlots['pact'].current : totalPactSlots;
+
+            mergedSlots['pact'] = {
+                current: Math.min(currentPact, totalPactSlots),
+                max: totalPactSlots // maxSlots.pact
+            };
+            // Guardamos o nível do slot de pacto em outro lugar? Warlock sempre conjura no nível max.
+            // Simplicidade: UI mostra "Slots de Pacto (Nv X)"
+        } else {
+            // Full/Half/Third casters
+            Object.entries(maxSlots).forEach(([lvl, count]) => {
+                const current = existingSlots[lvl]?.current !== undefined ? existingSlots[lvl].current : count; // Inicia cheio se não existir
+                mergedSlots[lvl] = {
+                    current: Math.min(current, count),
+                    max: count
+                };
+            });
+        }
+
         spellcastingData = {
             ability: castingAbility,
             saveDc,
             attackBonus,
-            slots: existingSlots
+            slots: mergedSlots
         };
     } else {
         spellcastingData = existingSpellcasting || {

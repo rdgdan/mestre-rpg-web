@@ -769,6 +769,70 @@ export default function CharacterSheetPage() {
                                 )}
                             </div>
 
+                            {/* Visualização de Slots de Magia */}
+                            {character.spellcasting?.slots && Object.entries(character.spellcasting.slots).length > 0 && (
+                                <div className="mb-6 p-4 bg-rpg-panel border border-rpg-gold/10 rounded-lg shadow-inner animate-fade-in">
+                                    <div className="flex justify-between items-center mb-3">
+                                        <h3 className="text-sm font-bold text-rpg-gold font-cinzel uppercase tracking-widest flex items-center gap-2">
+                                            <span className="w-2 h-2 bg-purple-500 rounded-full animate-pulse"></span>
+                                            Slots de Magia
+                                        </h3>
+                                        {!isReadOnly && (
+                                            <button
+                                                onClick={() => {
+                                                    updateCharacter(prev => {
+                                                        const newSlots = { ...prev.spellcasting.slots };
+                                                        Object.keys(newSlots).forEach(lvl => {
+                                                            newSlots[lvl].current = newSlots[lvl].max;
+                                                        });
+                                                        return { ...prev, spellcasting: { ...prev.spellcasting, slots: newSlots } };
+                                                    });
+                                                }}
+                                                className="text-[10px] bg-rpg-slate border border-rpg-gold/20 px-2 py-1 rounded text-rpg-gold hover:bg-rpg-gold hover:text-rpg-dark transition-colors uppercase tracking-wider"
+                                            >
+                                                Descanso Longo (Recuperar Tudo)
+                                            </button>
+                                        )}
+                                    </div>
+                                    <div className="flex flex-wrap gap-4">
+                                        {Object.entries(character.spellcasting.slots)
+                                            .sort((a, b) => {
+                                                if (a[0] === 'pact') return -1;
+                                                return parseInt(a[0]) - parseInt(b[0]);
+                                            })
+                                            .map(([level, slotData]) => (
+                                                <div key={level} className="flex flex-col bg-rpg-dark/30 p-2 rounded border border-white/5 min-w-[80px] items-center">
+                                                    <span className="text-[10px] font-bold text-rpg-grey mb-1 text-center font-medieval truncate w-full">
+                                                        {level === 'pact' ? `PACTO` : `${level}º CÍRCULO`}
+                                                    </span>
+                                                    <div className="flex flex-wrap gap-1 justify-center">
+                                                        {Array.from({ length: slotData.max }).map((_, i) => {
+                                                            const isAvailable = i < slotData.current;
+                                                            return (
+                                                                <button
+                                                                    key={i}
+                                                                    disabled={isReadOnly}
+                                                                    onClick={() => {
+                                                                        const newCurrent = isAvailable ? slotData.current - 1 : slotData.current + 1;
+                                                                        handleNestedChange(`spellcasting.slots.${level}.current`, Math.max(0, Math.min(newCurrent, slotData.max)));
+                                                                    }}
+                                                                    className={`w-6 h-6 rounded-full border flex items-center justify-center transition-all duration-300 ${isAvailable
+                                                                            ? 'bg-purple-600 border-purple-400 shadow-[0_0_10px_rgba(147,51,234,0.5)] scale-100 hover:bg-purple-500'
+                                                                            : 'bg-gray-800 border-gray-700 opacity-50 scale-90 hover:opacity-80'
+                                                                        } ${isReadOnly ? 'cursor-not-allowed opacity-70' : 'cursor-pointer'}`}
+                                                                    title={isAvailable ? "Gastar Slot" : "Recuperar Slot"}
+                                                                >
+                                                                    {isAvailable && <span className="text-[8px] text-white">✨</span>}
+                                                                </button>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                </div>
+                                            ))}
+                                    </div>
+                                </div>
+                            )}
+
                             <div className="space-y-4">
                                 {(() => {
                                     if (!character.spells || character.spells.length === 0) {
