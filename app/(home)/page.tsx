@@ -259,11 +259,6 @@ export default function HomePage() {
               >
                 🎲 Gerador de NPC
               </button>
-              <Link href="/biblioteca">
-                <button className="bg-rpg-slate hover:bg-rpg-slate/80 text-rpg-parchment border border-rpg-gold/20 p-2 px-4 rounded font-bold font-cinzel text-sm transition-all shadow-md hover:border-rpg-gold">
-                  📚 Grande Biblioteca
-                </button>
-              </Link>
             </div>
           </section>
 

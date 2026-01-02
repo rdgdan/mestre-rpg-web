@@ -43,3 +43,11 @@ export const dndRaces = [
   "Genasi (Fogo)",
   "Genasi (Terra)",
 ];
+
+export const DEFAULT_CLASSES = ['Mago', 'Feiticeiro', 'Clérigo', 'Paladino', 'Druida', 'Bardo', 'Bruxo', 'Patrulheiro', 'Guerreiro', 'Ladino', 'Monge', 'Bárbaro'];
+export const DEFAULT_SCHOOLS = ['Abjuração', 'Adivinhação', 'Conjuração', 'Encantamento', 'Evocação', 'Ilusão', 'Necromancia', 'Transmutação'];
+export const DEFAULT_MONSTER_TYPES = ['Aberração', 'Besta', 'Celestial', 'Construto', 'Dragão', 'Elemental', 'Fada', 'Feérico', 'Gigante', 'Humanoide', 'Monstruosidade', 'Morto-vivo', 'Planta', 'Limo'];
+export const DEFAULT_ITEM_CATEGORIES = ['Arma', 'Armadura', 'Escudo', 'Poção', 'Pergaminho', 'Anel', 'Cajado', 'Varinha', 'Item Mágico', 'Ferramenta', 'Equipamento de Aventuras'];
+export const DEFAULT_DAMAGE_TYPES = ['Ácido', 'Concussão', 'Cortante', 'Energia', 'Frio', 'Fogo', 'Necrótico', 'Perfurante', 'Psíquico', 'Radiante', 'Relâmpago', 'Trovejante', 'Veneno'];
+export const DEFAULT_PROPERTIES = ['Acuidade', 'Alcance', 'Arremesso', 'Carga', 'Duas Mãos', 'Especial', 'Leve', 'Mágica', 'Munição', 'Pesada', 'Recarga', 'Versátil'];
+export const DEFAULT_DICE = ['d4', 'd6', 'd8', 'd10', 'd12', 'd20'];

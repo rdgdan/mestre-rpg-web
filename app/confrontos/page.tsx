@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import { db } from '@/lib/firebase';
 import { collection, query, where, onSnapshot, doc, updateDoc, increment, setDoc, deleteDoc } from 'firebase/firestore';
@@ -73,26 +74,27 @@ interface PlayerReference {
 
 export default function ConfrontosPage() {
     const { user } = useAuth();
+    const router = useRouter();
 
     // --- Estados Principais ---
     const [phase, setPhase] = useState<'preparation' | 'initiative' | 'combat'>('preparation');
     const [combatants, setCombatants] = useState<Combatant[]>([]);
-        // Função para rolar iniciativa automática para monstros e NPCs sem valor definido
-        function rollInitiativeForMonstersAndNPCs() {
-            setCombatants(prev => prev.map(c => {
-                if ((c.type === 'monster' || c.type === 'npc') && (!c.initiative || c.initiative === 0)) {
-                    // Tenta buscar modificador de destreza do monstro (se existir)
-                    let dexMod = 0;
-                    const monster = dndMonsters.find(m => m.name === c.name);
-                    if (monster && typeof monster.dexterity === 'number') {
-                        dexMod = Math.floor((monster.dexterity - 10) / 2);
-                    }
-                    // NPCs: default 0
-                    return { ...c, initiative: rollD20() + dexMod };
+    // Função para rolar iniciativa automática para monstros e NPCs sem valor definido
+    function rollInitiativeForMonstersAndNPCs() {
+        setCombatants(prev => prev.map(c => {
+            if ((c.type === 'monster' || c.type === 'npc') && (!c.initiative || c.initiative === 0)) {
+                // Tenta buscar modificador de destreza do monstro (se existir)
+                let dexMod = 0;
+                const monster = dndMonsters.find(m => m.name === c.name);
+                if (monster && typeof monster.dexterity === 'number') {
+                    dexMod = Math.floor((monster.dexterity - 10) / 2);
                 }
-                return c;
-            }));
-        }
+                // NPCs: default 0
+                return { ...c, initiative: rollD20() + dexMod };
+            }
+            return c;
+        }));
+    }
     const [currentTurnIndex, setCurrentTurnIndex] = useState(0);
     const [round, setRound] = useState(1);
     const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -118,7 +120,8 @@ export default function ConfrontosPage() {
         cr: '0',
         xp: 0,
         initiative: '' as string | number,
-        playerId: ''
+        playerId: '',
+        quantity: 1
     });
     const [newEffect, setNewEffect] = useState({
         name: '',
@@ -419,58 +422,71 @@ export default function ConfrontosPage() {
         }
     };
 
+    const handleExitArena = () => {
+        router.push('/');
+    };
+
     // --- Adicionar/Remover ---
 
     const handleAddCombatant = (e: React.FormEvent) => {
         e.preventDefault();
 
-        let name = newCombatant.name;
-        let hp = newCombatant.hp;
-        let externalId = undefined;
-        let extraData: Partial<Combatant> = {};
+        const qty = (newCombatant.type === 'monster' || newCombatant.type === 'npc') ? (newCombatant.quantity || 1) : 1;
+        const newItems: Combatant[] = [];
 
-        if (newCombatant.type === 'player' && newCombatant.playerId) {
-            const p = availablePlayers.find(ap => ap.id === newCombatant.playerId);
-            if (p) {
-                name = p.name;
-                hp = p.hp;
-                externalId = p.id;
-                extraData = {
-                    class: p.class,
-                    level: p.level,
-                    equipment: p.equipment,
-                    spells: p.spells,
-                    abilities: p.abilities,
-                    ac: 10, // Default for players if not in ref
-                    cr: `Lvl ${p.level}`,
-                    xp: 0 // Players don't give XP
-                };
+        for (let i = 0; i < qty; i++) {
+            let name = newCombatant.name;
+            let hp = newCombatant.hp;
+            let externalId = undefined;
+            let extraData: Partial<Combatant> = {};
+
+            if (newCombatant.type === 'player' && newCombatant.playerId) {
+                const p = availablePlayers.find(ap => ap.id === newCombatant.playerId);
+                if (p) {
+                    name = p.name;
+                    hp = p.hp;
+                    externalId = p.id;
+                    extraData = {
+                        class: p.class,
+                        level: p.level,
+                        equipment: p.equipment,
+                        spells: p.spells,
+                        abilities: p.abilities,
+                        ac: 10, // Default for players if not in ref
+                        cr: `Lvl ${p.level}`,
+                        xp: 0 // Players don't give XP
+                    };
+                }
+            } else if (qty > 1) {
+                // Adicionar sufixo se houver múltiplos
+                name = `${name} ${i + 1}`;
             }
+
+            if (phase !== 'preparation' && (newCombatant.initiative === '' || isNaN(Number(newCombatant.initiative)))) {
+                alert("É obrigatório definir um valor de iniciativa para entrar no combate!");
+                return;
+            }
+
+            const initiativeValue = Number(newCombatant.initiative) || 0;
+
+            const newItem: Combatant = {
+                id: Math.random().toString(36).substr(2, 9),
+                externalId,
+                name,
+                type: newCombatant.type,
+                hp,
+                maxHp: hp,
+                ac: newCombatant.ac || 10,
+                cr: newCombatant.cr || '0',
+                xp: newCombatant.xp || 0,
+                initiative: initiativeValue,
+                statusEffects: [],
+                ...extraData
+            };
+            newItems.push(newItem);
         }
 
-        if (phase !== 'preparation' && (newCombatant.initiative === '' || isNaN(Number(newCombatant.initiative)))) {
-            alert("É obrigatório definir um valor de iniciativa para entrar no combate!");
-            return;
-        }
-
-        const initiativeValue = Number(newCombatant.initiative) || 0;
-
-        const newItem: Combatant = {
-            id: Math.random().toString(36).substr(2, 9),
-            externalId,
-            name,
-            type: newCombatant.type,
-            hp,
-            maxHp: hp,
-            ac: newCombatant.ac || 10,
-            cr: newCombatant.cr || '0',
-            xp: newCombatant.xp || 0,
-            initiative: initiativeValue,
-            statusEffects: [],
-            ...extraData
-        };
-
-        const updatedList = [...combatants, newItem];
+        const updatedList = [...combatants, ...newItems];
 
         if (phase === 'combat') {
             // Reordenar e manter o turno no combatente atual
@@ -482,16 +498,13 @@ export default function ConfrontosPage() {
             if (newIndex !== -1) {
                 setCurrentTurnIndex(newIndex);
             }
-            alert(`${name} entrou na batalha na posição de iniciativa ${initiativeValue}!`);
-        } else if (phase === 'initiative') {
-            // Apenas adiciona, a ordenação virá no "Iniciar Combate"
-            setCombatants(updatedList);
+            alert(`${qty} combatentes entraram na batalha!`);
         } else {
-            // Preparação: apenas adiciona no fim da lista
+            // Preparação ou Iniciativa: apenas adiciona
             setCombatants(updatedList);
         }
 
-        setNewCombatant({ ...newCombatant, name: '', initiative: '', playerId: '' });
+        setNewCombatant({ ...newCombatant, name: '', initiative: '', playerId: '', quantity: 1 });
         setIsAddModalOpen(false);
     };
     const removeCombatant = (id: string) => {
@@ -581,9 +594,12 @@ export default function ConfrontosPage() {
                                 {isCreatingSession ? 'Gerando...' : '🌐 Iniciar Sessão Online'}
                             </button>
                         )}
-                        <Link href="/" className="text-rpg-grey hover:text-rpg-parchment flex items-center gap-2 font-medieval">
+                        <button
+                            onClick={handleExitArena}
+                            className="text-rpg-grey hover:text-rpg-parchment flex items-center gap-2 font-medieval"
+                        >
                             <span>&larr;</span> Sair
-                        </Link>
+                        </button>
                         {onlineSessionId && user && (
                             <button
                                 className="bg-red-700 hover:bg-red-800 text-white px-4 py-1 rounded font-bold font-cinzel text-sm ml-2"
@@ -751,6 +767,7 @@ export default function ConfrontosPage() {
                                                     type="number"
                                                     value={c.initiative}
                                                     onChange={(e) => updateInitiative(c.id, Number(e.target.value))}
+                                                    onFocus={(e) => e.target.select()}
                                                     className="bg-transparent text-2xl font-bold font-medieval text-white w-full text-center focus:outline-none"
                                                     autoFocus={index === 0}
                                                 />
@@ -986,7 +1003,8 @@ export default function ConfrontosPage() {
                                             type="number"
                                             className="w-full bg-rpg-slate border border-white/10 p-3 rounded font-medieval text-rpg-parchment focus:border-rpg-gold outline-none"
                                             value={newCombatant.hp}
-                                            onChange={(e) => setNewCombatant({ ...newCombatant, hp: Number(e.target.value) })}
+                                            onChange={(e) => setNewCombatant({ ...newCombatant, hp: Number(e.target.value) || 0 })}
+                                            onFocus={(e) => e.target.select()}
                                             required
                                         />
                                     </div>
@@ -999,6 +1017,7 @@ export default function ConfrontosPage() {
                                             className="w-full bg-rpg-slate border border-white/10 p-3 rounded font-medieval text-rpg-parchment focus:border-rpg-gold outline-none"
                                             value={newCombatant.initiative}
                                             onChange={(e) => setNewCombatant({ ...newCombatant, initiative: e.target.value })}
+                                            onFocus={(e) => e.target.select()}
                                             required={phase !== 'preparation'}
                                             placeholder={phase !== 'preparation' ? "Número..." : "0"}
                                         />
@@ -1072,7 +1091,8 @@ export default function ConfrontosPage() {
                                             type="number"
                                             className="w-full bg-rpg-slate border border-white/10 p-3 rounded font-medieval text-rpg-parchment focus:border-rpg-gold outline-none"
                                             value={newCombatant.hp}
-                                            onChange={(e) => setNewCombatant({ ...newCombatant, hp: Number(e.target.value) })}
+                                            onChange={(e) => setNewCombatant({ ...newCombatant, hp: Number(e.target.value) || 0 })}
+                                            onFocus={(e) => e.target.select()}
                                             required
                                         />
                                     </div>
@@ -1082,7 +1102,8 @@ export default function ConfrontosPage() {
                                             type="number"
                                             className="w-full bg-rpg-slate border border-white/10 p-3 rounded font-medieval text-rpg-parchment focus:border-rpg-gold outline-none"
                                             value={newCombatant.ac}
-                                            onChange={(e) => setNewCombatant({ ...newCombatant, ac: Number(e.target.value) })}
+                                            onChange={(e) => setNewCombatant({ ...newCombatant, ac: Number(e.target.value) || 0 })}
+                                            onFocus={(e) => e.target.select()}
                                             required
                                         />
                                     </div>
@@ -1102,7 +1123,8 @@ export default function ConfrontosPage() {
                                             type="number"
                                             className="w-full bg-rpg-slate border border-white/10 p-3 rounded font-medieval text-rpg-parchment focus:border-rpg-gold outline-none"
                                             value={newCombatant.xp}
-                                            onChange={(e) => setNewCombatant({ ...newCombatant, xp: Number(e.target.value) })}
+                                            onChange={(e) => setNewCombatant({ ...newCombatant, xp: Number(e.target.value) || 0 })}
+                                            onFocus={(e) => e.target.select()}
                                             placeholder="XP..."
                                         />
                                     </div>
@@ -1113,10 +1135,26 @@ export default function ConfrontosPage() {
                                             className="w-full bg-rpg-slate border border-white/10 p-3 rounded font-medieval text-rpg-parchment focus:border-rpg-gold outline-none"
                                             value={newCombatant.initiative}
                                             onChange={(e) => setNewCombatant({ ...newCombatant, initiative: e.target.value })}
+                                            onFocus={(e) => e.target.select()}
                                             required={phase !== 'preparation'}
                                             placeholder={phase !== 'preparation' ? "Número..." : "0"}
                                         />
                                     </div>
+                                    {(newCombatant.type === 'monster' || newCombatant.type === 'npc') && (
+                                        <div className="col-span-1">
+                                            <label className="block text-rpg-gold text-xs uppercase font-cinzel mb-1">Quantidade</label>
+                                            <input
+                                                type="number"
+                                                min="1"
+                                                max="20"
+                                                className="w-full bg-rpg-slate border border-rpg-gold/30 p-3 rounded font-medieval text-rpg-parchment focus:border-rpg-gold outline-none"
+                                                value={newCombatant.quantity}
+                                                onChange={(e) => setNewCombatant({ ...newCombatant, quantity: Number(e.target.value) || 1 })}
+                                                onFocus={(e) => e.target.select()}
+                                                required
+                                            />
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         )}
@@ -1161,7 +1199,8 @@ export default function ConfrontosPage() {
                             min="1"
                             className="w-full bg-rpg-slate border border-white/10 p-3 rounded font-medieval text-rpg-parchment focus:border-rpg-gold outline-none"
                             value={newEffect.duration}
-                            onChange={(e) => setNewEffect({ ...newEffect, duration: Number(e.target.value) })}
+                            onChange={(e) => setNewEffect({ ...newEffect, duration: Number(e.target.value) || 1 })}
+                            onFocus={(e) => e.target.select()}
                             required
                         />
                         <p className="text-[10px] text-rpg-grey mt-1">O efeito diminuirá 1 rodada no início de cada turno deste combatente.</p>

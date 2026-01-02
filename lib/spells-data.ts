@@ -5,7 +5,7 @@ export interface Spell {
     id: string;
     name: string;
     level: number;
-    school: 'Abjuração' | 'Adivinhação' | 'Conjuração' | 'Encantamento' | 'Evocação' | 'Ilusão' | 'Necromancia' | 'Transmutação';
+    school: string; // Changed to string to allow custom schools
     castingTime: string;
     range: string;
     components: string;
@@ -14,6 +14,7 @@ export interface Spell {
     classes: string[]; // Classes que podem usar esta magia
     ritual?: boolean;
     concentration?: boolean;
+    subclass?: string; // New field for user categorization
 }
 
 export const spellsDatabase: Spell[] = [

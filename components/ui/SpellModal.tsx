@@ -55,7 +55,7 @@ const SpellModal: React.FC<SpellModalProps> = ({ isOpen, onClose, onSave, spellT
           <div className="grid grid-cols-2 gap-2">
             <div>
               <label className="block text-xs font-bold text-rpg-gold mb-1">Nível</label>
-              <input type="number" min={0} max={9} className="w-full p-2 rounded bg-rpg-slate border border-rpg-gold/10 text-rpg-parchment" value={spell.level} onChange={e => setSpell(s => ({ ...s, level: Number(e.target.value) }))} required />
+              <input type="number" min={0} max={9} className="w-full p-2 rounded bg-rpg-slate border border-rpg-gold/10 text-rpg-parchment" value={spell.level} onChange={e => setSpell(s => ({ ...s, level: Number(e.target.value) || 0 }))} onFocus={(e) => e.target.select()} required />
             </div>
             <div>
               <label className="block text-xs font-bold text-rpg-gold mb-1">Tempo de Conjuração</label>

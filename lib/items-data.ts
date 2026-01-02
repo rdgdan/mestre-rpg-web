@@ -11,6 +11,12 @@ export interface Weapon {
     isMagical: boolean;
     magicalBonus: number;
     magicalEffect: string;
+    // Novos campos para sincronia com Biblioteca
+    diceQty?: number;
+    diceType?: string;
+    diceBonus?: number;
+    isCustomDamage?: boolean;
+    isProficient?: boolean;
 }
 
 export interface Currency {
@@ -30,6 +36,9 @@ export interface OtherEquipmentItem {
     armorClass?: number;
     type?: 'armor' | 'shield' | 'other';
     description?: string;
+    isMagical?: boolean;
+    magicalBonus?: number;
+    magicalEffect?: string;
 }
 
 export interface Inventory {
@@ -91,3 +100,27 @@ export const dndEquipments = [
     { name: "Capa de Respirar na Água" },
     { name: "Mochila de Carga" }
 ];
+
+// Utilitário para converter strings de dano em dados estruturados
+export function parseDamageString(damage: string) {
+    // Regex para capturar [quantidade]d[faces] [+ bônus]
+    const regex = /^(\d+)d(\d+)\s*(?:\+\s*(\d+))?$/i;
+    const match = damage.trim().match(regex);
+
+    if (match) {
+        return {
+            diceQty: parseInt(match[1]) || 1,
+            diceType: `d${match[2]}`,
+            diceBonus: parseInt(match[3]) || 0,
+            isCustomDamage: false
+        };
+    }
+
+    // Se não combinar com o padrão simples, retorna como customizado
+    return {
+        diceQty: 1,
+        diceType: 'd8',
+        diceBonus: 0,
+        isCustomDamage: true
+    };
+}

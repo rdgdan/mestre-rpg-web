@@ -4,6 +4,8 @@ import { MonsterData, dndMonsters } from './monsters-data';
 // Interface estendida com descrição
 export interface MonsterDataExtended extends MonsterData {
     description: string;
+    classes?: string[];
+    subclass?: string;
 }
 
 // Descrições dos monstros (mapeamento)

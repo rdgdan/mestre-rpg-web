@@ -3,7 +3,8 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
-import { Weapon } from '@/lib/items-data';
+import { Weapon, parseDamageString } from '@/lib/items-data';
+import { DEFAULT_DICE, DEFAULT_DAMAGE_TYPES, DEFAULT_PROPERTIES } from '@/lib/dnd-data';
 
 interface WeaponModalProps {
     isOpen: boolean;
@@ -15,25 +16,41 @@ interface WeaponModalProps {
 const BLANK_WEAPON: Omit<Weapon, 'id'> = {
     name: '',
     damage: '',
-    damageType: '',
+    damageType: 'Cortante',
     properties: [],
-    quantity: 1, // <-- PADRÃO
+    quantity: 1,
     isMagical: false,
     magicalBonus: 0,
-    magicalEffect: ''
+    magicalEffect: '',
+    diceQty: 1,
+    diceType: 'd8',
+    diceBonus: 0,
+    isCustomDamage: false,
+    isProficient: true
 };
 
 const WeaponModal: React.FC<WeaponModalProps> = ({ isOpen, onClose, onSave, weaponToEdit }) => {
-    type WeaponEdit = Omit<Weapon, 'quantity' | 'magicalBonus'> & { quantity: number | ''; magicalBonus: number | '' };
-    const [weapon, setWeapon] = useState<WeaponEdit>({ id: new Date().toISOString(), ...BLANK_WEAPON });
+    const [weapon, setWeapon] = useState<Weapon>({ id: new Date().toISOString(), ...BLANK_WEAPON });
 
     useEffect(() => {
         if (isOpen) {
             if (weaponToEdit) {
+                // Se o dano for customizado, tenta ver se ele pode ser estruturado
+                let enhancedWeapon = { ...weaponToEdit };
+                if (weaponToEdit.isCustomDamage && weaponToEdit.damage) {
+                    const parsed = parseDamageString(weaponToEdit.damage);
+                    if (!parsed.isCustomDamage) {
+                        enhancedWeapon = { ...enhancedWeapon, ...parsed };
+                    }
+                }
+
                 setWeapon({
-                    ...weaponToEdit,
-                    quantity: weaponToEdit.quantity === 0 ? '' : weaponToEdit.quantity,
-                    magicalBonus: weaponToEdit.magicalBonus === 0 ? '' : weaponToEdit.magicalBonus
+                    ...enhancedWeapon,
+                    diceQty: enhancedWeapon.diceQty || 1,
+                    diceType: enhancedWeapon.diceType || 'd8',
+                    diceBonus: enhancedWeapon.diceBonus || 0,
+                    isCustomDamage: enhancedWeapon.isCustomDamage ?? true,
+                    isProficient: enhancedWeapon.isProficient ?? true
                 });
             } else {
                 setWeapon({ id: new Date().toISOString(), ...BLANK_WEAPON });
@@ -41,115 +58,207 @@ const WeaponModal: React.FC<WeaponModalProps> = ({ isOpen, onClose, onSave, weap
         }
     }, [weaponToEdit, isOpen]);
 
-    const handleChange = (field: keyof Weapon, value: any) => {
-        if (field === 'quantity') {
-            if (value === '') {
-                value = '';
-            } else {
-                const numValue = parseInt(value, 10);
-                value = isNaN(numValue) || numValue < 1 ? 1 : numValue;
-            }
-        }
-        if (field === 'magicalBonus') {
-            if (value === '') {
-                value = '';
-            } else {
-                const numValue = parseInt(value, 10);
-                value = isNaN(numValue) ? 0 : numValue;
-            }
-        }
-        setWeapon(prev => ({ ...prev, [field]: value }));
-    };
-
     const handlePropertyChange = (prop: string) => {
-        const newProperties = weapon.properties.includes(prop)
-            ? weapon.properties.filter(p => p !== prop)
-            : [...weapon.properties, prop];
-        handleChange('properties', newProperties);
+        const props = weapon.properties || [];
+        const updated = props.includes(prop)
+            ? props.filter(p => p !== prop)
+            : [...props, prop];
+        setWeapon({ ...weapon, properties: updated });
     };
 
     const handleSave = () => {
-        const weaponToSave: Weapon = {
+        if (!weapon.name) return alert('Dê um nome à arma!');
+
+        let finalDamage = weapon.damage;
+        if (!weapon.isCustomDamage) {
+            finalDamage = `${weapon.diceQty}${weapon.diceType}${weapon.diceBonus ? ` + ${weapon.diceBonus}` : ''}`;
+        }
+
+        onSave({
             ...weapon,
-            quantity: weapon.quantity === '' ? 1 : weapon.quantity,
-            magicalBonus: weapon.magicalBonus === '' ? 0 : weapon.magicalBonus
-        };
-        onSave(weaponToSave);
+            damage: finalDamage
+        });
+        onClose();
     };
 
     if (!isOpen) return null;
 
     return (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex justify-center items-center z-50">
-            <div className="bg-rpg-panel border-2 border-rpg-gold/30 p-6 rounded-lg shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto shadow-black/50 custom-scrollbar">
-                <h2 className="text-2xl font-bold text-rpg-gold mb-4 font-cinzel border-b border-rpg-gold/20 pb-2">{weaponToEdit ? 'Editar Arma' : 'Criar Nova Arma'}</h2>
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex justify-center items-center z-50 p-4">
+            <div className="bg-rpg-panel border-2 border-rpg-gold/30 rounded-lg shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto custom-scrollbar">
+                <div className="p-6 border-b border-rpg-gold/20 flex justify-between items-center bg-black/20">
+                    <h2 className="text-2xl font-bold text-rpg-gold font-cinzel">{weaponToEdit ? 'Editar Arma' : 'Criar Nova Arma'}</h2>
+                    <button onClick={onClose} className="text-rpg-grey hover:text-rpg-gold text-2xl">×</button>
+                </div>
 
-                <div className="space-y-4">
-                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                        {/* CAMPO DE QUANTIDADE */}
-                        <div className="md:col-span-1">
-                            <label className="block text-sm font-bold text-rpg-gold font-medieval mb-1">Qtd.</label>
-                            <input type="number" value={weapon.quantity === 0 ? '' : weapon.quantity} onChange={e => handleChange('quantity', e.target.value)} className="w-full p-2 bg-rpg-slate border border-rpg-gold/10 rounded-md text-rpg-parchment focus:outline-none focus:ring-2 focus:ring-rpg-gold font-medieval text-center" />
+                <div className="p-6 space-y-6">
+                    {/* Nome e Quantidade */}
+                    <div className="grid grid-cols-4 gap-4">
+                        <div className="col-span-3">
+                            <label className="block text-xs font-bold text-rpg-gold uppercase mb-1">Nome da Arma</label>
+                            <input
+                                type="text"
+                                value={weapon.name}
+                                onChange={e => setWeapon({ ...weapon, name: e.target.value })}
+                                className="w-full bg-rpg-slate border border-rpg-gold/20 rounded px-3 py-2 text-rpg-parchment focus:border-rpg-gold outline-none font-medieval"
+                                placeholder="ex: Espada Longa"
+                            />
                         </div>
-                        <div className="md:col-span-3">
-                            <label className="block text-sm font-bold text-rpg-gold font-medieval mb-1">Nome da Arma</label>
-                            <input type="text" placeholder="Nome da Arma" value={weapon.name} onChange={e => handleChange('name', e.target.value)} className="w-full p-2 bg-rpg-slate border border-rpg-gold/10 rounded-md text-rpg-parchment focus:outline-none focus:ring-2 focus:ring-rpg-gold font-medieval placeholder-rpg-grey/50" />
+                        <div>
+                            <label className="block text-xs font-bold text-rpg-gold uppercase mb-1 text-center">Qtd.</label>
+                            <input
+                                type="number"
+                                min="1"
+                                value={weapon.quantity}
+                                onChange={e => setWeapon({ ...weapon, quantity: parseInt(e.target.value) || 1 })}
+                                className="w-full bg-rpg-slate border border-rpg-gold/20 rounded px-3 py-2 text-rpg-parchment text-center font-medieval"
+                            />
                         </div>
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div>
-                            <label className="block text-sm font-bold text-rpg-gold font-medieval mb-1">Dano</label>
-                            <input type="text" placeholder="e.g., 1d8" value={weapon.damage} onChange={e => handleChange('damage', e.target.value)} className="w-full p-2 bg-rpg-slate border border-rpg-gold/10 rounded-md text-rpg-parchment focus:outline-none focus:ring-2 focus:ring-rpg-gold font-medieval placeholder-rpg-grey/50" />
+                    {/* Dano Estruturado */}
+                    <div className="space-y-3">
+                        <div className="flex justify-between items-center">
+                            <label className="text-xs font-bold text-rpg-gold uppercase tracking-wider">Dano / Efeito</label>
+                            <label className="flex items-center gap-2 text-[10px] text-rpg-gold cursor-pointer uppercase font-bold">
+                                <input
+                                    type="checkbox"
+                                    checked={weapon.isCustomDamage}
+                                    onChange={(e) => setWeapon({ ...weapon, isCustomDamage: e.target.checked })}
+                                    className="accent-rpg-gold"
+                                />
+                                Dano Customizado
+                            </label>
                         </div>
-                        <div>
-                            <label className="block text-sm font-bold text-rpg-gold font-medieval mb-1">Tipo de Dano</label>
-                            <input type="text" placeholder="e.g., Cortante" value={weapon.damageType} onChange={e => handleChange('damageType', e.target.value)} className="w-full p-2 bg-rpg-slate border border-rpg-gold/10 rounded-md text-rpg-parchment focus:outline-none focus:ring-2 focus:ring-rpg-gold font-medieval placeholder-rpg-grey/50" />
+
+                        {weapon.isCustomDamage ? (
+                            <input
+                                type="text"
+                                placeholder="ex: 1d8 + 1"
+                                value={weapon.damage}
+                                onChange={(e) => setWeapon({ ...weapon, damage: e.target.value })}
+                                className="w-full bg-rpg-slate border border-rpg-gold/20 rounded px-3 py-2 text-rpg-parchment focus:border-rpg-gold outline-none font-medieval"
+                            />
+                        ) : (
+                            <div className="grid grid-cols-3 gap-2">
+                                <div className="flex bg-rpg-slate border border-rpg-gold/20 rounded overflow-hidden">
+                                    <span className="px-2 py-2 text-[10px] text-rpg-grey bg-black/20 flex items-center border-r border-rpg-gold/10">Qt</span>
+                                    <input
+                                        type="number"
+                                        min="1"
+                                        value={weapon.diceQty}
+                                        onChange={(e) => setWeapon({ ...weapon, diceQty: parseInt(e.target.value) || 1 })}
+                                        onFocus={(e) => e.target.select()}
+                                        className="w-full bg-transparent px-2 py-2 text-rpg-parchment text-center text-sm outline-none font-medieval"
+                                    />
+                                </div>
+                                <select
+                                    value={weapon.diceType}
+                                    onChange={(e) => setWeapon({ ...weapon, diceType: e.target.value })}
+                                    className="bg-rpg-slate border border-rpg-gold/20 rounded px-2 py-2 text-rpg-parchment text-sm outline-none font-medieval"
+                                >
+                                    {DEFAULT_DICE.map(d => <option key={d} value={d}>{d}</option>)}
+                                </select>
+                                <div className="flex bg-rpg-slate border border-rpg-gold/20 rounded overflow-hidden">
+                                    <span className="px-2 py-2 text-[10px] text-rpg-grey bg-black/20 flex items-center border-r border-rpg-gold/10">+</span>
+                                    <input
+                                        type="number"
+                                        value={weapon.diceBonus}
+                                        onChange={(e) => setWeapon({ ...weapon, diceBonus: parseInt(e.target.value) || 0 })}
+                                        onFocus={(e) => e.target.select()}
+                                        className="w-full bg-transparent px-2 py-2 text-rpg-parchment text-center text-sm outline-none font-medieval"
+                                    />
+                                </div>
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Tipo de Dano */}
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="col-span-2">
+                            <label className="block text-xs font-bold text-rpg-gold uppercase mb-1">Tipo de Dano</label>
+                            <select
+                                value={weapon.damageType}
+                                onChange={(e) => setWeapon({ ...weapon, damageType: e.target.value })}
+                                className="w-full bg-rpg-slate border border-rpg-gold/20 rounded px-3 py-2 text-rpg-parchment focus:border-rpg-gold outline-none font-medieval"
+                            >
+                                {DEFAULT_DAMAGE_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                            </select>
                         </div>
                     </div>
 
+                    {/* Propriedades (Chips) */}
                     <div>
-                        <label className="block text-sm font-bold text-rpg-gold font-medieval mb-2">Propriedades</label>
-                        <input type="text" placeholder="Adicionar propriedade e pressionar Enter..." onKeyDown={(e) => {
-                            if (e.key === 'Enter' && e.currentTarget.value.trim()) {
-                                e.preventDefault();
-                                handlePropertyChange(e.currentTarget.value.trim());
-                                e.currentTarget.value = '';
-                            }
-                        }} className="w-full p-2 bg-rpg-slate border border-rpg-gold/10 rounded-md mb-2 text-rpg-parchment focus:outline-none focus:ring-2 focus:ring-rpg-gold font-medieval placeholder-rpg-grey/50" />
+                        <label className="block text-xs font-bold text-rpg-gold uppercase mb-2 tracking-wider">Propriedades</label>
                         <div className="flex flex-wrap gap-2">
-                            {weapon.properties.map(prop => (
-                                <span key={prop} className="bg-rpg-slate border border-rpg-gold/20 px-2 py-1 rounded-md text-sm flex items-center text-rpg-parchment font-medieval">
+                            {DEFAULT_PROPERTIES.map(prop => (
+                                <button
+                                    key={prop}
+                                    onClick={() => handlePropertyChange(prop)}
+                                    className={`px-3 py-1 rounded-full text-[10px] font-bold transition-all ${weapon.properties?.includes(prop)
+                                        ? 'bg-rpg-gold text-rpg-dark'
+                                        : 'bg-rpg-slate text-rpg-parchment border border-rpg-gold/20 hover:border-rpg-gold/50'
+                                        }`}
+                                >
                                     {prop}
-                                    <button onClick={() => handlePropertyChange(prop)} className="ml-2 text-rpg-red hover:text-red-400 font-bold transition-colors">X</button>
-                                </span>
+                                </button>
                             ))}
                         </div>
                     </div>
 
-                    <div className="bg-rpg-slate/50 border border-rpg-gold/10 p-4 rounded-lg space-y-3">
-                        <div className="flex items-center">
-                            <input type="checkbox" id="isMagical" checked={weapon.isMagical} onChange={e => handleChange('isMagical', e.target.checked)} className="w-5 h-5 rounded-sm text-rpg-gold focus:ring-rpg-gold bg-rpg-dark border-rpg-grey/50" />
-                            <label htmlFor="isMagical" className="ml-3 text-lg font-bold text-rpg-gold font-cinzel">É uma Arma Mágica?</label>
+                    {/* Mágico e Proficiência */}
+                    <div className="space-y-4 pt-4 border-t border-rpg-gold/10">
+                        <div className="flex items-center justify-between">
+                            <label className="flex items-center gap-2 text-sm font-bold text-rpg-gold cursor-pointer group">
+                                <input
+                                    type="checkbox"
+                                    checked={weapon.isProficient}
+                                    onChange={e => setWeapon({ ...weapon, isProficient: e.target.checked })}
+                                    className="accent-rpg-gold w-4 h-4"
+                                />
+                                <span className="group-hover:text-rpg-gold-light transition-colors">Proficiente?</span>
+                            </label>
+
+                            <label className="flex items-center gap-2 text-sm font-bold text-rpg-gold cursor-pointer group">
+                                <input
+                                    type="checkbox"
+                                    checked={weapon.isMagical}
+                                    onChange={e => setWeapon({ ...weapon, isMagical: e.target.checked })}
+                                    className="accent-rpg-gold w-4 h-4"
+                                />
+                                <span className="group-hover:text-rpg-gold-light transition-colors">É Mágica?</span>
+                            </label>
                         </div>
+
                         {weapon.isMagical && (
-                            <div className="space-y-3 pl-8 animate-fade-in">
-                                <div>
-                                    <label className="block text-sm font-bold text-rpg-gold font-medieval mb-1">Bônus Mágico (+)</label>
-                                    <input type="number" value={weapon.magicalBonus === 0 ? '' : weapon.magicalBonus} onChange={e => handleChange('magicalBonus', e.target.value)} className="w-full p-2 bg-rpg-slate border border-rpg-gold/10 rounded-md text-rpg-parchment focus:outline-none focus:ring-2 focus:ring-rpg-gold font-medieval" />
+                            <div className="grid grid-cols-4 gap-4 animate-fade-in bg-black/20 p-4 rounded border border-rpg-gold/10">
+                                <div className="col-span-1">
+                                    <label className="block text-[10px] font-bold text-rpg-gold uppercase mb-1 text-center">Bônus (+)</label>
+                                    <input
+                                        type="number"
+                                        value={weapon.magicalBonus}
+                                        onChange={e => setWeapon({ ...weapon, magicalBonus: parseInt(e.target.value) || 0 })}
+                                        className="w-full bg-rpg-slate border border-rpg-gold/20 rounded px-2 py-2 text-rpg-parchment text-center outline-none font-medieval"
+                                    />
                                 </div>
-                                <div>
-                                    <label className="block text-sm font-bold text-rpg-gold font-medieval mb-1">Efeitos Mágicos</label>
-                                    <textarea placeholder="Descreva os efeitos..." value={weapon.magicalEffect} onChange={e => handleChange('magicalEffect', e.target.value)} className="w-full h-24 p-2 bg-rpg-slate border border-rpg-gold/10 rounded-md text-rpg-parchment focus:outline-none focus:ring-2 focus:ring-rpg-gold font-medieval placeholder-rpg-grey/50"></textarea>
+                                <div className="col-span-3">
+                                    <label className="block text-[10px] font-bold text-rpg-gold uppercase mb-1">Efeito Mágico</label>
+                                    <input
+                                        type="text"
+                                        placeholder="ex: Brilha na presença de orcs"
+                                        value={weapon.magicalEffect}
+                                        onChange={e => setWeapon({ ...weapon, magicalEffect: e.target.value })}
+                                        className="w-full bg-rpg-slate border border-rpg-gold/20 rounded px-3 py-2 text-rpg-parchment outline-none text-sm font-medieval"
+                                    />
                                 </div>
                             </div>
                         )}
                     </div>
                 </div>
 
-                <div className="flex justify-end gap-4 mt-6 pt-4 border-t border-rpg-gold/10">
-                    <button onClick={onClose} className="px-4 py-2 text-sm font-medium rounded-md transition-all duration-200 bg-rpg-slate text-rpg-grey hover:bg-rpg-dark hover:text-rpg-parchment border border-rpg-grey/30">Cancelar</button>
-                    <button onClick={handleSave} className="px-6 py-2 font-bold rounded-md transition-all duration-200 bg-rpg-gold text-rpg-dark hover:bg-rpg-gold-light shadow-lg hover:shadow-glow-gold font-cinzel">Salvar Arma</button>
+                <div className="p-6 border-t border-rpg-gold/20 flex justify-end gap-3 bg-black/20">
+                    <button onClick={onClose} className="px-4 py-2 text-sm font-medium rounded-md bg-rpg-slate text-rpg-grey hover:bg-rpg-dark transition-all border border-rpg-gold/10">Cancelar</button>
+                    <button onClick={handleSave} className="px-6 py-2 font-bold rounded-md bg-rpg-gold text-rpg-dark hover:brightness-110 shadow-lg font-cinzel tracking-wider transition-all">Salvar Arma</button>
                 </div>
             </div>
         </div>
