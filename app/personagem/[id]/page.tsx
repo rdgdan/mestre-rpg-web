@@ -34,11 +34,18 @@ const StatBlock = ({ label, value }: { label: string; value: string | number }) 
     </div>
 );
 
-const AttributeInput = ({ label, value, onChange }: { label: string; value: number; onChange: (newValue: number) => void }) => (
-    <div className="w-full p-3 text-center transition-all duration-300 bg-rpg-panel border border-rpg-gold/20 rounded-lg shadow-lg hover:border-rpg-gold/50 backdrop-blur-sm group">
-        <label className="block text-xs font-bold tracking-wider text-rpg-gold uppercase font-cinzel group-hover:text-rpg-gold-light">{label}</label>
-        <input type="number" value={value} onChange={(e) => onChange(parseInt(e.target.value, 10) || 0)} onFocus={(e) => e.target.select()} className="w-20 p-1 text-3xl font-bold text-center text-rpg-parchment bg-transparent border-b-2 border-rpg-gold/20 focus:outline-none focus:border-rpg-gold font-medieval" />
-        <div className="mt-1 text-xl font-bold text-rpg-parchment font-medieval bg-rpg-dark/50 rounded px-2 w-10 mx-auto border border-white/5">{Math.floor((value - 10) / 2)}</div>
+const AttributeInput = ({ label, value, onChange, disabled }: { label: string; value: number; onChange: (newValue: number) => void; disabled?: boolean }) => (
+    <div className={`w-full p-3 text-center transition-all duration-300 bg-rpg-panel border rounded-lg shadow-lg backdrop-blur-sm group ${disabled ? 'opacity-70 border-rpg-grey/20' : 'border-rpg-gold/20 hover:border-rpg-gold/50'}`}>
+        <label className={`block text-xs font-bold tracking-wider uppercase font-cinzel ${disabled ? 'text-rpg-grey' : 'text-rpg-gold group-hover:text-rpg-gold-light'}`}>{label}</label>
+        <input
+            type="number"
+            value={value}
+            onChange={(e) => onChange(parseInt(e.target.value, 10) || 0)}
+            onFocus={(e) => e.target.select()}
+            disabled={disabled}
+            className={`w-20 p-1 text-3xl font-bold text-center bg-transparent border-b-2 focus:outline-none font-medieval ${disabled ? 'text-rpg-grey border-rpg-grey/20 cursor-not-allowed' : 'text-rpg-parchment border-rpg-gold/20 focus:border-rpg-gold'}`}
+        />
+        <div className={`mt-1 text-xl font-bold font-medieval bg-rpg-dark/50 rounded px-2 w-10 mx-auto border border-white/5 ${disabled ? 'text-rpg-grey' : 'text-rpg-parchment'}`}>{Math.floor((value - 10) / 2)}</div>
     </div>
 );
 
@@ -50,15 +57,23 @@ interface SkillCheckboxProps {
     proficiencyBonus: number;
     attributeMod: number;
     onChange: (key: string, checked: boolean) => void;
+    disabled?: boolean;
 }
 
-const SkillCheckbox = ({ skillKey, displayName, attribute, isProficient, proficiencyBonus, attributeMod, onChange }: SkillCheckboxProps) => (
-    <div className="flex items-center justify-between p-2 rounded-md hover:bg-rpg-dark/40 transition-colors border-b border-rpg-gold/5">
-        <label htmlFor={skillKey} className="flex items-center cursor-pointer">
-            <input id={skillKey} type="checkbox" checked={isProficient} onChange={(e) => onChange(skillKey, e.target.checked)} className="w-4 h-4 rounded-sm text-rpg-gold focus:ring-rpg-gold bg-rpg-dark border-rpg-gold/30" />
-            <span className={`ml-3 text-sm ${isProficient ? 'text-rpg-gold font-bold' : 'text-rpg-grey'}`}>{displayName} <span className="text-xs text-rpg-grey/50">({attribute.slice(0, 3).toUpperCase()})</span></span>
+const SkillCheckbox = ({ skillKey, displayName, attribute, isProficient, proficiencyBonus, attributeMod, onChange, disabled }: SkillCheckboxProps) => (
+    <div className={`flex items-center justify-between p-2 rounded-md transition-colors border-b border-rpg-gold/5 ${disabled ? 'opacity-60 cursor-not-allowed' : 'hover:bg-rpg-dark/40'}`}>
+        <label htmlFor={skillKey} className={`flex items-center ${disabled ? 'cursor-not-allowed' : 'cursor-pointer'}`}>
+            <input
+                id={skillKey}
+                type="checkbox"
+                checked={isProficient}
+                onChange={(e) => onChange(skillKey, e.target.checked)}
+                disabled={disabled}
+                className={`w-4 h-4 rounded-sm bg-rpg-dark border-rpg-gold/30 ${disabled ? 'text-rpg-grey' : 'text-rpg-gold focus:ring-rpg-gold'}`}
+            />
+            <span className={`ml-3 text-sm ${isProficient ? (disabled ? 'text-rpg-gold/70' : 'text-rpg-gold font-bold') : 'text-rpg-grey'}`}>{displayName} <span className="text-xs text-rpg-grey/50">({attribute.slice(0, 3).toUpperCase()})</span></span>
         </label>
-        <span className="font-medieval text-lg font-bold text-rpg-parchment">{isProficient ? attributeMod + proficiencyBonus : attributeMod}</span>
+        <span className={`font-medieval text-lg font-bold ${disabled ? 'text-rpg-grey' : 'text-rpg-parchment'}`}>{isProficient ? attributeMod + proficiencyBonus : attributeMod}</span>
     </div>
 );
 
@@ -89,6 +104,7 @@ export default function CharacterSheetPage() {
     const [character, setCharacter] = useState<Character | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [isReadOnly, setIsReadOnly] = useState(false); // True quando o mestre está visualizando
     const [activeTab, setActiveTab] = useState('Principal');
 
     // Modais e Estados de Dados
@@ -133,6 +149,7 @@ export default function CharacterSheetPage() {
     }, 1500), [user]);
 
     const updateCharacter = (updater: (char: Character) => Character) => {
+        if (isReadOnly) return; // Não permite edição em modo somente leitura
         setCharacter(prevChar => {
             if (!prevChar) return null;
             const updatedChar = updater(prevChar);
@@ -197,76 +214,95 @@ export default function CharacterSheetPage() {
                 } else {
                     const docRef = doc(db, 'personagens', id);
                     const docSnap = await getDoc(docRef);
-                    if (docSnap.exists() && docSnap.data().ownerId === user.uid) {
-                        const hydratedChar = hydrateCharacter(docSnap.data() as Partial<Character>, docSnap.id);
 
-                        // Enriquecer magias se necessário
-                        const { fetchGlobalSpells } = await import('@/lib/spells-data');
-                        const globalSpells = await fetchGlobalSpells();
+                    if (docSnap.exists()) {
+                        const charData = docSnap.data();
+                        const isOwner = charData.ownerId === user.uid;
 
-                        let needsUpdate = false;
-                        const enrichedSpells = hydratedChar.spells.map(s => {
-                            if (s.description && s.description !== 'Sem descrição.' && s.castingTime) return s;
-
-                            const match = globalSpells.find(gs => gs.name.toLowerCase() === s.name.toLowerCase());
-                            if (match) {
-                                needsUpdate = true;
-                                return { ...s, ...match, id: s.id };
+                        // Verificar se o usuário é o mestre da campanha vinculada
+                        let isCampaignMaster = false;
+                        if (charData.campaignId) {
+                            const campaignRef = doc(db, 'campaigns', charData.campaignId);
+                            const campaignSnap = await getDoc(campaignRef);
+                            if (campaignSnap.exists() && campaignSnap.data().ownerId === user.uid) {
+                                isCampaignMaster = true;
                             }
-                            return s;
-                        });
-
-                        hydratedChar.spells = enrichedSpells;
-
-                        // Enriquecer itens se necessário
-                        const { fetchGlobalItems } = await import('@/lib/items-data');
-                        const globalItems = await fetchGlobalItems();
-
-                        const enrichedWeapons = hydratedChar.inventory.weapons.map(w => {
-                            if (w.damage && w.weight !== undefined) return w;
-                            const match = globalItems.find(gi => gi.name.toLowerCase() === w.name.toLowerCase() && gi.itemType === 'WEAPON');
-                            if (match) {
-                                needsUpdate = true;
-                                return { ...w, ...match, id: w.id };
-                            }
-                            return w;
-                        });
-
-                        const enrichedEquipment = hydratedChar.inventory.otherEquipment.map(e => {
-                            if (e.description && e.weight !== undefined && e.type !== 'other') return e;
-                            const match = globalItems.find(gi => gi.name.toLowerCase() === e.name.toLowerCase() && gi.itemType !== 'WEAPON');
-                            if (match) {
-                                needsUpdate = true;
-                                return {
-                                    ...e,
-                                    ...match,
-                                    id: e.id,
-                                    type: (match.itemType === 'ARMOR' ? 'armor' : match.itemType === 'SHIELD' ? 'shield' : 'other'),
-                                    armorClass: match.ac || e.armorClass,
-                                    weight: match.weight || e.weight
-                                };
-                            }
-                            return e;
-                        });
-
-                        hydratedChar.inventory.weapons = enrichedWeapons;
-                        hydratedChar.inventory.otherEquipment = enrichedEquipment;
-
-                        setCharacter(hydratedChar);
-                        characterLoaded.current = true;
-
-                        // Se houve enriquecimento, salva de volta para evitar re-enriquecer
-                        if (needsUpdate) {
-                            debouncedSave(hydratedChar);
                         }
-                    } else {
-                        setError("Ficha não encontrada ou acesso negado.");
-                        router.push('/personagens');
+
+                        if (isOwner || isCampaignMaster) {
+                            // Define modo somente leitura se for o mestre da campanha
+                            setIsReadOnly(isCampaignMaster && !isOwner);
+
+                            const hydratedChar = hydrateCharacter(charData as Partial<Character>, docSnap.id);
+
+                            // Enriquecer magias se necessário
+                            const { fetchGlobalSpells } = await import('@/lib/spells-data');
+                            const globalSpells = await fetchGlobalSpells();
+
+                            let needsUpdate = false;
+                            const enrichedSpells = hydratedChar.spells.map(s => {
+                                if (s.description && s.description !== 'Sem descrição.' && s.castingTime) return s;
+
+                                const match = globalSpells.find(gs => gs.name.toLowerCase() === s.name.toLowerCase());
+                                if (match) {
+                                    needsUpdate = true;
+                                    return { ...s, ...match, id: s.id };
+                                }
+                                return s;
+                            });
+
+                            hydratedChar.spells = enrichedSpells;
+
+                            // Enriquecer itens se necessário
+                            const { fetchGlobalItems } = await import('@/lib/items-data');
+                            const globalItems = await fetchGlobalItems();
+
+                            const enrichedWeapons = hydratedChar.inventory.weapons.map(w => {
+                                if (w.damage && w.weight !== undefined) return w;
+                                const match = globalItems.find(gi => gi.name.toLowerCase() === w.name.toLowerCase() && gi.itemType === 'WEAPON');
+                                if (match) {
+                                    needsUpdate = true;
+                                    return { ...w, ...match, id: w.id };
+                                }
+                                return w;
+                            });
+
+                            const enrichedEquipment = hydratedChar.inventory.otherEquipment.map(e => {
+                                if (e.description && e.weight !== undefined && e.type !== 'other') return e;
+                                const match = globalItems.find(gi => gi.name.toLowerCase() === e.name.toLowerCase() && gi.itemType !== 'WEAPON');
+                                if (match) {
+                                    needsUpdate = true;
+                                    return {
+                                        ...e,
+                                        ...match,
+                                        id: e.id,
+                                        type: (match.itemType === 'ARMOR' ? 'armor' : match.itemType === 'SHIELD' ? 'shield' : 'other'),
+                                        armorClass: match.ac || e.armorClass,
+                                        weight: match.weight || e.weight
+                                    };
+                                }
+                                return e;
+                            });
+
+                            hydratedChar.inventory.weapons = enrichedWeapons;
+                            hydratedChar.inventory.otherEquipment = enrichedEquipment;
+
+                            setCharacter(hydratedChar);
+                            characterLoaded.current = true;
+
+                            // Se houve enriquecimento, salva de volta para evitar re-enriquecer
+                            if (needsUpdate) {
+                                debouncedSave(hydratedChar);
+                            }
+                        } else {
+                            setError("Ficha não encontrada ou acesso negado.");
+                            router.push('/personagens');
+                        }
                     }
                 }
             } catch (e) { setError("Falha ao carregar a ficha."); console.error(e); }
             finally { setIsLoading(false); }
-        }
+        };
         loadChar();
     }, [id, user, loadingAuth, router, character]);
 
@@ -417,16 +453,33 @@ export default function CharacterSheetPage() {
             <div className="max-w-7xl mx-auto">
                 {/* Header e Navigation */}
                 <div className="mb-6 flex justify-between items-center">
-                    <Link href="/personagens" className="px-4 py-2 text-sm font-bold rounded-md bg-rpg-panel border border-rpg-gold/20 text-rpg-grey hover:text-rpg-gold hover:border-rpg-gold shadow-lg hover:shadow-glow-gold transition-all">&larr; Voltar ao Salão</Link>
+                    <Link
+                        href={character.campaignId ? `/campanha/${character.campaignId}?tab=characters` : "/personagens"}
+                        className="px-4 py-2 text-sm font-bold rounded-md bg-rpg-panel border border-rpg-gold/20 text-rpg-grey hover:text-rpg-gold hover:border-rpg-gold shadow-lg hover:shadow-glow-gold transition-all"
+                    >
+                        &larr; {character.campaignId ? "Voltar à Campanha" : "Voltar ao Salão"}
+                    </Link>
+                    {isReadOnly && (
+                        <div className="px-4 py-2 bg-rpg-gold/20 border border-rpg-gold text-rpg-gold rounded font-bold font-cinzel flex items-center gap-2 animate-pulse">
+                            <span>👁️</span> Modo Espectador (Mestre)
+                        </div>
+                    )}
                     {id === 'novo' && (<button onClick={() => { }} className="px-6 py-2 font-bold rounded-md bg-gradient-to-r from-rpg-gold to-yellow-600 text-rpg-dark hover:from-yellow-400 hover:to-rpg-gold shadow-lg transform hover:scale-105 transition-all">Salvar Novo Personagem</button>)}
                 </div>
 
                 <header className="flex flex-col md:flex-row justify-between md:items-end mb-8 gap-6 p-6 bg-rpg-panel/50 rounded-xl border border-rpg-gold/10 shadow-2xl backdrop-blur-md">
                     <div className="flex-grow">
-                        <input type="text" value={character.name} onChange={e => handleFieldChange('name', e.target.value)} className="w-full text-5xl font-extrabold bg-transparent border-b-2 border-rpg-gold/30 font-cinzel text-rpg-gold focus:outline-none focus:border-rpg-gold transition-all placeholder-rpg-grey/30" placeholder="Nome do Personagem" />
+                        <input
+                            type="text"
+                            disabled={isReadOnly}
+                            value={character.name}
+                            onChange={e => handleFieldChange('name', e.target.value)}
+                            className="w-full text-5xl font-extrabold bg-transparent border-b-2 border-rpg-gold/30 font-cinzel text-rpg-gold focus:outline-none focus:border-rpg-gold transition-all placeholder-rpg-grey/30"
+                            placeholder="Nome do Personagem"
+                        />
                     </div>
                     <div className="flex flex-wrap items-end gap-3 w-full md:w-auto">
-                        <div className="w-full sm:w-40"><label className="block text-[10px] font-bold text-rpg-gold uppercase tracking-wider mb-1 font-cinzel text-center sm:text-left">Classe</label><button onClick={() => openSelectionModal('class')} className="w-full bg-rpg-slate border border-rpg-gold/20 rounded-md px-3 py-2 text-left hover:border-rpg-gold/50 font-medieval text-sm">{character.class || 'Selecione...'}</button></div>
+                        <div className="w-full sm:w-40"><label className="block text-[10px] font-bold text-rpg-gold uppercase tracking-wider mb-1 font-cinzel text-center sm:text-left">Classe</label><button disabled={isReadOnly} onClick={() => openSelectionModal('class')} className={`w-full bg-rpg-slate border border-rpg-gold/20 rounded-md px-3 py-2 text-left hover:border-rpg-gold/50 font-medieval text-sm ${isReadOnly ? 'opacity-70 cursor-not-allowed' : ''}`}>{character.class || 'Selecione...'}</button></div>
                         <div className="w-32 text-center group">
                             <label className="block text-[10px] font-bold text-rpg-gold uppercase tracking-wider mb-1 font-cinzel transition-colors group-hover:text-yellow-400">Nível</label>
                             <div className="relative flex items-center justify-between bg-rpg-slate border-2 border-rpg-gold/30 rounded-lg p-1 shadow-lg shadow-black/40 group-hover:border-rpg-gold transition-all">
@@ -435,19 +488,21 @@ export default function CharacterSheetPage() {
 
                                 <button
                                     onClick={() => handleFieldChange('level', Math.max(1, (character.level || 1) - 1))}
-                                    className="w-8 h-8 flex items-center justify-center bg-rpg-dark/50 hover:bg-rpg-red/20 text-rpg-grey hover:text-rpg-red rounded transition-all font-bold z-10"
+                                    disabled={isReadOnly}
+                                    className={`w-8 h-8 flex items-center justify-center bg-rpg-dark/50 hover:bg-rpg-red/20 text-rpg-grey hover:text-rpg-red rounded transition-all font-bold z-10 ${isReadOnly ? 'opacity-50 cursor-not-allowed' : ''}`}
                                 >-</button>
 
                                 <span className="text-3xl font-black text-rpg-gold font-medieval drop-shadow-glow-gold px-2">{character.level || 1}</span>
 
                                 <button
                                     onClick={() => handleFieldChange('level', Math.min(20, (character.level || 1) + 1))}
-                                    className="w-8 h-8 flex items-center justify-center bg-rpg-dark/50 hover:bg-green-900/20 text-rpg-grey hover:text-green-500 rounded transition-all font-bold z-10"
+                                    disabled={isReadOnly}
+                                    className={`w-8 h-8 flex items-center justify-center bg-rpg-dark/50 hover:bg-green-900/20 text-rpg-grey hover:text-green-500 rounded transition-all font-bold z-10 ${isReadOnly ? 'opacity-50 cursor-not-allowed' : ''}`}
                                 >+</button>
                             </div>
                         </div>
-                        <div className="w-32"><label className="block text-[10px] font-bold text-rpg-gold uppercase tracking-wider mb-1 font-cinzel text-center">Experiência</label><input type="number" value={character.experience === 0 ? '0' : (character.experience || '')} onChange={(e) => handleFieldChange('experience', e.target.value === '' ? '' : parseInt(e.target.value))} className="bg-rpg-dark/50 border border-rpg-gold/20 rounded-md px-2 py-2 text-center font-bold w-full font-medieval text-sm text-rpg-gold" /></div>
-                        <div className="w-full sm:w-40"><label className="block text-[10px] font-bold text-rpg-gold uppercase tracking-wider mb-1 font-cinzel text-center sm:text-left">Raça</label><button onClick={() => openSelectionModal('race')} className="w-full bg-rpg-slate border border-rpg-gold/20 rounded-md px-3 py-2 text-left hover:border-rpg-gold/50 font-medieval text-sm">{character.race || 'Selecione...'}</button></div>
+                        <div className="w-32"><label className="block text-[10px] font-bold text-rpg-gold uppercase tracking-wider mb-1 font-cinzel text-center">Experiência</label><input type="number" disabled={isReadOnly} value={character.experience === 0 ? '0' : (character.experience || '')} onChange={(e) => handleFieldChange('experience', e.target.value === '' ? '' : parseInt(e.target.value))} className={`bg-rpg-dark/50 border border-rpg-gold/20 rounded-md px-2 py-2 text-center font-bold w-full font-medieval text-sm text-rpg-gold ${isReadOnly ? 'opacity-70' : ''}`} /></div>
+                        <div className="w-full sm:w-40"><label className="block text-[10px] font-bold text-rpg-gold uppercase tracking-wider mb-1 font-cinzel text-center sm:text-left">Raça</label><button disabled={isReadOnly} onClick={() => openSelectionModal('race')} className={`w-full bg-rpg-slate border border-rpg-gold/20 rounded-md px-3 py-2 text-left hover:border-rpg-gold/50 font-medieval text-sm ${isReadOnly ? 'opacity-70 cursor-not-allowed' : ''}`}>{character.race || 'Selecione...'}</button></div>
                     </div>
                 </header>
 
@@ -466,7 +521,7 @@ export default function CharacterSheetPage() {
                         <div className="space-y-6 animate-fade-in">
                             <div className="flex gap-2 overflow-x-auto pb-4">
                                 {ATTRIBUTE_KEYS.map((key) => (
-                                    <AttributeInput key={key} label={ATTRIBUTE_DISPLAY_NAMES[key].slice(0, 3)} value={character.attributes[key]} onChange={(val) => handleNestedChange(`attributes.${key}`, val)} />
+                                    <AttributeInput key={key} label={ATTRIBUTE_DISPLAY_NAMES[key].slice(0, 3)} value={character.attributes[key]} onChange={(val) => handleNestedChange(`attributes.${key}`, val)} disabled={isReadOnly} />
                                 ))}
                             </div>
 
@@ -474,18 +529,18 @@ export default function CharacterSheetPage() {
                                 <div className="p-4 bg-rpg-panel border border-rpg-gold/20 rounded-lg shadow-md text-center backdrop-blur-sm group hover:border-rpg-gold/40 transition-all">
                                     <h4 className="text-xs font-bold text-rpg-gold uppercase mb-2 tracking-widest font-cinzel">Pontos de Vida</h4>
                                     <div className="flex items-center justify-center gap-2 mb-2">
-                                        <input type="number" value={character.currentHp === 0 ? '0' : (character.currentHp || '')} onChange={(e) => handleFieldChange('currentHp', e.target.value === '' ? '' : parseInt(e.target.value))} className="w-16 text-3xl font-bold text-center bg-transparent border-b-2 border-rpg-gold/30 text-rpg-parchment font-medieval" />
+                                        <input type="number" disabled={isReadOnly} value={character.currentHp === 0 ? '0' : (character.currentHp || '')} onChange={(e) => handleFieldChange('currentHp', e.target.value === '' ? '' : parseInt(e.target.value))} className={`w-16 text-3xl font-bold text-center bg-transparent border-b-2 border-rpg-gold/30 text-rpg-parchment font-medieval ${isReadOnly ? 'opacity-70' : ''}`} />
                                         <span className="text-xl text-rpg-grey/50">/</span>
-                                        <input type="number" value={character.maxHp === 0 ? '0' : (character.maxHp || '')} onChange={(e) => handleFieldChange('maxHp', e.target.value === '' ? '' : parseInt(e.target.value))} className="w-16 text-xl font-bold text-center bg-transparent text-rpg-grey font-medieval" />
+                                        <input type="number" disabled={isReadOnly} value={character.maxHp === 0 ? '0' : (character.maxHp || '')} onChange={(e) => handleFieldChange('maxHp', e.target.value === '' ? '' : parseInt(e.target.value))} className={`w-16 text-xl font-bold text-center bg-transparent text-rpg-grey font-medieval ${isReadOnly ? 'opacity-70' : ''}`} />
                                     </div>
                                     <div className="flex justify-center gap-2">
-                                        <button onClick={() => updateCharacter(c => ({ ...c, currentHp: Math.max(0, c.currentHp - 1) }))} className="px-2 py-1 bg-rpg-red/20 text-red-200 border border-rpg-red/30 rounded text-xs font-bold hover:bg-rpg-red/40 transition-colors">-1</button>
-                                        <button onClick={() => updateCharacter(c => ({ ...c, currentHp: Math.min(c.maxHp, c.currentHp + 1) }))} className="px-2 py-1 bg-green-900/30 text-green-200 border border-green-700/30 rounded text-xs font-bold hover:bg-green-700/40 transition-colors">+1</button>
+                                        <button disabled={isReadOnly} onClick={() => updateCharacter(c => ({ ...c, currentHp: Math.max(0, c.currentHp - 1) }))} className={`px-2 py-1 bg-rpg-red/20 text-red-200 border border-rpg-red/30 rounded text-xs font-bold hover:bg-rpg-red/40 transition-colors ${isReadOnly ? 'opacity-50 cursor-not-allowed' : ''}`}>-1</button>
+                                        <button disabled={isReadOnly} onClick={() => updateCharacter(c => ({ ...c, currentHp: Math.min(c.maxHp, c.currentHp + 1) }))} className={`px-2 py-1 bg-green-900/30 text-green-200 border border-green-700/30 rounded text-xs font-bold hover:bg-green-700/40 transition-colors ${isReadOnly ? 'opacity-50 cursor-not-allowed' : ''}`}>+1</button>
                                     </div>
                                 </div>
                                 <div className="p-4 bg-rpg-panel border border-rpg-gold/20 rounded-lg shadow-md text-center backdrop-blur-sm group hover:border-rpg-gold/40 transition-all">
                                     <h4 className="text-xs font-bold text-rpg-gold uppercase mb-2 tracking-widest font-cinzel">PV Temporários</h4>
-                                    <input type="number" value={character.temporaryHp === 0 ? '0' : (character.temporaryHp || '')} onChange={(e) => handleFieldChange('temporaryHp', e.target.value === '' ? '' : parseInt(e.target.value))} className="w-full text-3xl font-bold text-center bg-transparent border-b-2 border-rpg-gold/30 text-blue-200 font-medieval" />
+                                    <input type="number" disabled={isReadOnly} value={character.temporaryHp === 0 ? '0' : (character.temporaryHp || '')} onChange={(e) => handleFieldChange('temporaryHp', e.target.value === '' ? '' : parseInt(e.target.value))} className={`w-full text-3xl font-bold text-center bg-transparent border-b-2 border-rpg-gold/30 text-blue-200 font-medieval ${isReadOnly ? 'opacity-70' : ''}`} />
                                 </div>
                                 <StatBlock label="Classe de Armadura" value={character.armorClass} />
                                 <StatBlock label="Iniciativa" value={character.initiative >= 0 ? `+${character.initiative}` : character.initiative} />
@@ -495,7 +550,7 @@ export default function CharacterSheetPage() {
                                 <div className="p-4 bg-rpg-panel border border-rpg-gold/20 rounded-lg shadow-md text-center backdrop-blur-sm group hover:border-rpg-gold/40 transition-colors">
                                     <h4 className="text-sm font-semibold text-rpg-gold text-center font-medieval tracking-wide">Deslocamento</h4>
                                     <div className="flex items-center justify-center gap-1">
-                                        <input type="number" value={character.speed === 0 ? '0' : (character.speed || '')} onChange={(e) => handleFieldChange('speed', e.target.value === '' ? '' : parseInt(e.target.value))} className="w-16 text-3xl font-bold text-center bg-transparent border-b-2 border-rpg-gold/30 text-rpg-parchment font-medieval" />
+                                        <input type="number" disabled={isReadOnly} value={character.speed === 0 ? '0' : (character.speed || '')} onChange={(e) => handleFieldChange('speed', e.target.value === '' ? '' : parseInt(e.target.value))} className={`w-16 text-3xl font-bold text-center bg-transparent border-b-2 border-rpg-gold/30 text-rpg-parchment font-medieval ${isReadOnly ? 'opacity-70' : ''}`} />
                                         <span className="text-rpg-grey font-medieval">m</span>
                                     </div>
                                 </div>
@@ -507,8 +562,8 @@ export default function CharacterSheetPage() {
 
                             <div className="p-5 bg-rpg-panel border border-rpg-gold/10 rounded-lg shadow-md">
                                 <h4 className="font-bold text-rpg-gold mb-3 font-cinzel tracking-wide text-lg border-b border-rpg-gold/10 pb-2 text-center sm:text-left">Resistências à Morte</h4>
-                                <div className="flex justify-between items-center mb-2"><span className="text-sm text-rpg-grey font-bold uppercase tracking-widest">Sucessos</span> <div className="flex gap-2">{[1, 2, 3].map(i => <input key={i} type="checkbox" checked={character.deathSaves?.successes >= i} onChange={(e) => handleNestedChange('deathSaves.successes', e.target.checked ? i : i - 1)} className="w-5 h-5 rounded-full accent-green-600 cursor-pointer" />)}</div></div>
-                                <div className="flex justify-between items-center"><span className="text-sm text-rpg-grey font-bold uppercase tracking-widest">Falhas</span> <div className="flex gap-2">{[1, 2, 3].map(i => <input key={i} type="checkbox" checked={character.deathSaves?.failures >= i} onChange={(e) => handleNestedChange('deathSaves.failures', e.target.checked ? i : i - 1)} className="w-5 h-5 rounded-full accent-rpg-red cursor-pointer" />)}</div></div>
+                                <div className="flex justify-between items-center mb-2"><span className="text-sm text-rpg-grey font-bold uppercase tracking-widest">Sucessos</span> <div className="flex gap-2">{[1, 2, 3].map(i => <input key={i} type="checkbox" disabled={isReadOnly} checked={character.deathSaves?.successes >= i} onChange={(e) => handleNestedChange('deathSaves.successes', e.target.checked ? i : i - 1)} className={`w-5 h-5 rounded-full accent-green-600 ${isReadOnly ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`} />)}</div></div>
+                                <div className="flex justify-between items-center"><span className="text-sm text-rpg-grey font-bold uppercase tracking-widest">Falhas</span> <div className="flex gap-2">{[1, 2, 3].map(i => <input key={i} type="checkbox" disabled={isReadOnly} checked={character.deathSaves?.failures >= i} onChange={(e) => handleNestedChange('deathSaves.failures', e.target.checked ? i : i - 1)} className={`w-5 h-5 rounded-full accent-rpg-red ${isReadOnly ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`} />)}</div></div>
                             </div>
                         </div>
                     )}
@@ -550,7 +605,7 @@ export default function CharacterSheetPage() {
                                         {(Object.keys(character.inventory.currency) as Array<keyof typeof character.inventory.currency>).map(key => (
                                             <div key={key}>
                                                 <label className="block text-[10px] font-bold text-rpg-gold uppercase text-center mb-1 font-cinzel">{key}</label>
-                                                <input type="number" value={character.inventory.currency[key]} onChange={e => handleNestedChange(`inventory.currency.${key}`, parseInt(e.target.value) || 0)} className="w-full p-2 text-xl font-bold text-center bg-rpg-slate rounded-md border border-rpg-gold/10 font-medieval focus:border-rpg-gold/50 outline-none" />
+                                                <input type="number" disabled={isReadOnly} value={character.inventory.currency[key]} onChange={e => handleNestedChange(`inventory.currency.${key}`, parseInt(e.target.value) || 0)} className={`w-full p-2 text-xl font-bold text-center bg-rpg-slate rounded-md border border-rpg-gold/10 font-medieval focus:border-rpg-gold/50 outline-none ${isReadOnly ? 'opacity-70' : ''}`} />
                                             </div>
                                         ))}
                                     </div>
@@ -559,10 +614,12 @@ export default function CharacterSheetPage() {
                                 <div>
                                     <div className="flex justify-between items-center mb-3">
                                         <h3 className="text-xl font-bold text-rpg-gold font-cinzel flex items-center gap-2"><span className="w-2 h-2 bg-rpg-gold rounded-full"></span> Armas</h3>
-                                        <div className="flex gap-2">
-                                            <button onClick={() => openSelectionModal('weapon')} className="px-3 py-1 text-xs font-bold bg-rpg-slate border border-rpg-gold/20 rounded hover:bg-rpg-dark transition-all uppercase tracking-tighter">Biblioteca</button>
-                                            <button onClick={() => handleOpenWeaponModal(null)} className="px-3 py-1 text-xs font-bold bg-rpg-gold text-rpg-dark rounded hover:brightness-110 transition-all uppercase tracking-tighter shadow-glow-gold/20">+ Nova Arma</button>
-                                        </div>
+                                        {!isReadOnly && (
+                                            <div className="flex gap-2">
+                                                <button onClick={() => openSelectionModal('weapon')} className="px-3 py-1 text-xs font-bold bg-rpg-slate border border-rpg-gold/20 rounded hover:bg-rpg-dark transition-all uppercase tracking-tighter">Biblioteca</button>
+                                                <button onClick={() => handleOpenWeaponModal(null)} className="px-3 py-1 text-xs font-bold bg-rpg-gold text-rpg-dark rounded hover:brightness-110 transition-all uppercase tracking-tighter shadow-glow-gold/20">+ Nova Arma</button>
+                                            </div>
+                                        )}
                                     </div>
                                     <div className="bg-rpg-panel border border-rpg-gold/10 rounded-lg p-4 space-y-3 shadow-inner">
                                         {filteredWeapons.length > 0 ? filteredWeapons.map((weapon) => {
@@ -583,10 +640,12 @@ export default function CharacterSheetPage() {
                                                         <p className="text-[10px] font-bold text-rpg-grey uppercase tracking-wider bg-black/20 px-2 py-1 rounded inline-block">{weapon.damageType} | {weapon.properties?.join(', ')}</p>
                                                         {weapon.magicalEffect && <p className="text-[10px] text-purple-300 italic mt-1 font-sans">{weapon.magicalEffect}</p>}
                                                     </div>
-                                                    <div className="flex gap-2 items-center self-end md:self-center">
-                                                        <button onClick={() => handleOpenWeaponModal(weapon)} className="px-3 py-1 text-xs font-medium bg-rpg-slate/50 border border-rpg-grey/30 hover:border-rpg-gold text-rpg-grey hover:text-rpg-parchment rounded-md transition-colors uppercase">Editar</button>
-                                                        <button onClick={() => handleRemoveWeapon(weapon.id)} className="px-3 py-1 text-xs font-medium bg-rpg-red/20 border border-rpg-red/30 hover:bg-rpg-red/40 text-red-200 rounded-md transition-colors">×</button>
-                                                    </div>
+                                                    {!isReadOnly && (
+                                                        <div className="flex gap-2 items-center self-end md:self-center">
+                                                            <button onClick={() => handleOpenWeaponModal(weapon)} className="px-3 py-1 text-xs font-medium bg-rpg-slate/50 border border-rpg-grey/30 hover:border-rpg-gold text-rpg-grey hover:text-rpg-parchment rounded-md transition-colors uppercase">Editar</button>
+                                                            <button onClick={() => handleRemoveWeapon(weapon.id)} className="px-3 py-1 text-xs font-medium bg-rpg-red/20 border border-rpg-red/30 hover:bg-rpg-red/40 text-red-200 rounded-md transition-colors">×</button>
+                                                        </div>
+                                                    )}
                                                 </div>
                                             );
                                         }) : (
@@ -598,9 +657,11 @@ export default function CharacterSheetPage() {
                                 <div>
                                     <div className="flex justify-between items-center mb-3">
                                         <h3 className="text-xl font-bold text-rpg-gold font-cinzel flex items-center gap-2"><span className="w-2 h-2 bg-rpg-gold rounded-full"></span> Mochila & Itens</h3>
-                                        <div className="flex gap-2">
-                                            <button onClick={() => handleOpenEquipmentModal(null)} className="px-3 py-1 text-xs font-bold bg-rpg-gold text-rpg-dark rounded hover:brightness-110 transition-all uppercase tracking-tighter shadow-glow-gold/20">+ Novo Item</button>
-                                        </div>
+                                        {!isReadOnly && (
+                                            <div className="flex gap-2">
+                                                <button onClick={() => handleOpenEquipmentModal(null)} className="px-3 py-1 text-xs font-bold bg-rpg-gold text-rpg-dark rounded hover:brightness-110 transition-all uppercase tracking-tighter shadow-glow-gold/20">+ Novo Item</button>
+                                            </div>
+                                        )}
                                     </div>
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                                         {filteredEquipment.length > 0 ? filteredEquipment.map((item) => (
@@ -615,14 +676,16 @@ export default function CharacterSheetPage() {
                                                     {item.weight && <span className="text-[10px] text-rpg-grey/60">{item.weight} kg</span>}
                                                     {item.magicalEffect && <p className="text-[9px] text-purple-300/80 italic mt-0.5 font-sans leading-tight line-clamp-1">{item.magicalEffect}</p>}
                                                 </div>
-                                                <div className="flex gap-2 opacity-40 group-hover:opacity-100 transition-opacity">
-                                                    <button onClick={() => handleOpenEquipmentModal(item)} className="p-1 text-rpg-grey hover:text-rpg-gold transition-colors">
-                                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
-                                                    </button>
-                                                    <button onClick={() => handleRemoveEquipment(item.id)} className="p-1 text-rpg-red/50 hover:text-rpg-red transition-colors">
-                                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-4v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                                                    </button>
-                                                </div>
+                                                {!isReadOnly && (
+                                                    <div className="flex gap-2 opacity-40 group-hover:opacity-100 transition-opacity">
+                                                        <button onClick={() => handleOpenEquipmentModal(item)} className="p-1 text-rpg-grey hover:text-rpg-gold transition-colors">
+                                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
+                                                        </button>
+                                                        <button onClick={() => handleRemoveEquipment(item.id)} className="p-1 text-rpg-red/50 hover:text-rpg-red transition-colors">
+                                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-4v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                                                        </button>
+                                                    </div>
+                                                )}
                                             </div>
                                         )) : (
                                             <p className="col-span-full text-center text-rpg-grey py-8 italic bg-rpg-slate/20 rounded-lg border border-dashed border-rpg-gold/10">A mochila parece leve... nenhum item registrado.</p>
@@ -638,7 +701,8 @@ export default function CharacterSheetPage() {
                                             value={character.treasures || ''}
                                             onChange={(e) => handleFieldChange('treasures', e.target.value)}
                                             placeholder="Joias, pedras preciosas, obras de arte e outros itens valiosos que não ocupam espaço regular na mochila..."
-                                            className="w-full h-32 bg-transparent text-rpg-parchment font-handschrift text-lg focus:outline-none resize-none placeholder:text-rpg-grey/30 border-none"
+                                            disabled={isReadOnly}
+                                            className={`w-full h-32 bg-transparent text-rpg-parchment font-handschrift text-lg focus:outline-none resize-none placeholder:text-rpg-grey/30 border-none ${isReadOnly ? 'opacity-70 cursor-not-allowed' : ''}`}
                                         />
                                         <div className="mt-2 text-[10px] text-rpg-grey italic border-t border-rpg-gold/10 pt-2">
                                             Ex: Colar de pérolas (250 po), Estatueta de obsidiana, Pergaminho antigo.
@@ -665,6 +729,7 @@ export default function CharacterSheetPage() {
                                             proficiencyBonus={character.proficiencyBonus}
                                             attributeMod={character.attributeModifiers[skill.attribute]}
                                             onChange={(k: any, v: any) => handleNestedChange(`skills.${k}`, v)}
+                                            disabled={isReadOnly}
                                         />
                                     ))}
                                 </div>
@@ -696,7 +761,9 @@ export default function CharacterSheetPage() {
                                 <StatBlock label="Bônus de Ataque" value={`+${character.spellcasting?.attackBonus || 0}`} />
                             </div>
                             <div className="flex justify-end mb-2">
-                                <button onClick={() => setSpellSelectOpen(true)} className="px-4 py-2 rounded bg-rpg-gold text-rpg-dark font-bold hover:bg-yellow-400 transition-all shadow-glow-gold/10 uppercase text-xs tracking-wider">+ Selecionar Magia</button>
+                                {!isReadOnly && (
+                                    <button onClick={() => setSpellSelectOpen(true)} className="px-4 py-2 rounded bg-rpg-gold text-rpg-dark font-bold hover:bg-yellow-400 transition-all shadow-glow-gold/10 uppercase text-xs tracking-wider">+ Selecionar Magia</button>
+                                )}
                             </div>
 
                             <div className="space-y-4">
@@ -770,17 +837,19 @@ export default function CharacterSheetPage() {
 
                                                                 <p className="text-xs text-rpg-grey/90 leading-relaxed line-clamp-2 group-hover:line-clamp-none transition-all duration-300">{spell.description}</p>
 
-                                                                <div className="flex justify-end mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                                    <button
-                                                                        onClick={() => handleRemoveSpell(spell.name)}
-                                                                        className="p-1 text-rpg-red/60 hover:text-rpg-red transition-colors"
-                                                                        title="Esquecer Magia"
-                                                                    >
-                                                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-4v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                                                        </svg>
-                                                                    </button>
-                                                                </div>
+                                                                {!isReadOnly && (
+                                                                    <div className="flex justify-end mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                                        <button
+                                                                            onClick={() => handleRemoveSpell(spell.name)}
+                                                                            className="p-1 text-rpg-red/60 hover:text-rpg-red transition-colors"
+                                                                            title="Esquecer Magia"
+                                                                        >
+                                                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-4v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                                                            </svg>
+                                                                        </button>
+                                                                    </div>
+                                                                )}
                                                             </div>
                                                         ))}
                                                     </div>
@@ -799,25 +868,25 @@ export default function CharacterSheetPage() {
                             <div className="space-y-6">
                                 <div className="group">
                                     <label className="block text-rpg-gold font-bold mb-2 font-cinzel uppercase text-sm tracking-widest group-hover:text-rpg-gold-light transition-colors">Traços de Personalidade</label>
-                                    <textarea value={character.personalityTraits} onChange={e => handleFieldChange('personalityTraits', e.target.value)} className="w-full h-28 bg-rpg-panel/40 border border-rpg-gold/10 rounded-md p-4 text-rpg-parchment focus:outline-none focus:ring-2 focus:ring-rpg-gold/30 focus:border-rpg-gold/50 transition-all font-sans leading-relaxed resize-none shadow-inner" placeholder="Peculiaridades e maneirismos..." />
+                                    <textarea disabled={isReadOnly} value={character.personalityTraits} onChange={e => handleFieldChange('personalityTraits', e.target.value)} className={`w-full h-28 bg-rpg-panel/40 border border-rpg-gold/10 rounded-md p-4 text-rpg-parchment focus:outline-none focus:ring-2 focus:ring-rpg-gold/30 focus:border-rpg-gold/50 transition-all font-sans leading-relaxed resize-none shadow-inner ${isReadOnly ? 'opacity-70 cursor-not-allowed' : ''}`} placeholder="Peculiaridades e maneirismos..." />
                                 </div>
                                 <div className="group">
                                     <label className="block text-rpg-gold font-bold mb-2 font-cinzel uppercase text-sm tracking-widest group-hover:text-rpg-gold-light transition-colors">Ideais</label>
-                                    <textarea value={character.ideals} onChange={e => handleFieldChange('ideals', e.target.value)} className="w-full h-28 bg-rpg-panel/40 border border-rpg-gold/10 rounded-md p-4 text-rpg-parchment focus:outline-none focus:ring-2 focus:ring-rpg-gold/30 focus:border-rpg-gold/50 transition-all font-sans leading-relaxed resize-none shadow-inner" placeholder="No que você acredita?" />
+                                    <textarea disabled={isReadOnly} value={character.ideals} onChange={e => handleFieldChange('ideals', e.target.value)} className={`w-full h-28 bg-rpg-panel/40 border border-rpg-gold/10 rounded-md p-4 text-rpg-parchment focus:outline-none focus:ring-2 focus:ring-rpg-gold/30 focus:border-rpg-gold/50 transition-all font-sans leading-relaxed resize-none shadow-inner ${isReadOnly ? 'opacity-70 cursor-not-allowed' : ''}`} placeholder="No que você acredita?" />
                                 </div>
                                 <div className="group">
                                     <label className="block text-rpg-gold font-bold mb-2 font-cinzel uppercase text-sm tracking-widest group-hover:text-rpg-gold-light transition-colors">Vínculos</label>
-                                    <textarea value={character.bonds} onChange={e => handleFieldChange('bonds', e.target.value)} className="w-full h-28 bg-rpg-panel/40 border border-rpg-gold/10 rounded-md p-4 text-rpg-parchment focus:outline-none focus:ring-2 focus:ring-rpg-gold/30 focus:border-rpg-gold/50 transition-all font-sans leading-relaxed resize-none shadow-inner" placeholder="O que te move?" />
+                                    <textarea disabled={isReadOnly} value={character.bonds} onChange={e => handleFieldChange('bonds', e.target.value)} className={`w-full h-28 bg-rpg-panel/40 border border-rpg-gold/10 rounded-md p-4 text-rpg-parchment focus:outline-none focus:ring-2 focus:ring-rpg-gold/30 focus:border-rpg-gold/50 transition-all font-sans leading-relaxed resize-none shadow-inner ${isReadOnly ? 'opacity-70 cursor-not-allowed' : ''}`} placeholder="O que te move?" />
                                 </div>
                             </div>
                             <div className="space-y-6">
                                 <div className="group">
                                     <label className="block text-rpg-gold font-bold mb-2 font-cinzel uppercase text-sm tracking-widest group-hover:text-rpg-gold-light transition-colors">Defeitos</label>
-                                    <textarea value={character.flaws} onChange={e => handleFieldChange('flaws', e.target.value)} className="w-full h-28 bg-rpg-panel/40 border border-rpg-gold/10 rounded-md p-4 text-rpg-parchment focus:outline-none focus:ring-2 focus:ring-rpg-gold/30 focus:border-rpg-gold/50 transition-all font-sans leading-relaxed resize-none shadow-inner" placeholder="Suas fraquezas..." />
+                                    <textarea disabled={isReadOnly} value={character.flaws} onChange={e => handleFieldChange('flaws', e.target.value)} className={`w-full h-28 bg-rpg-panel/40 border border-rpg-gold/10 rounded-md p-4 text-rpg-parchment focus:outline-none focus:ring-2 focus:ring-rpg-gold/30 focus:border-rpg-gold/50 transition-all font-sans leading-relaxed resize-none shadow-inner ${isReadOnly ? 'opacity-70 cursor-not-allowed' : ''}`} placeholder="Suas fraquezas..." />
                                 </div>
                                 <div className="group flex-grow">
                                     <label className="block text-rpg-gold font-bold mb-2 font-cinzel uppercase text-sm tracking-widest group-hover:text-rpg-gold-light transition-colors">Anotações & História</label>
-                                    <textarea value={character.notes} onChange={e => handleFieldChange('notes', e.target.value)} className="w-full h-[400px] bg-rpg-panel/40 border border-rpg-gold/10 rounded-lg p-5 text-rpg-parchment focus:outline-none focus:ring-2 focus:ring-rpg-gold/30 focus:border-rpg-gold/50 transition-all font-sans leading-relaxed resize-none shadow-inner custom-scrollbar" placeholder="Escreva a lenda do seu herói aqui..." />
+                                    <textarea disabled={isReadOnly} value={character.notes} onChange={e => handleFieldChange('notes', e.target.value)} className={`w-full h-[400px] bg-rpg-panel/40 border border-rpg-gold/10 rounded-lg p-5 text-rpg-parchment focus:outline-none focus:ring-2 focus:ring-rpg-gold/30 focus:border-rpg-gold/50 transition-all font-sans leading-relaxed resize-none shadow-inner custom-scrollbar ${isReadOnly ? 'opacity-70 cursor-not-allowed' : ''}`} placeholder="Escreva a lenda do seu herói aqui..." />
                                 </div>
                             </div>
                         </div>

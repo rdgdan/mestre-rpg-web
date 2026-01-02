@@ -1,13 +1,15 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter, usePathname } from 'next/navigation';
 import { db } from '@/lib/firebase';
 import { doc, onSnapshot, updateDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import { useAuth } from '@/context/AuthContext';
 import Modal from '@/components/Modal';
-
+import JSZip from 'jszip';
+import { mapImportedDataToCharacter } from '@/lib/character-mapper';
+import { dndMonsters, MonsterData } from '@/lib/monsters-data';
 // --- Tipos ---
 type CombatantType = 'player' | 'monster' | 'npc';
 
@@ -68,6 +70,9 @@ export default function SharedArenaPage() {
     const [selectedCharId, setSelectedCharId] = useState('');
     const [joinInitiative, setJoinInitiative] = useState<number>(0);
     const [isJoining, setIsJoining] = useState(false);
+    const [isManualJoin, setIsManualJoin] = useState(false);
+    const [manualChar, setManualChar] = useState({ name: '', class: 'Guerreiro', level: 1, hp: 10, ac: 10 });
+    const fileInputRef = useRef<HTMLInputElement>(null);
 
     // Effect management for players
     const [isEffectModalOpen, setIsEffectModalOpen] = useState(false);
@@ -117,51 +122,76 @@ export default function SharedArenaPage() {
     }, [id]);
 
     const handleJoinBattle = async () => {
-        if (!user || !session || !selectedCharId) return;
+        if (!user || !session) return;
+        if (!isManualJoin && !selectedCharId) return;
 
-        const char = myCharacters.find(c => c.id === selectedCharId);
-        if (!char) return;
+        // Validação básica manual
+        if (isManualJoin && !manualChar.name) {
+            alert("Preencha o nome do herói.");
+            return;
+        }
 
         setIsJoining(true);
         try {
             const sessionRef = doc(db, 'arenas_online', id as string);
             let updatedCombatants = [...session.combatants];
 
-            // Verifica se o personagem já existe na arena (pode ter sido adicionado pelo mestre como placeholder)
-            const existingIndex = updatedCombatants.findIndex(c => c.externalId === char.id);
-
-            if (existingIndex > -1) {
-                // Atualiza o existente (Lógica de "Assumir Slot")
-                updatedCombatants[existingIndex] = {
-                    ...updatedCombatants[existingIndex],
-                    name: char.name,
-                    hp: char.hp,
-                    maxHp: char.hp,
-                    class: char.class,
-                    level: char.level,
-                    cr: `Lvl ${char.level}`,
-                    initiative: joinInitiative,
-                    ownerId: user.uid
-                };
-            } else {
-                // Adiciona novo caso não exista
+            if (isManualJoin) {
+                // Criação de personagem temporário
                 const newCombatant: Combatant = {
                     id: Math.random().toString(36).substr(2, 9),
-                    externalId: char.id,
-                    name: char.name,
+                    externalId: 'manual_' + Math.random().toString(36).substr(2, 5),
+                    name: manualChar.name,
                     type: 'player',
-                    hp: char.hp,
-                    maxHp: char.hp,
-                    ac: 10,
-                    cr: `Lvl ${char.level}`,
+                    hp: manualChar.hp,
+                    maxHp: manualChar.hp,
+                    ac: manualChar.ac,
+                    cr: `Lvl ${manualChar.level}`,
                     xp: 0,
                     initiative: joinInitiative,
                     statusEffects: [],
-                    class: char.class,
-                    level: char.level,
+                    class: manualChar.class,
+                    level: manualChar.level,
                     ownerId: user.uid
                 };
                 updatedCombatants.push(newCombatant);
+            } else {
+                const char = myCharacters.find(c => c.id === selectedCharId);
+                if (!char) return;
+
+                // Verifica se já existe para atualizar
+                const existingIndex = updatedCombatants.findIndex(c => c.externalId === char.id);
+
+                if (existingIndex > -1) {
+                    updatedCombatants[existingIndex] = {
+                        ...updatedCombatants[existingIndex],
+                        name: char.name,
+                        hp: char.hp,
+                        maxHp: char.hp,
+                        class: char.class,
+                        level: char.level,
+                        ownerId: user.uid,
+                        initiative: joinInitiative
+                    };
+                } else {
+                    const newCombatant: Combatant = {
+                        id: Math.random().toString(36).substr(2, 9),
+                        externalId: char.id,
+                        name: char.name,
+                        type: 'player',
+                        hp: char.hp,
+                        maxHp: char.hp,
+                        ac: 10,
+                        cr: `Lvl ${char.level}`,
+                        xp: 0,
+                        initiative: joinInitiative,
+                        statusEffects: [],
+                        class: char.class,
+                        level: char.level,
+                        ownerId: user.uid
+                    };
+                    updatedCombatants.push(newCombatant);
+                }
             }
 
             // Reordenar a iniciativa no banco
@@ -217,6 +247,42 @@ export default function SharedArenaPage() {
             setMyCharacters(chars);
         } catch (err) {
             console.error("Erro ao carregar personagens:", err);
+        }
+    };
+
+    const handleFileImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0];
+        if (!file || !user) return;
+
+        try {
+            const zip = await JSZip.loadAsync(file);
+            const jsonFiles = zip.file(/\.json$/i);
+
+            if (jsonFiles.length === 0) {
+                alert("Arquivo inválido (.rpg sem json)");
+                return;
+            }
+
+            const jsonData = JSON.parse(await jsonFiles[0].async("string"));
+            const char = mapImportedDataToCharacter(jsonData, user.uid, '');
+
+            // Preenche o formulário manual com dados do arquivo
+            setManualChar({
+                name: char.name,
+                class: char.class || 'Aventureiro',
+                level: char.level || 1,
+                hp: char.maxHp || 10,
+                ac: char.armorClass || 10
+            });
+
+            setIsManualJoin(true); // Força a aba manual
+            alert(`Dados de "${char.name}" carregados! Clique em "Entrar na Arena" para confirmar.`);
+
+        } catch (err) {
+            console.error("Erro import:", err);
+            alert("Erro ao ler arquivo. Verifique se é um arquivo .rpg válido.");
+        } finally {
+            if (fileInputRef.current) fileInputRef.current.value = "";
         }
     };
 
@@ -650,22 +716,108 @@ export default function SharedArenaPage() {
             {/* MODAL JOIN */}
             <Modal isOpen={isJoinModalOpen} onClose={() => setIsJoinModalOpen(false)} title="Convocação de Herói">
                 <div className="space-y-6">
-                    <div>
-                        <label className="block text-rpg-gold text-xs uppercase font-cinzel mb-2">Escolha seu Personagem</label>
-                        <select
-                            value={selectedCharId}
-                            onChange={(e) => setSelectedCharId(e.target.value)}
-                            className="w-full bg-rpg-slate border border-rpg-gold/20 p-3 rounded font-medieval text-rpg-parchment focus:border-rpg-gold outline-none"
+                    <div className="flex gap-2 mb-4">
+                        <button
+                            onClick={() => setIsManualJoin(false)}
+                            className={`flex-1 py-2 text-xs font-cinzel rounded border ${!isManualJoin ? 'bg-rpg-gold text-rpg-dark border-rpg-gold' : 'bg-transparent text-rpg-grey border-white/10'}`}
                         >
-                            <option value="">-- Selecione seu herói --</option>
-                            {myCharacters.map(c => (
-                                <option key={c.id} value={c.id}>{c.name} (Lvl {c.level} {c.class})</option>
-                            ))}
-                        </select>
-                        {myCharacters.length === 0 && (
-                            <p className="text-[10px] text-red-400 mt-2 font-medieval">Você não possui personagens criados.</p>
-                        )}
+                            Meus Personagens
+                        </button>
+                        <button
+                            onClick={() => setIsManualJoin(true)}
+                            className={`flex-1 py-2 text-xs font-cinzel rounded border ${isManualJoin ? 'bg-rpg-gold text-rpg-dark border-rpg-gold' : 'bg-transparent text-rpg-grey border-white/10'}`}
+                        >
+                            Importar Herói
+                        </button>
                     </div>
+
+                    {!isManualJoin ? (
+                        <div>
+                            <label className="block text-rpg-gold text-xs uppercase font-cinzel mb-2">Escolha seu Personagem</label>
+                            <select
+                                value={selectedCharId}
+                                onChange={(e) => setSelectedCharId(e.target.value)}
+                                className="w-full bg-rpg-slate border border-rpg-gold/20 p-3 rounded font-medieval text-rpg-parchment focus:border-rpg-gold outline-none"
+                            >
+                                <option value="">-- Selecione seu herói --</option>
+                                {myCharacters.map(c => (
+                                    <option key={c.id} value={c.id}>{c.name} (Lvl {c.level} {c.class})</option>
+                                ))}
+                            </select>
+                            {myCharacters.length === 0 && (
+                                <p className="text-[10px] text-red-400 mt-2 font-medieval">
+                                    Você não possui personagens criados. Use a aba "Importar Herói" para entrar manualmente.
+                                </p>
+                            )}
+                        </div>
+                    ) : (
+                        <div className="space-y-3 bg-black/20 p-3 rounded border border-white/5">
+                            <div className="flex justify-end">
+                                <input
+                                    type="file"
+                                    ref={fileInputRef}
+                                    onChange={handleFileImport}
+                                    accept=".rpg"
+                                    className="hidden"
+                                />
+                                <button
+                                    onClick={() => fileInputRef.current?.click()}
+                                    className="text-[10px] text-rpg-gold hover:underline flex items-center gap-1 font-cinzel"
+                                >
+                                    📂 Carregar arquivo .rpg
+                                </button>
+                            </div>
+                            <div>
+                                <label className="block text-rpg-gold text-[10px] uppercase font-cinzel mb-1">Nome do Herói</label>
+                                <input
+                                    type="text"
+                                    value={manualChar.name}
+                                    onChange={(e) => setManualChar({ ...manualChar, name: e.target.value })}
+                                    className="w-full bg-rpg-slate border border-white/10 p-2 text-sm rounded font-medieval text-rpg-parchment outline-none focus:border-rpg-gold"
+                                    placeholder="Ex: Aragorn"
+                                />
+                            </div>
+                            <div className="grid grid-cols-2 gap-2">
+                                <div>
+                                    <label className="block text-rpg-gold text-[10px] uppercase font-cinzel mb-1">Classe</label>
+                                    <input
+                                        type="text"
+                                        value={manualChar.class}
+                                        onChange={(e) => setManualChar({ ...manualChar, class: e.target.value })}
+                                        className="w-full bg-rpg-slate border border-white/10 p-2 text-sm rounded font-medieval text-rpg-parchment outline-none focus:border-rpg-gold"
+                                        placeholder="Ex: Guerreiro"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-rpg-gold text-[10px] uppercase font-cinzel mb-1">Nível</label>
+                                    <input
+                                        type="number"
+                                        value={manualChar.level}
+                                        onChange={(e) => setManualChar({ ...manualChar, level: Number(e.target.value) })}
+                                        className="w-full bg-rpg-slate border border-white/10 p-2 text-sm rounded font-medieval text-rpg-parchment outline-none focus:border-rpg-gold"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-rpg-gold text-[10px] uppercase font-cinzel mb-1">HP Máximo</label>
+                                    <input
+                                        type="number"
+                                        value={manualChar.hp}
+                                        onChange={(e) => setManualChar({ ...manualChar, hp: Number(e.target.value) })}
+                                        className="w-full bg-rpg-slate border border-white/10 p-2 text-sm rounded font-medieval text-rpg-parchment outline-none focus:border-rpg-gold"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-rpg-gold text-[10px] uppercase font-cinzel mb-1">CA (Armor)</label>
+                                    <input
+                                        type="number"
+                                        value={manualChar.ac}
+                                        onChange={(e) => setManualChar({ ...manualChar, ac: Number(e.target.value) })}
+                                        className="w-full bg-rpg-slate border border-white/10 p-2 text-sm rounded font-medieval text-rpg-parchment outline-none focus:border-rpg-gold"
+                                    />
+                                </div>
+                            </div>
+                        </div>
+                    )}
 
                     <div>
                         <label className="block text-rpg-gold text-xs uppercase font-cinzel mb-2">Iniciativa da Rodada</label>

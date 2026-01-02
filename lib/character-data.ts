@@ -40,6 +40,7 @@ export const SKILLS = [
 export interface Character {
     id: string;
     ownerId: string;
+    campaignId?: string; // ID da campanha vinculada
     name: string;
     race: string;
     class: string;

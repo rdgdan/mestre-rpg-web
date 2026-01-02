@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import { db } from '@/lib/firebase';
-import { collection, query, where, onSnapshot, doc, updateDoc, increment, setDoc, deleteDoc } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, doc, updateDoc, increment, setDoc, deleteDoc, getDocs } from 'firebase/firestore';
 import Modal from '@/components/Modal';
 import { dndMonsters, MonsterData } from '@/lib/monsters-data';
 import { npcTemplates, NPCTemplate } from '@/lib/npc-combatants-data';
@@ -70,6 +70,7 @@ interface PlayerReference {
     equipment: string[];
     spells: string[];
     abilities: string[];
+    campaignName?: string;
 }
 
 export default function ConfrontosPage() {
@@ -112,6 +113,8 @@ export default function ConfrontosPage() {
 
     // --- Estados de Formulário ---
     const [availablePlayers, setAvailablePlayers] = useState<PlayerReference[]>([]);
+    const [myChars, setMyChars] = useState<PlayerReference[]>([]);
+    const [campChars, setCampChars] = useState<PlayerReference[]>([]);
     const [newCombatant, setNewCombatant] = useState({
         name: '',
         type: 'monster' as CombatantType,
@@ -128,47 +131,112 @@ export default function ConfrontosPage() {
         duration: 1
     });
 
-    // Carregar personagens do usuário para seleção
+    // Efeito para combinar personagens pessoais e de campanha
+    useEffect(() => {
+        const checkMap = new Map();
+        const combined: PlayerReference[] = [];
+
+        // Adiciona meus personagens
+        myChars.forEach(c => {
+            if (!checkMap.has(c.id)) {
+                checkMap.set(c.id, true);
+                combined.push(c);
+            }
+        });
+
+        // Adiciona personagens da campanha (evitando duplicatas se eu for o dono)
+        campChars.forEach(c => {
+            if (!checkMap.has(c.id)) {
+                checkMap.set(c.id, true);
+                combined.push(c);
+            }
+        });
+
+        setAvailablePlayers(combined);
+    }, [myChars, campChars]);
+
+    // Carregar personagens do usuário e das campanhas
     useEffect(() => {
         if (!user) {
-            setAvailablePlayers([]);
+            setMyChars([]);
+            setCampChars([]);
             return;
         }
 
-        // Query simples para evitar problemas de índice
-        const q = query(collection(db, 'personagens'), where('ownerId', '==', user.uid));
+        // Funcao auxiliar de mapeamento
+        const mapDocToPlayer = (doc: any, campaignName?: string): PlayerReference => {
+            const data = doc.data();
+            const hp = data.currentHp || data.hp?.current || data.hp?.max || data.maxHp || 10;
 
-        const unsubscribe = onSnapshot(q, (querySnapshot) => {
-            const players: PlayerReference[] = [];
-            querySnapshot.forEach((doc) => {
-                const data = doc.data();
+            return {
+                id: doc.id,
+                name: data.name || 'Sem Nome',
+                hp: hp,
+                class: data.class || data.classe || '',
+                level: data.level || data.nivel || 1,
+                equipment: Array.isArray(data.features?.equipment) ? data.features.equipment :
+                    (typeof data.equipment === 'string' ? [data.equipment] : []),
+                spells: Array.isArray(data.spells) ? data.spells.map((s: any) => s.name || s) : [],
+                abilities: Array.isArray(data.features) ? data.features.map((f: any) => f.name || f) : [],
+                campaignName: campaignName
+            };
+        };
 
-                // Mapeamento robusto para suportar diferentes versões da ficha
-                const hp = data.currentHp || data.hp?.current || data.hp?.max || data.maxHp || 10;
-
-                players.push({
-                    id: doc.id,
-                    name: data.name || 'Sem Nome',
-                    hp: hp,
-                    class: data.class || data.classe || '',
-                    level: data.level || data.nivel || 1,
-
-                    // Suporta equipamento como string (importado) ou array (manual)
-                    equipment: Array.isArray(data.features?.equipment) ? data.features.equipment :
-                        (typeof data.equipment === 'string' ? [data.equipment] : []),
-
-                    // Magias e Habilidades
-                    spells: Array.isArray(data.spells) ? data.spells.map((s: any) => s.name || s) : [],
-                    abilities: Array.isArray(data.features) ? data.features.map((f: any) => f.name || f) : []
-                });
-            });
-            console.log("Jogadores carregados na Arena:", players.length);
-            setAvailablePlayers(players);
-        }, (err) => {
-            console.error("Erro ao seguir personagens na Arena:", err);
+        // 1. Meus Personagens
+        const qMyChars = query(collection(db, 'personagens'), where('ownerId', '==', user.uid));
+        const unsubscribeMy = onSnapshot(qMyChars, (snap) => {
+            const chars = snap.docs.map(d => mapDocToPlayer(d));
+            setMyChars(chars);
         });
 
-        return () => unsubscribe();
+        let unsubscribeCamp: (() => void) | null = null;
+
+        // 2. Personagens das Campanhas
+        const loadCampaignsAndChars = async () => {
+            try {
+                // Busca campanhas onde sou o mestre
+                const qCamp = query(collection(db, 'campaigns'), where('ownerId', '==', user.uid));
+                const campSnap = await getDocs(qCamp);
+
+                if (campSnap.empty) {
+                    setCampChars([]);
+                    return;
+                }
+
+                const campaignsMap: Record<string, string> = {};
+                const campIds: string[] = [];
+
+                campSnap.forEach(doc => {
+                    campaignsMap[doc.id] = doc.data().name || 'Campanha Sem Nome';
+                    campIds.push(doc.id);
+                });
+
+                // Firestore limita 'in' queries a 10 itens. 
+                // Se o mestre tiver > 10 campanhas, pegamos as 10 primeiras por enquanto.
+                // TODO: Implementar chunks se necessário no futuro.
+                const targetIds = campIds.slice(0, 10);
+
+                const qCampChars = query(collection(db, 'personagens'), where('campaignId', 'in', targetIds));
+
+                unsubscribeCamp = onSnapshot(qCampChars, (snap) => {
+                    const chars = snap.docs.map(d => {
+                        const data = d.data();
+                        return mapDocToPlayer(d, campaignsMap[data.campaignId]);
+                    });
+                    setCampChars(chars);
+                });
+
+            } catch (err) {
+                console.error("Erro ao carregar personagens das campanhas:", err);
+            }
+        };
+
+        loadCampaignsAndChars();
+
+        return () => {
+            unsubscribeMy();
+            if (unsubscribeCamp) unsubscribeCamp();
+        };
     }, [user]);
 
     // --- Lógica de Combate ---
@@ -1016,7 +1084,9 @@ export default function ConfrontosPage() {
                                         >
                                             <option value="">-- Herói Desconhecido --</option>
                                             {availablePlayers.map(p => (
-                                                <option key={p.id} value={p.id}>{p.name} ({p.class} Lvl {p.level})</option>
+                                                <option key={p.id} value={p.id}>
+                                                    {p.name} ({p.class} Lvl {p.level}) {p.campaignName ? `- ${p.campaignName}` : ''}
+                                                </option>
                                             ))}
                                         </select>
                                     </div>
