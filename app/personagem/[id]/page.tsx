@@ -367,8 +367,8 @@ export default function CharacterSheetPage() {
                     </div>
                     <div className="flex flex-wrap items-end gap-3 w-full md:w-auto">
                         <div className="w-full sm:w-40"><label className="block text-[10px] font-bold text-rpg-gold uppercase tracking-wider mb-1 font-cinzel text-center sm:text-left">Classe</label><button onClick={() => openSelectionModal('class')} className="w-full bg-rpg-slate border border-rpg-gold/20 rounded-md px-3 py-2 text-left hover:border-rpg-gold/50 font-medieval text-sm">{character.class || 'Selecione...'}</button></div>
-                        <div className="w-20"><label className="block text-[10px] font-bold text-rpg-gold uppercase tracking-wider mb-1 font-cinzel text-center">Nível</label><input type="number" value={character.level} onChange={e => handleFieldChange('level', parseInt(e.target.value) || 1)} className="bg-rpg-slate border border-rpg-gold/20 rounded-md px-2 py-2 text-center font-bold w-full font-medieval text-sm" /></div>
-                        <div className="w-32"><label className="block text-[10px] font-bold text-rpg-gold uppercase tracking-wider mb-1 font-cinzel text-center">Experiência</label><input type="number" value={character.experience || 0} onChange={(e) => handleFieldChange('experience', parseInt(e.target.value) || 0)} className="bg-rpg-dark/50 border border-rpg-gold/20 rounded-md px-2 py-2 text-center font-bold w-full font-medieval text-sm text-rpg-gold" /></div>
+                        <div className="w-20"><label className="block text-[10px] font-bold text-rpg-gold uppercase tracking-wider mb-1 font-cinzel text-center">Nível</label><input type="number" value={character.level || ''} onChange={e => handleFieldChange('level', e.target.value === '' ? '' : parseInt(e.target.value))} className="bg-rpg-slate border border-rpg-gold/20 rounded-md px-2 py-2 text-center font-bold w-full font-medieval text-sm" /></div>
+                        <div className="w-32"><label className="block text-[10px] font-bold text-rpg-gold uppercase tracking-wider mb-1 font-cinzel text-center">Experiência</label><input type="number" value={character.experience === 0 ? '0' : (character.experience || '')} onChange={(e) => handleFieldChange('experience', e.target.value === '' ? '' : parseInt(e.target.value))} className="bg-rpg-dark/50 border border-rpg-gold/20 rounded-md px-2 py-2 text-center font-bold w-full font-medieval text-sm text-rpg-gold" /></div>
                         <div className="w-full sm:w-40"><label className="block text-[10px] font-bold text-rpg-gold uppercase tracking-wider mb-1 font-cinzel text-center sm:text-left">Raça</label><button onClick={() => openSelectionModal('race')} className="w-full bg-rpg-slate border border-rpg-gold/20 rounded-md px-3 py-2 text-left hover:border-rpg-gold/50 font-medieval text-sm">{character.race || 'Selecione...'}</button></div>
                     </div>
                 </header>
@@ -396,18 +396,18 @@ export default function CharacterSheetPage() {
                                 <div className="p-4 bg-rpg-panel border border-rpg-gold/20 rounded-lg shadow-md text-center backdrop-blur-sm group hover:border-rpg-gold/40 transition-all">
                                     <h4 className="text-xs font-bold text-rpg-gold uppercase mb-2 tracking-widest font-cinzel">Pontos de Vida</h4>
                                     <div className="flex items-center justify-center gap-2 mb-2">
-                                        <input type="number" value={character.currentHp} onChange={(e) => handleFieldChange('currentHp', parseInt(e.target.value) || 0)} className="w-16 text-3xl font-bold text-center bg-transparent border-b-2 border-rpg-gold/30 text-rpg-parchment font-medieval" />
+                                        <input type="number" value={character.currentHp === 0 ? '0' : (character.currentHp || '')} onChange={(e) => handleFieldChange('currentHp', e.target.value === '' ? '' : parseInt(e.target.value))} className="w-16 text-3xl font-bold text-center bg-transparent border-b-2 border-rpg-gold/30 text-rpg-parchment font-medieval" />
                                         <span className="text-xl text-rpg-grey/50">/</span>
-                                        <input type="number" value={character.maxHp} onChange={(e) => handleFieldChange('maxHp', parseInt(e.target.value) || 0)} className="w-16 text-xl font-bold text-center bg-transparent text-rpg-grey font-medieval" />
+                                        <input type="number" value={character.maxHp === 0 ? '0' : (character.maxHp || '')} onChange={(e) => handleFieldChange('maxHp', e.target.value === '' ? '' : parseInt(e.target.value))} className="w-16 text-xl font-bold text-center bg-transparent text-rpg-grey font-medieval" />
                                     </div>
                                     <div className="flex justify-center gap-2">
                                         <button onClick={() => updateCharacter(c => ({ ...c, currentHp: Math.max(0, c.currentHp - 1) }))} className="px-2 py-1 bg-rpg-red/20 text-red-200 border border-rpg-red/30 rounded text-xs font-bold hover:bg-rpg-red/40 transition-colors">-1</button>
                                         <button onClick={() => updateCharacter(c => ({ ...c, currentHp: Math.min(c.maxHp, c.currentHp + 1) }))} className="px-2 py-1 bg-green-900/30 text-green-200 border border-green-700/30 rounded text-xs font-bold hover:bg-green-700/40 transition-colors">+1</button>
                                     </div>
                                 </div>
-                                <div className="p-4 bg-rpg-panel border border-rpg-gold/20 rounded-lg shadow-md text-center backdrop-blur-sm group hover:border-rpg-gold/40 transition-colors">
+                                <div className="p-4 bg-rpg-panel border border-rpg-gold/20 rounded-lg shadow-md text-center backdrop-blur-sm group hover:border-rpg-gold/40 transition-all">
                                     <h4 className="text-xs font-bold text-rpg-gold uppercase mb-2 tracking-widest font-cinzel">PV Temporários</h4>
-                                    <input type="number" value={character.temporaryHp || 0} onChange={(e) => handleFieldChange('temporaryHp', parseInt(e.target.value) || 0)} className="w-full text-3xl font-bold text-center bg-transparent border-b-2 border-rpg-gold/30 text-blue-200 font-medieval" />
+                                    <input type="number" value={character.temporaryHp === 0 ? '0' : (character.temporaryHp || '')} onChange={(e) => handleFieldChange('temporaryHp', e.target.value === '' ? '' : parseInt(e.target.value))} className="w-full text-3xl font-bold text-center bg-transparent border-b-2 border-rpg-gold/30 text-blue-200 font-medieval" />
                                 </div>
                                 <StatBlock label="Classe de Armadura" value={character.armorClass} />
                                 <StatBlock label="Iniciativa" value={character.initiative >= 0 ? `+${character.initiative}` : character.initiative} />
@@ -417,7 +417,7 @@ export default function CharacterSheetPage() {
                                 <div className="p-4 bg-rpg-panel border border-rpg-gold/20 rounded-lg shadow-md text-center backdrop-blur-sm group hover:border-rpg-gold/40 transition-colors">
                                     <h4 className="text-sm font-semibold text-rpg-gold text-center font-medieval tracking-wide">Deslocamento</h4>
                                     <div className="flex items-center justify-center gap-1">
-                                        <input type="number" value={character.speed} onChange={(e) => handleFieldChange('speed', parseInt(e.target.value) || 0)} className="w-16 text-3xl font-bold text-center bg-transparent border-b-2 border-rpg-gold/30 text-rpg-parchment font-medieval" />
+                                        <input type="number" value={character.speed === 0 ? '0' : (character.speed || '')} onChange={(e) => handleFieldChange('speed', e.target.value === '' ? '' : parseInt(e.target.value))} className="w-16 text-3xl font-bold text-center bg-transparent border-b-2 border-rpg-gold/30 text-rpg-parchment font-medieval" />
                                         <span className="text-rpg-grey font-medieval">m</span>
                                     </div>
                                 </div>
