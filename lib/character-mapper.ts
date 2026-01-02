@@ -104,25 +104,28 @@ export function mapImportedDataToCharacter(data: any, ownerId: string, imageUrl:
   });
 
   // --- MAGIAS ---
-  // Algumas classes (como Bruxo) podem ter magias em nós diferentes (e.g., Pact Magic em 'w')
-  const rawSpells = [...(data.l || []), ...(data.w || [])];
+  const charUuid = charData.uuid;
+  const rawSpells = [
+    ...(data.l || []),
+    ...(data.w || []),
+    ...(data.r || []).filter((item: any) => item.a?.a === charUuid && item.b?.b) // Somente se for do personagem e tiver nome
+  ];
 
-  // Debug para desenvolvedor se necessário (visível no console do navegador)
-  if (rawSpells.length === 0 && (data.l || data.w)) {
-    console.warn("Mapeador: Nós de magia encontrados mas nenhum item processado.", { l: data.l, w: data.w });
-  }
-
-  const spells = rawSpells.map((spell: any) => ({
-    name: spell.b?.d || 'Magia Desconhecida',
-    description: spell.b?.e || 'Sem descrição.',
-    level: safeParseInt(spell.b?.c, 0),
-    school: spell.b?.f || '',
-    castingTime: spell.b?.g || '',
-    range: spell.b?.h || '',
-    components: spell.b?.i || '',
-    duration: spell.b?.j || '',
-    prepared: !!spell.a?.d || false,
-  }));
+  const spells = rawSpells.map((spell: any) => {
+    const s = spell.b || {};
+    return {
+      id: s.uuid || spell.a?.c || Math.random().toString(36).substr(2, 9),
+      name: s.b || s.d || 'Magia Desconhecida',
+      description: s.c || s.e || 'Sem descrição.',
+      level: safeParseInt(s.k !== undefined ? s.k : s.c, 0),
+      school: s.d || s.f || '',
+      castingTime: s.f || s.g || '',
+      range: s.g || s.h || '',
+      components: s.i || '',
+      duration: s.e || s.j || '',
+      prepared: !!spell.a?.d || false,
+    };
+  });
 
   // --- INVENTÁRIO INTELIGENTE ---
   const weapons: Weapon[] = [];

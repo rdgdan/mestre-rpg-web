@@ -282,30 +282,58 @@ export default function ConfrontosPage() {
 
         const sessionRef = doc(db, 'arenas_online', onlineSessionId);
 
-        // Listener para mudanças externas (Jogadores entrando)
+        // Listener para mudanças externas (Jogadores entrando ou adicionando efeitos)
         const unsubscribe = onSnapshot(sessionRef, (docSnap) => {
             if (docSnap.exists()) {
                 const data = docSnap.data();
-                // Só atualizamos os combatentes se houver uma mudança no tamanho da lista 
-                // ou se o hostId não for o atual (prevenindo loops se mudarmos algo local)
-                // Mas a forma mais segura é olhar se o dado de combatentes mudou.
-                // Para simplificar e evitar loops infinitos, vamos focar em novos combatentes adicionados por jogadores.
                 const cloudCombatants = data.combatants as Combatant[];
 
-                // Se um jogador adicionou alguém, a lista terá IDs que não temos localmente
+                // Se houver novos combatentes ou mudança nos efeitos dos existentes
+                let hasChanges = false;
+
+                // Verifica novos combatentes
                 const hasNewCombatants = cloudCombatants.some(cc => !combatants.some(lc => lc.id === cc.id));
+                if (hasNewCombatants) hasChanges = true;
 
-                if (hasNewCombatants) {
-                    // Manter a ordem de iniciativa se já estivermos em combate
-                    const merged = [...combatants];
-                    cloudCombatants.forEach(cc => {
-                        if (!merged.some(lc => lc.id === cc.id)) {
-                            merged.push(cc);
+                // Verifica atualizações de efeitos (especialmente vindos de jogadores)
+                const merged = combatants.map(localC => {
+                    const cloudC = cloudCombatants.find(cc => cc.id === localC.id);
+                    if (cloudC) {
+                        // Verifica se há NOVOS efeitos na nuvem que não temos localmente
+                        const newCloudEffects = cloudC.statusEffects.filter(ce =>
+                            !localC.statusEffects.some(le => le.id === ce.id)
+                        );
+
+                        if (newCloudEffects.length > 0) {
+                            hasChanges = true;
+                            // Adiciona apenas os novos, mantendo o estado atual (duração) dos existentes
+                            return {
+                                ...localC,
+                                statusEffects: [...localC.statusEffects, ...newCloudEffects]
+                            };
                         }
-                    });
+                    }
+                    return localC;
+                });
 
+                // Adiciona os novos que não existiam
+                cloudCombatants.forEach(cc => {
+                    if (!merged.some(lc => lc.id === cc.id)) {
+                        merged.push(cc);
+                    }
+                });
+
+                if (hasChanges) {
                     if (phase === 'combat') {
-                        setCombatants(merged.sort((a, b) => b.initiative - a.initiative));
+                        // Tenta manter a ordem atual mas com dados atualizados
+                        setCombatants(prev => {
+                            // Reconstroi a lista baseada na ordem atual (que pode ser diferente da merged sorted inicial)
+                            // Apenas atualiza os dados dos combatentes existentes e anexa os novos no fim (ou reordena tudo?)
+                            // Melhor reordenar tudo pela iniciativa se for combate para consistência
+                            // Mas se o mestre mudou algo manualmente, pode ser confuso.
+                            // Vamos confiar no sort de iniciativa padrão por enquanto.
+                            return merged.sort((a, b) => b.initiative - a.initiative);
+                        });
                     } else {
                         setCombatants(merged);
                     }
@@ -411,6 +439,7 @@ export default function ConfrontosPage() {
         setRound(1);
         setCurrentTurnIndex(0);
         setPhase('preparation');
+        router.push('/'); // Retornar ao Dashboard após finalizar
     };
 
     const clearCombat = () => {
@@ -555,92 +584,95 @@ export default function ConfrontosPage() {
     return (
         <div className="min-h-screen bg-rpg-dark text-rpg-parchment bg-[url('https://www.transparenttextures.com/patterns/dark-matter.png')] flex flex-col font-lato">
 
-            {/* HEADER */}
-            <header className="bg-rpg-panel p-4 shadow-lg border-b-2 border-rpg-gold/30 sticky top-0 z-30 backdrop-blur-sm">
-                <div className="container mx-auto flex justify-between items-center">
-                    <div className="flex items-center gap-4">
-                        <Link href="/" className="text-rpg-gold hover:text-rpg-gold-light transition-all text-2xl" title="Voltar">
-                            ⚔️
-                        </Link>
-                        <h1 className="text-3xl font-bold font-cinzel text-rpg-gold text-shadow-md">Arena de Combate</h1>
-                    </div>
-                    <div className="flex gap-3">
-                        <button
-                            onClick={() => setIsAddModalOpen(true)}
-                            className="bg-rpg-gold hover:bg-rpg-gold/80 text-rpg-dark p-2 px-6 rounded font-bold font-cinzel transition-all transform hover:scale-105 shadow-glow-gold/20"
-                        >
-                            + Adicionar
-                        </button>
-                        {onlineSessionId ? (
-                            <div className="flex items-center gap-2 bg-green-900/30 border border-green-500/30 p-1 px-3 rounded">
-                                <span className="text-[10px] font-cinzel text-green-400">ONLINE: {onlineSessionId}</span>
+            {phase === 'preparation' && (
+                <header className="bg-rpg-panel p-3 sm:p-4 shadow-lg border-b-2 border-rpg-gold/30 relative sm:sticky top-0 z-30 backdrop-blur-sm">
+                    <div className="container mx-auto flex flex-col sm:flex-row justify-between items-center gap-2 sm:gap-4">
+                        <div className="flex items-center gap-3 sm:gap-4 w-full sm:w-auto">
+                            <Link href="/" className="text-rpg-gold hover:text-rpg-gold-light transition-all text-xl sm:text-2xl" title="Voltar">
+                                ⚔️
+                            </Link>
+                            <h1 className="text-xl sm:text-3xl font-bold font-cinzel text-rpg-gold text-shadow-md truncate">Arena de Combate</h1>
+                        </div>
+                        <div className="flex flex-wrap items-center justify-center sm:justify-end gap-2 sm:gap-3 w-full sm:w-auto">
+                            <button
+                                onClick={() => setIsAddModalOpen(true)}
+                                className="flex-grow sm:flex-grow-0 bg-rpg-gold hover:bg-rpg-gold/80 text-rpg-dark p-2 px-4 sm:px-6 rounded font-bold font-cinzel text-xs sm:text-base transition-all transform hover:scale-[1.02] active:scale-95 shadow-glow-gold/20"
+                            >
+                                + Adicionar
+                            </button>
+                            {onlineSessionId ? (
+                                <div className="flex items-center gap-2 bg-green-900/30 border border-green-500/30 p-1 px-3 rounded">
+                                    <span className="text-[10px] font-cinzel text-green-400">ONLINE: {onlineSessionId}</span>
+                                    <button
+                                        onClick={() => {
+                                            const url = `${window.location.origin}/arena/${onlineSessionId}`;
+                                            navigator.clipboard.writeText(url);
+                                            alert("Link de convite copiado!");
+                                        }}
+                                        className="bg-green-600 hover:bg-green-500 text-white text-[10px] px-2 py-1 rounded font-bold"
+                                    >
+                                        Copiar
+                                    </button>
+                                </div>
+                            ) : (
                                 <button
-                                    onClick={() => {
-                                        const url = `${window.location.origin}/arena/${onlineSessionId}`;
-                                        navigator.clipboard.writeText(url);
-                                        alert("Link de convite copiado!");
-                                    }}
-                                    className="bg-green-600 hover:bg-green-500 text-white text-[10px] px-2 py-0.5 rounded font-bold"
+                                    onClick={createOnlineSession}
+                                    disabled={isCreatingSession || combatants.length === 0}
+                                    className="flex-grow sm:flex-grow-0 bg-sky-600 hover:bg-sky-500 disabled:opacity-50 text-white p-2 px-3 sm:px-4 rounded font-bold font-cinzel text-[10px] sm:text-sm transition-all shadow-glow-sky/20 active:scale-95"
                                 >
-                                    Copiar Link
+                                    {isCreatingSession ? 'Gerando...' : 'Iniciar Sessão Online'}
                                 </button>
-                            </div>
-                        ) : (
+                            )}
                             <button
-                                onClick={createOnlineSession}
-                                disabled={isCreatingSession || combatants.length === 0}
-                                className="bg-sky-600 hover:bg-sky-500 disabled:opacity-50 text-white p-2 px-4 rounded font-bold font-cinzel text-sm transition-all shadow-glow-sky/20"
+                                onClick={handleExitArena}
+                                className="text-rpg-grey hover:text-rpg-parchment flex items-center gap-2 font-medieval text-xs sm:text-base px-2"
                             >
-                                {isCreatingSession ? 'Gerando...' : '🌐 Iniciar Sessão Online'}
+                                <span>&larr;</span> Sair
                             </button>
-                        )}
-                        <button
-                            onClick={handleExitArena}
-                            className="text-rpg-grey hover:text-rpg-parchment flex items-center gap-2 font-medieval"
-                        >
-                            <span>&larr;</span> Sair
-                        </button>
-                        {onlineSessionId && user && (
-                            <button
-                                className="bg-red-700 hover:bg-red-800 text-white px-4 py-1 rounded font-bold font-cinzel text-sm ml-2"
-                                onClick={async () => {
-                                    try {
-                                        const sessionRef = doc(db, 'arenas_online', onlineSessionId);
-                                        await deleteDoc(sessionRef);
-                                    } catch (err) {
-                                        console.error('Erro ao apagar sessão online:', err);
-                                    }
-                                }}
-                            >
-                                Apagar Sessão Online
-                            </button>
-                        )}
+                            {onlineSessionId && user && (
+                                <button
+                                    className="bg-red-700 hover:bg-red-800 text-white px-4 py-1 rounded font-bold font-cinzel text-sm ml-2"
+                                    onClick={async () => {
+                                        try {
+                                            const sessionRef = doc(db, 'arenas_online', onlineSessionId);
+                                            await deleteDoc(sessionRef);
+                                        } catch (err) {
+                                            console.error('Erro ao apagar sessão online:', err);
+                                        }
+                                    }}
+                                >
+                                    Apagar Sessão Online
+                                </button>
+                            )}
+                        </div>
                     </div>
-                </div>
-            </header>
+                </header>
+            )}
 
             {/* CONTROLS BAR */}
-            <section className="bg-rpg-slate/40 border-b border-rpg-gold/10 p-4 sticky top-[74px] z-20 backdrop-blur-md">
-                <div className="container mx-auto flex flex-wrap justify-between items-center gap-4">
-                    <div className="flex items-center gap-8">
+            <section className="bg-rpg-slate/40 border-b border-rpg-gold/10 px-2 py-3 sm:p-4 sticky top-0 sm:top-[74px] z-20 backdrop-blur-md">
+                <div className="container mx-auto flex flex-col md:flex-row justify-between items-center gap-3 sm:gap-4">
+                    <div className="flex flex-col sm:flex-row items-center gap-4 sm:gap-8 w-full md:w-auto">
                         {/* Indicador de Fase */}
-                        <div className="flex gap-4 items-center">
-                            <span className={`text-[10px] uppercase font-cinzel px-2 py-1 rounded border ${phase === 'preparation' ? 'bg-rpg-gold text-rpg-dark border-rpg-gold' : 'text-rpg-grey border-white/10'}`}>1. Preparação</span>
-                            <span className="text-rpg-grey/20">→</span>
-                            <span className={`text-[10px] uppercase font-cinzel px-2 py-1 rounded border ${phase === 'initiative' ? 'bg-rpg-gold text-rpg-dark border-rpg-gold' : 'text-rpg-grey border-white/10'}`}>2. Iniciativa</span>
-                            <span className="text-rpg-grey/20">→</span>
-                            <span className={`text-[10px] uppercase font-cinzel px-2 py-1 rounded border ${phase === 'combat' ? 'bg-rpg-gold text-rpg-dark border-rpg-gold' : 'text-rpg-grey border-white/10'}`}>3. Combate</span>
-                        </div>
+                        {phase !== 'combat' && (
+                            <div className="flex gap-1 sm:gap-4 items-center justify-center w-full">
+                                <span className={`text-[9px] sm:text-[10px] uppercase font-cinzel px-1.5 sm:px-2 py-1 rounded border transition-all ${phase === 'preparation' ? 'bg-rpg-gold text-rpg-dark border-rpg-gold font-bold' : 'text-rpg-grey border-white/10'}`}>1. Preparação</span>
+                                <span className="text-rpg-grey/20 hidden xs:inline">→</span>
+                                <span className={`text-[9px] sm:text-[10px] uppercase font-cinzel px-1.5 sm:px-2 py-1 rounded border transition-all ${phase === 'initiative' ? 'bg-rpg-gold text-rpg-dark border-rpg-gold font-bold' : 'text-rpg-grey border-white/10'}`}>2. Iniciativa</span>
+                                <span className="text-rpg-grey/20 hidden xs:inline">→</span>
+                                <span className="text-[9px] sm:text-[10px] uppercase font-cinzel px-1.5 sm:px-2 py-1 rounded border transition-all text-rpg-grey border-white/10">3. Combate</span>
+                            </div>
+                        )}
 
                         {phase === 'combat' && (
-                            <div className="flex items-center gap-8 ml-4 border-l border-white/10 pl-8">
-                                <div className="flex flex-col">
-                                    <span className="text-xs text-rpg-grey uppercase font-cinzel tracking-widest">Rodada</span>
-                                    <span className="text-2xl font-bold text-rpg-gold font-medieval">{round}</span>
+                            <div className="flex items-center justify-center gap-6 sm:gap-8 w-full sm:w-auto">
+                                <div className="flex flex-col items-center sm:items-start">
+                                    <span className="text-[10px] text-rpg-grey uppercase font-cinzel tracking-widest">Rodada</span>
+                                    <span className="text-xl sm:text-2xl font-bold text-rpg-gold font-medieval">{round}</span>
                                 </div>
-                                <div className="flex flex-col">
-                                    <span className="text-xs text-rpg-grey uppercase font-cinzel tracking-widest">Turno de</span>
-                                    <span className="text-2xl font-bold text-rpg-parchment font-medieval">
+                                <div className="flex flex-col items-center sm:items-start">
+                                    <span className="text-[10px] text-rpg-grey uppercase font-cinzel tracking-widest">Turno de</span>
+                                    <span className="text-xl sm:text-2xl font-bold text-rpg-parchment font-medieval truncate max-w-[150px]">
                                         {combatants[currentTurnIndex]?.name || "Finalizado"}
                                     </span>
                                 </div>
@@ -648,21 +680,21 @@ export default function ConfrontosPage() {
                         )}
                     </div>
 
-                    <div className="flex gap-3">
+                    <div className="flex flex-wrap justify-center gap-2 sm:gap-3 w-full md:w-auto mt-1 sm:mt-0">
                         {phase === 'preparation' && (
                             <>
                                 <button
                                     onClick={clearCombat}
-                                    className="bg-red-900/40 hover:bg-red-800 text-red-200 border border-red-500/30 p-2 px-4 rounded font-bold font-cinzel text-sm"
+                                    className="flex-1 sm:flex-none bg-red-900/40 hover:bg-red-800 text-red-200 border border-red-500/30 p-2 px-3 sm:px-4 rounded font-bold font-cinzel text-[10px] sm:text-sm active:scale-95"
                                 >
-                                    💀 Limpar Tudo
+                                    💀 <span className="hidden sm:inline">Limpar Tudo</span><span className="sm:hidden">Limpar</span>
                                 </button>
                                 <button
                                     onClick={() => setPhase('initiative')}
                                     disabled={combatants.length === 0}
-                                    className="bg-sky-700 hover:bg-sky-600 text-white p-3 px-8 rounded font-bold font-cinzel transition-all transform hover:scale-105"
+                                    className="flex-[2] sm:flex-none bg-sky-700 hover:bg-sky-600 text-white p-2.5 sm:p-3 px-6 sm:px-8 rounded font-bold font-cinzel text-xs sm:text-base transition-all transform hover:scale-[1.02] active:scale-95 shadow-lg"
                                 >
-                                    Pronto para Iniciativa &rarr;
+                                    Fase de Iniciativa &rarr;
                                 </button>
                             </>
                         )}
@@ -671,21 +703,21 @@ export default function ConfrontosPage() {
                             <>
                                 <button
                                     onClick={() => setPhase('preparation')}
-                                    className="text-rpg-grey hover:text-white font-medieval px-4"
+                                    className="text-rpg-grey hover:text-white font-medieval px-2 sm:px-4 text-xs sm:text-base"
                                 >
-                                    &larr; Voltar
+                                    &larr; <span className="sm:inline">Voltar</span>
                                 </button>
                                 <button
                                     onClick={rollInitiativeForMonstersAndNPCs}
-                                    className="bg-sky-700 hover:bg-sky-600 text-white p-3 px-8 rounded font-bold font-cinzel transition-all mr-2"
+                                    className="flex-1 sm:flex-none bg-sky-700 hover:bg-sky-600 text-white p-2.5 sm:p-3 px-4 sm:px-8 rounded font-bold font-cinzel text-[10px] sm:text-sm transition-all active:scale-95"
                                 >
-                                    🎲 Rolar Iniciativa Monstros/NPCs
+                                    🎲 <span className="hidden sm:inline">Iniciativa Auto</span><span className="sm:hidden">Auto</span>
                                 </button>
                                 <button
                                     onClick={startCombat}
-                                    className="bg-rpg-gold hover:bg-rpg-gold-light text-rpg-dark p-3 px-8 rounded font-bold font-cinzel transition-all transform hover:scale-105 shadow-glow-gold/40 border-2 border-rpg-gold/50"
+                                    className="flex-[2] sm:flex-none bg-rpg-gold hover:bg-rpg-gold-light text-rpg-dark p-2.5 sm:p-3 px-6 sm:px-8 rounded font-bold font-cinzel text-xs sm:text-base transition-all transform hover:scale-[1.02] active:scale-95 shadow-glow-gold/40 border-2 border-rpg-gold/50"
                                 >
-                                    ⚔️ Ordenar e Iniciar Combate
+                                    ⚔️ Iniciar Arena
                                 </button>
                             </>
                         )}
@@ -694,15 +726,15 @@ export default function ConfrontosPage() {
                             <>
                                 <button
                                     onClick={finishCombat}
-                                    className="text-rpg-gold hover:text-white font-medieval px-4 border border-rpg-gold/20 rounded hover:bg-rpg-gold/10 transition-all"
+                                    className="text-rpg-gold hover:text-white font-medieval px-3 sm:px-4 border border-rpg-gold/20 rounded hover:bg-rpg-gold/10 transition-all text-xs sm:text-base"
                                 >
-                                    Terminar Combate & XP
+                                    Encerrar
                                 </button>
                                 <button
                                     onClick={nextTurn}
-                                    className="bg-rpg-gold hover:bg-rpg-gold-light text-rpg-dark p-3 px-8 rounded font-bold font-cinzel transition-all transform hover:scale-105 shadow-glow-gold/40 border-2 border-rpg-gold/50"
+                                    className="bg-rpg-gold hover:bg-rpg-gold-light text-rpg-dark p-2.5 sm:p-3 px-6 sm:px-8 rounded font-bold font-cinzel text-xs sm:text-base transition-all transform hover:scale-[1.02] active:scale-95 shadow-glow-gold/40 border-2 border-rpg-gold/50"
                                 >
-                                    Próxima Jogada &rarr;
+                                    Próximo Turno &rarr;
                                 </button>
                             </>
                         )}
@@ -713,13 +745,13 @@ export default function ConfrontosPage() {
             {/* INITIATIVE LIST */}
             <main className="container mx-auto p-4 sm:p-8 flex-grow">
                 {combatants.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center p-20 border-2 border-dashed border-rpg-grey/20 rounded-xl bg-rpg-panel/30">
-                        <div className="text-6xl mb-4 opacity-30">⚔️</div>
-                        <h2 className="text-2xl font-cinzel text-rpg-grey">O campo de batalha está vazio...</h2>
-                        <p className="text-rpg-grey font-medieval">Adicione heróis e monstros para começar a iniciativa.</p>
+                    <div className="flex flex-col items-center justify-center p-8 sm:p-20 border-2 border-dashed border-rpg-grey/20 rounded-xl bg-rpg-panel/30 text-center">
+                        <div className="text-4xl sm:text-6xl mb-4 opacity-30">⚔️</div>
+                        <h2 className="text-xl sm:text-2xl font-cinzel text-rpg-grey">O campo de batalha está vazio...</h2>
+                        <p className="text-sm sm:text-base text-rpg-grey font-medieval">Adicione heróis e monstros para começar a iniciativa.</p>
                         <button
                             onClick={() => setIsAddModalOpen(true)}
-                            className="mt-6 text-rpg-gold hover:underline font-cinzel animate-pulse"
+                            className="mt-6 text-rpg-gold hover:underline font-cinzel animate-pulse text-sm sm:text-base"
                         >
                             + Iniciar Chamado de Batalha
                         </button>
@@ -755,126 +787,128 @@ export default function ConfrontosPage() {
                                         </div>
                                     )}
 
-                                    <div className="flex flex-col md:flex-row items-center gap-4 p-4">
+                                    <div className="flex flex-col sm:flex-row items-center gap-2 sm:gap-4 p-2 sm:p-4">
                                         {/* Iniciativa */}
                                         <div className={`
-                                            rounded-lg w-16 h-16 flex flex-col items-center justify-center border shrink-0 transition-all
+                                            rounded-lg w-12 h-12 sm:w-16 sm:h-16 flex flex-col items-center justify-center border shrink-0 transition-all
                                             ${phase === 'initiative' ? 'bg-sky-900/40 border-sky-500 shadow-glow-sky' : 'bg-rpg-slate border-rpg-gold/20'}
                                         `}>
-                                            <span className="text-[10px] text-rpg-grey uppercase font-cinzel">Ini</span>
+                                            <span className="text-[8px] sm:text-[10px] text-rpg-grey uppercase font-cinzel">Ini</span>
                                             {phase === 'initiative' ? (
                                                 <input
                                                     type="number"
                                                     value={c.initiative}
                                                     onChange={(e) => updateInitiative(c.id, Number(e.target.value))}
                                                     onFocus={(e) => e.target.select()}
-                                                    className="bg-transparent text-2xl font-bold font-medieval text-white w-full text-center focus:outline-none"
+                                                    className="bg-transparent text-xl sm:text-2xl font-bold font-medieval text-white w-full text-center focus:outline-none"
                                                     autoFocus={index === 0}
                                                 />
                                             ) : (
-                                                <span className="text-2xl font-bold font-medieval text-rpg-gold">{c.initiative}</span>
+                                                <span className="text-xl sm:text-2xl font-bold font-medieval text-rpg-gold">{c.initiative}</span>
                                             )}
                                         </div>
 
                                         {/* Info */}
-                                        <div className="flex-grow min-w-0">
-                                            <div className="flex items-center gap-3 mb-1">
-                                                <h3 className={`text-2xl font-bold font-medieval truncate ${phase === 'combat' && isCurrent ? 'text-rpg-parchment' : 'text-rpg-parchment/70'}`}>
+                                        <div className="flex-grow min-w-0 w-full">
+                                            <div className="flex flex-wrap items-center gap-2 sm:gap-3 mb-1">
+                                                <h3 className={`text-lg sm:text-2xl font-bold font-medieval truncate max-w-[150px] sm:max-w-none ${phase === 'combat' && isCurrent ? 'text-rpg-parchment' : 'text-rpg-parchment/70'}`}>
                                                     {c.name}
                                                 </h3>
-                                                <span className={`px-2 py-0.5 rounded text-[10px] uppercase font-bold tracking-widest border
-                                            ${c.type === 'monster' ? 'bg-red-900/30 text-red-100 border-red-500/30' :
-                                                        c.type === 'npc' ? 'bg-blue-900/30 text-blue-100 border-blue-500/30' :
-                                                            'bg-rpg-gold/20 text-rpg-gold border-rpg-gold/30'}`}>
-                                                    {c.type === 'monster' ? 'Monstro' : c.type === 'npc' ? 'NPC' : 'Player'}
-                                                </span>
+                                                <div className="flex items-center gap-2">
+                                                    <span className={`px-1.5 sm:px-2 py-0.5 rounded text-[8px] sm:text-[10px] uppercase font-bold tracking-widest border
+                                                ${c.type === 'monster' ? 'bg-red-900/30 text-red-100 border-red-500/30' :
+                                                            c.type === 'npc' ? 'bg-blue-900/30 text-blue-100 border-blue-500/30' :
+                                                                'bg-rpg-gold/20 text-rpg-gold border-rpg-gold/30'}`}>
+                                                        {c.type === 'monster' ? 'Monstro' : c.type === 'npc' ? 'NPC' : 'Player'}
+                                                    </span>
 
-                                                {/* Link para Ficha */}
-                                                {c.externalId && phase !== 'initiative' && (
-                                                    <Link
-                                                        href={`/personagem/${c.externalId}`}
-                                                        target="_blank"
-                                                        className="text-rpg-gold hover:text-rpg-gold-light bg-rpg-gold/5 p-1 rounded border border-rpg-gold/20 flex items-center gap-1 text-[10px] uppercase font-bold px-2 transition-all hover:bg-rpg-gold/10"
-                                                    >
-                                                        👁️ Ficha
-                                                    </Link>
-                                                )}
+                                                    {/* Link para Ficha */}
+                                                    {c.externalId && phase !== 'initiative' && (
+                                                        <Link
+                                                            href={`/personagem/${c.externalId}`}
+                                                            target="_blank"
+                                                            className="text-rpg-gold hover:text-rpg-gold-light bg-rpg-gold/5 p-1 rounded border border-rpg-gold/20 flex items-center gap-1 text-[8px] sm:text-[10px] uppercase font-bold px-2 transition-all hover:bg-rpg-gold/10"
+                                                        >
+                                                            👁️ <span className="hidden xs:inline">Ficha</span>
+                                                        </Link>
+                                                    )}
+                                                </div>
 
-                                                <div className="flex gap-2 ml-auto">
-                                                    <div className="flex flex-col items-center justify-center bg-rpg-panel border border-rpg-gold/20 rounded px-2 min-w-[40px]">
-                                                        <span className="text-[8px] text-rpg-grey uppercase font-cinzel">CA</span>
-                                                        <span className="text-xs font-bold text-rpg-gold">{c.ac}</span>
+                                                <div className="flex gap-1.5 sm:gap-2 ml-auto">
+                                                    <div className="flex flex-col items-center justify-center bg-rpg-panel border border-rpg-gold/20 rounded px-1.5 sm:px-2 min-w-[32px] sm:min-w-[40px]">
+                                                        <span className="text-[7px] sm:text-[8px] text-rpg-grey uppercase font-cinzel">CA</span>
+                                                        <span className="text-[10px] sm:text-xs font-bold text-rpg-gold">{c.ac}</span>
                                                     </div>
-                                                    <div className="flex flex-col items-center justify-center bg-rpg-panel border border-white/5 rounded px-2 min-w-[40px]">
-                                                        <span className="text-[8px] text-rpg-grey uppercase font-cinzel">CR</span>
-                                                        <span className="text-xs font-bold text-rpg-parchment">{c.cr}</span>
+                                                    <div className="flex flex-col items-center justify-center bg-rpg-panel border border-white/5 rounded px-1.5 sm:px-2 min-w-[32px] sm:min-w-[40px]">
+                                                        <span className="text-[7px] sm:text-[8px] text-rpg-grey uppercase font-cinzel">CR</span>
+                                                        <span className="text-[10px] sm:text-xs font-bold text-rpg-parchment">{c.cr}</span>
                                                     </div>
-                                                    <div className="flex flex-col items-center justify-center bg-rpg-panel border border-rpg-gold/10 rounded px-2 min-w-[40px]">
-                                                        <span className="text-[8px] text-rpg-grey uppercase font-cinzel">XP</span>
-                                                        <span className="text-xs font-bold text-rpg-gold-light">{c.xp}</span>
+                                                    <div className="flex flex-col items-center justify-center bg-rpg-panel border border-rpg-gold/10 rounded px-1.5 sm:px-2 min-w-[32px] sm:min-w-[40px] hidden xs:flex">
+                                                        <span className="text-[7px] sm:text-[8px] text-rpg-grey uppercase font-cinzel">XP</span>
+                                                        <span className="text-[10px] sm:text-xs font-bold text-rpg-gold-light">{c.xp}</span>
                                                     </div>
                                                 </div>
                                             </div>
 
                                             {/* Detalhes Extra no Combat */}
                                             {phase === 'combat' && (
-                                                <>
-                                                    <div className="flex flex-wrap gap-2 items-center mb-2">
+                                                <div className="mt-1">
+                                                    <div className="flex flex-wrap gap-1.5 sm:gap-2 items-center mb-1">
                                                         {c.statusEffects.map(effect => (
-                                                            <div key={effect.id} className="bg-purple-900/40 border border-purple-500/30 rounded px-2 py-0.5 text-xs flex items-center gap-2">
+                                                            <div key={effect.id} className="bg-purple-900/40 border border-purple-500/30 rounded px-1.5 sm:px-2 py-0.5 text-[10px] sm:text-xs flex items-center gap-1.5 sm:gap-2">
                                                                 <span className="text-purple-100 font-bold">✨ {effect.name}</span>
-                                                                <span className="bg-purple-500 text-white px-1 rounded-full text-[10px]">{effect.duration}</span>
+                                                                <span className="bg-purple-500 text-white px-1 sm:px-1 rounded-full text-[8px] sm:text-[10px]">{effect.duration}</span>
                                                             </div>
                                                         ))}
                                                         <button
                                                             onClick={() => { setSelectedCombatantId(c.id); setIsEffectModalOpen(true); }}
-                                                            className="text-rpg-grey hover:text-rpg-gold text-[10px] uppercase font-bold tracking-tighter"
+                                                            className="text-rpg-grey hover:text-rpg-gold text-[8px] sm:text-[10px] uppercase font-bold tracking-tighter ml-1"
                                                         >
-                                                            + Adicionar Efeito
+                                                            + Efeito
                                                         </button>
                                                     </div>
 
                                                     {(c.class || c.level) && (
-                                                        <div className="text-[10px] text-rpg-grey font-cinzel uppercase flex gap-2">
+                                                        <div className="text-[8px] sm:text-[10px] text-rpg-grey font-cinzel uppercase flex flex-wrap gap-2">
                                                             {c.class && <span>{c.class}</span>}
                                                             {c.level && <span>• Nível {c.level}</span>}
                                                             <button
                                                                 onClick={() => setExpandedId(isExpanded ? null : c.id)}
-                                                                className="text-rpg-gold hover:underline lowercase ml-2"
+                                                                className="text-rpg-gold hover:underline lowercase ml-1"
                                                             >
-                                                                {isExpanded ? "[Ocultar detalhes]" : "[Ver equipamentos/magias]"}
+                                                                {isExpanded ? "[Ocultar]" : "[Detalhes]"}
                                                             </button>
                                                         </div>
                                                     )}
-                                                </>
+                                                </div>
                                             )}
                                         </div>
 
                                         {/* Barra de HP (Escondida na Iniciativa para focar) */}
                                         {phase !== 'initiative' && (
-                                            <div className="w-full md:w-64 shrink-0 flex items-center gap-3">
+                                            <div className="w-full sm:w-48 md:w-64 shrink-0 flex items-center gap-2 sm:gap-3 mt-1 sm:mt-0 pt-2 sm:pt-0 border-t sm:border-t-0 border-white/5">
                                                 <div className="flex-grow group relative">
-                                                    <div className="h-4 bg-black/40 rounded-full border border-white/10 overflow-hidden">
+                                                    <div className="h-3 sm:h-4 bg-black/40 rounded-full border border-white/10 overflow-hidden">
                                                         <div
                                                             className={`h-full transition-all duration-500 ${c.hp / c.maxHp > 0.5 ? 'bg-green-600' : c.hp / c.maxHp > 0.2 ? 'bg-yellow-600' : 'bg-red-600'}`}
                                                             style={{ width: `${(c.hp / c.maxHp) * 100}%` }}
                                                         ></div>
                                                     </div>
-                                                    <div className="flex justify-between mt-1 px-1">
-                                                        <span className="text-xs font-medieval">{c.hp} / {c.maxHp} HP</span>
-                                                        <span className="text-[10px] text-rpg-grey font-medieval">Vida</span>
+                                                    <div className="flex justify-between mt-0.5 sm:mt-1 px-1">
+                                                        <span className="text-[10px] sm:text-xs font-medieval">{c.hp} / {c.maxHp} HP</span>
+                                                        <span className="text-[8px] sm:text-[10px] text-rpg-grey font-medieval">Vida</span>
                                                     </div>
                                                 </div>
                                                 <div className="flex gap-1">
                                                     <button
                                                         onClick={() => updateHP(c.id, -1)}
-                                                        className="w-8 h-8 rounded bg-red-900/40 border border-red-500/30 flex items-center justify-center hover:bg-red-800 text-red-500 font-bold"
+                                                        className="w-7 h-7 sm:w-8 sm:h-8 rounded bg-red-900/40 border border-red-500/30 flex items-center justify-center hover:bg-red-800 text-red-500 font-bold active:scale-95"
                                                     >
                                                         -
                                                     </button>
                                                     <button
                                                         onClick={() => updateHP(c.id, 1)}
-                                                        className="w-8 h-8 rounded bg-green-900/40 border border-green-500/30 flex items-center justify-center hover:bg-green-800 text-green-500 font-bold"
+                                                        className="w-7 h-7 sm:w-8 sm:h-8 rounded bg-green-900/40 border border-green-500/30 flex items-center justify-center hover:bg-green-800 text-green-500 font-bold active:scale-95"
                                                     >
                                                         +
                                                     </button>
@@ -886,7 +920,7 @@ export default function ConfrontosPage() {
                                         {phase === 'preparation' && (
                                             <button
                                                 onClick={() => removeCombatant(c.id)}
-                                                className="text-red-500/20 hover:text-red-500 p-2 transition-colors ml-2"
+                                                className="absolute top-2 right-2 sm:relative sm:top-auto sm:right-auto text-red-500/40 hover:text-red-500 p-2 transition-colors sm:ml-2"
                                                 title="Remover do Combate"
                                             >
                                                 ✖
@@ -896,7 +930,7 @@ export default function ConfrontosPage() {
 
                                     {/* Detalhes Expandidos (Equipamentos/Magias) */}
                                     {isExpanded && (
-                                        <div className="px-8 pb-4 pt-2 border-t border-rpg-gold/10 grid grid-cols-1 sm:grid-cols-3 gap-6 animate-fade-in bg-black/20">
+                                        <div className="px-4 sm:px-8 pb-4 pt-2 border-t border-rpg-gold/10 grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6 animate-fade-in bg-black/20">
                                             <div>
                                                 <h4 className="text-[10px] text-rpg-gold uppercase font-cinzel mb-2 border-b border-rpg-gold/10">Equipamento</h4>
                                                 <ul className="text-xs font-medieval space-y-1 max-h-32 overflow-y-auto custom-scrollbar">
@@ -938,239 +972,241 @@ export default function ConfrontosPage() {
             {/* MODAL ADICIONAR */}
             <Modal isOpen={isAddModalOpen} onClose={() => setIsAddModalOpen(false)} title="Convocação de Combate">
                 <form onSubmit={handleAddCombatant} className="space-y-4">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <div className="col-span-1 sm:col-span-2">
-                            <label className="block text-rpg-gold text-xs uppercase font-cinzel mb-1">Tipo de Unidade</label>
-                            <div className="flex gap-2">
-                                {['monster', 'npc', 'player'].map(type => (
-                                    <button
-                                        key={type}
-                                        type="button"
-                                        onClick={() => setNewCombatant({ ...newCombatant, type: type as CombatantType, playerId: '' })}
-                                        className={`flex-1 p-2 rounded border font-medieval capitalize transition-all
+                    <div className="max-h-[50vh] overflow-y-auto custom-scrollbar pr-2 -mr-2">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div className="col-span-1 sm:col-span-2">
+                                <label className="block text-rpg-gold text-xs uppercase font-cinzel mb-1">Tipo de Unidade</label>
+                                <div className="flex gap-2">
+                                    {['monster', 'npc', 'player'].map(type => (
+                                        <button
+                                            key={type}
+                                            type="button"
+                                            onClick={() => setNewCombatant({ ...newCombatant, type: type as CombatantType, playerId: '' })}
+                                            className={`flex-1 p-2 rounded border font-medieval capitalize transition-all
                                     ${newCombatant.type === type
-                                                ? 'bg-rpg-gold text-rpg-dark border-rpg-gold shadow-glow-gold/20'
-                                                : 'bg-rpg-slate text-rpg-grey border-white/10 hover:border-rpg-gold/30'}`}
-                                    >
-                                        {type === 'player' ? 'Jogador' : type === 'npc' ? 'NPC' : 'Monstro'}
-                                    </button>
-                                ))}
-                            </div>
-                        </div>
-
-                        {newCombatant.type === 'player' ? (
-                            <div className="col-span-1 sm:col-span-2 space-y-4">
-                                <div>
-                                    <label className="block text-rpg-gold text-xs uppercase font-cinzel mb-1">Importar da Taverna (Opcional)</label>
-                                    <select
-                                        className="w-full bg-rpg-slate border border-white/10 p-3 rounded font-medieval text-rpg-parchment focus:border-rpg-gold outline-none"
-                                        value={newCombatant.playerId}
-                                        onChange={(e) => {
-                                            const p = availablePlayers.find(ap => ap.id === e.target.value);
-                                            if (p) {
-                                                setNewCombatant({
-                                                    ...newCombatant,
-                                                    playerId: e.target.value,
-                                                    name: p.name,
-                                                    hp: p.hp
-                                                });
-                                            } else {
-                                                setNewCombatant({ ...newCombatant, playerId: e.target.value });
-                                            }
-                                        }}
-                                    >
-                                        <option value="">-- Herói Desconhecido --</option>
-                                        {availablePlayers.map(p => (
-                                            <option key={p.id} value={p.id}>{p.name} ({p.class} Lvl {p.level})</option>
-                                        ))}
-                                    </select>
-                                </div>
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                    <div className="col-span-1 sm:col-span-2">
-                                        <label className="block text-rpg-gold text-xs uppercase font-cinzel mb-1">Nome do Herói</label>
-                                        <input
-                                            type="text"
-                                            className="w-full bg-rpg-slate border border-white/10 p-3 rounded font-medieval text-rpg-parchment focus:border-rpg-gold outline-none"
-                                            placeholder="Nome do Jogador..."
-                                            value={newCombatant.name}
-                                            onChange={(e) => setNewCombatant({ ...newCombatant, name: e.target.value })}
-                                            required
-                                        />
-                                    </div>
-                                    <div>
-                                        <label className="block text-rpg-gold text-xs uppercase font-cinzel mb-1">Vida Total (HP)</label>
-                                        <input
-                                            type="number"
-                                            className="w-full bg-rpg-slate border border-white/10 p-3 rounded font-medieval text-rpg-parchment focus:border-rpg-gold outline-none"
-                                            value={newCombatant.hp}
-                                            onChange={(e) => setNewCombatant({ ...newCombatant, hp: Number(e.target.value) || 0 })}
-                                            onFocus={(e) => e.target.select()}
-                                            required
-                                        />
-                                    </div>
-                                    <div>
-                                        <label className="block text-rpg-gold text-xs uppercase font-cinzel mb-1">
-                                            Iniciativa {phase !== 'preparation' && <span className="text-red-500">*</span>}
-                                        </label>
-                                        <input
-                                            type="number"
-                                            className="w-full bg-rpg-slate border border-white/10 p-3 rounded font-medieval text-rpg-parchment focus:border-rpg-gold outline-none"
-                                            value={newCombatant.initiative}
-                                            onChange={(e) => setNewCombatant({ ...newCombatant, initiative: e.target.value })}
-                                            onFocus={(e) => e.target.select()}
-                                            required={phase !== 'preparation'}
-                                            placeholder={phase !== 'preparation' ? "Número..." : "0"}
-                                        />
-                                    </div>
+                                                    ? 'bg-rpg-gold text-rpg-dark border-rpg-gold shadow-glow-gold/20'
+                                                    : 'bg-rpg-slate text-rpg-grey border-white/10 hover:border-rpg-gold/30'}`}
+                                        >
+                                            {type === 'player' ? 'Jogador' : type === 'npc' ? 'NPC' : 'Monstro'}
+                                        </button>
+                                    ))}
                                 </div>
                             </div>
-                        ) : (
-                            <div className="col-span-1 sm:col-span-2 space-y-4">
-                                <div>
-                                    <label className="block text-rpg-gold text-xs uppercase font-cinzel mb-1">
-                                        Selecionar da Biblioteca ({newCombatant.type === 'monster' ? 'Monstros' : 'NPCs'})
-                                    </label>
-                                    <select
-                                        className="w-full bg-rpg-slate border border-white/10 p-3 rounded font-medieval text-rpg-parchment focus:border-rpg-gold outline-none"
-                                        onChange={(e) => {
-                                            if (newCombatant.type === 'monster') {
-                                                const m = dndMonsters.find(dm => dm.name === e.target.value);
-                                                if (m) {
-                                                    setNewCombatant({
-                                                        ...newCombatant,
-                                                        name: m.name,
-                                                        hp: m.hp,
-                                                        ac: m.ac,
-                                                        cr: m.challenge,
-                                                        xp: m.xp
-                                                    });
-                                                }
-                                            } else {
-                                                const n = npcTemplates.find(nt => nt.name === e.target.value);
-                                                if (n) {
-                                                    setNewCombatant({
-                                                        ...newCombatant,
-                                                        name: n.name,
-                                                        hp: n.hp,
-                                                        ac: n.ac,
-                                                        cr: n.challenge,
-                                                        xp: n.xp
-                                                    });
-                                                }
-                                            }
-                                        }}
-                                        defaultValue=""
-                                    >
-                                        <option value="" disabled>-- Escolha um {newCombatant.type === 'monster' ? 'Monstro' : 'NPC'} --</option>
-                                        {newCombatant.type === 'monster'
-                                            ? dndMonsters.map(m => (
-                                                <option key={m.name} value={m.name}>{m.name} (CR {m.challenge} • {m.hp} HP)</option>
-                                            ))
-                                            : npcTemplates.map(n => (
-                                                <option key={n.name} value={n.name}>{n.name} (CR {n.challenge} • {n.hp} HP)</option>
-                                            ))
-                                        }
-                                    </select>
-                                </div>
 
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                    <div className="col-span-1 sm:col-span-2">
-                                        <label className="block text-rpg-gold text-xs uppercase font-cinzel mb-1">Nome Personalizado</label>
-                                        <input
-                                            type="text"
-                                            className="w-full bg-rpg-slate border border-white/10 p-3 rounded font-medieval text-rpg-parchment focus:border-rpg-gold outline-none"
-                                            placeholder="Nome..."
-                                            value={newCombatant.name}
-                                            onChange={(e) => setNewCombatant({ ...newCombatant, name: e.target.value })}
-                                            required
-                                        />
+                            {newCombatant.type === 'player' ? (
+                                <div className="col-span-1 sm:col-span-2 space-y-4">
+                                    <div>
+                                        <label className="block text-rpg-gold text-xs uppercase font-cinzel mb-1">Importar da Taverna (Opcional)</label>
+                                        <select
+                                            className="w-full bg-rpg-slate border border-white/10 p-2 text-sm sm:p-3 sm:text-base rounded font-medieval text-rpg-parchment focus:border-rpg-gold outline-none"
+                                            value={newCombatant.playerId}
+                                            onChange={(e) => {
+                                                const p = availablePlayers.find(ap => ap.id === e.target.value);
+                                                if (p) {
+                                                    setNewCombatant({
+                                                        ...newCombatant,
+                                                        playerId: e.target.value,
+                                                        name: p.name,
+                                                        hp: p.hp
+                                                    });
+                                                } else {
+                                                    setNewCombatant({ ...newCombatant, playerId: e.target.value });
+                                                }
+                                            }}
+                                        >
+                                            <option value="">-- Herói Desconhecido --</option>
+                                            {availablePlayers.map(p => (
+                                                <option key={p.id} value={p.id}>{p.name} ({p.class} Lvl {p.level})</option>
+                                            ))}
+                                        </select>
                                     </div>
-                                    <div className="col-span-1">
-                                        <label className="block text-rpg-gold text-xs uppercase font-cinzel mb-1">Vida Total (HP)</label>
-                                        <input
-                                            type="number"
-                                            className="w-full bg-rpg-slate border border-white/10 p-3 rounded font-medieval text-rpg-parchment focus:border-rpg-gold outline-none"
-                                            value={newCombatant.hp}
-                                            onChange={(e) => setNewCombatant({ ...newCombatant, hp: Number(e.target.value) || 0 })}
-                                            onFocus={(e) => e.target.select()}
-                                            required
-                                        />
-                                    </div>
-                                    <div className="col-span-1">
-                                        <label className="block text-rpg-gold text-xs uppercase font-cinzel mb-1">Classe de Armadura (CA)</label>
-                                        <input
-                                            type="number"
-                                            className="w-full bg-rpg-slate border border-white/10 p-3 rounded font-medieval text-rpg-parchment focus:border-rpg-gold outline-none"
-                                            value={newCombatant.ac}
-                                            onChange={(e) => setNewCombatant({ ...newCombatant, ac: Number(e.target.value) || 0 })}
-                                            onFocus={(e) => e.target.select()}
-                                            required
-                                        />
-                                    </div>
-                                    <div className="col-span-1">
-                                        <label className="block text-rpg-gold text-xs uppercase font-cinzel mb-1">Nível de Desafio (CR)</label>
-                                        <input
-                                            type="text"
-                                            className="w-full bg-rpg-slate border border-white/10 p-3 rounded font-medieval text-rpg-parchment focus:border-rpg-gold outline-none"
-                                            value={newCombatant.cr}
-                                            onChange={(e) => setNewCombatant({ ...newCombatant, cr: e.target.value })}
-                                            placeholder="Ex: 1/4, 5, etc"
-                                        />
-                                    </div>
-                                    <div className="col-span-1">
-                                        <label className="block text-rpg-gold text-xs uppercase font-cinzel mb-1">XP (Recompensa)</label>
-                                        <input
-                                            type="number"
-                                            className="w-full bg-rpg-slate border border-white/10 p-3 rounded font-medieval text-rpg-parchment focus:border-rpg-gold outline-none"
-                                            value={newCombatant.xp}
-                                            onChange={(e) => setNewCombatant({ ...newCombatant, xp: Number(e.target.value) || 0 })}
-                                            onFocus={(e) => e.target.select()}
-                                            placeholder="XP..."
-                                        />
-                                    </div>
-                                    <div className="col-span-1">
-                                        <label className="block text-rpg-gold text-xs uppercase font-cinzel mb-1">Iniciativa {phase !== 'preparation' && <span className="text-red-500">*</span>}</label>
-                                        <input
-                                            type="number"
-                                            className="w-full bg-rpg-slate border border-white/10 p-3 rounded font-medieval text-rpg-parchment focus:border-rpg-gold outline-none"
-                                            value={newCombatant.initiative}
-                                            onChange={(e) => setNewCombatant({ ...newCombatant, initiative: e.target.value })}
-                                            onFocus={(e) => e.target.select()}
-                                            required={phase !== 'preparation'}
-                                            placeholder={phase !== 'preparation' ? "Número..." : "0"}
-                                        />
-                                    </div>
-                                    {(newCombatant.type === 'monster' || newCombatant.type === 'npc') && (
-                                        <div className="col-span-1">
-                                            <label className="block text-rpg-gold text-xs uppercase font-cinzel mb-1">Quantidade</label>
+                                    <div className="grid grid-cols-2 sm:grid-cols-2 gap-3 sm:gap-4">
+                                        <div className="col-span-2">
+                                            <label className="block text-rpg-gold text-xs uppercase font-cinzel mb-1">Nome do Herói</label>
+                                            <input
+                                                type="text"
+                                                className="w-full bg-rpg-slate border border-white/10 p-2 text-sm sm:p-3 sm:text-base rounded font-medieval text-rpg-parchment focus:border-rpg-gold outline-none"
+                                                placeholder="Nome do Jogador..."
+                                                value={newCombatant.name}
+                                                onChange={(e) => setNewCombatant({ ...newCombatant, name: e.target.value })}
+                                                required
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-rpg-gold text-xs uppercase font-cinzel mb-1">Vida Total (HP)</label>
                                             <input
                                                 type="number"
-                                                min="1"
-                                                max="20"
-                                                className="w-full bg-rpg-slate border border-rpg-gold/30 p-3 rounded font-medieval text-rpg-parchment focus:border-rpg-gold outline-none"
-                                                value={newCombatant.quantity}
-                                                onChange={(e) => setNewCombatant({ ...newCombatant, quantity: Number(e.target.value) || 1 })}
+                                                className="w-full bg-rpg-slate border border-white/10 p-2 text-sm sm:p-3 sm:text-base rounded font-medieval text-rpg-parchment focus:border-rpg-gold outline-none"
+                                                value={newCombatant.hp}
+                                                onChange={(e) => setNewCombatant({ ...newCombatant, hp: Number(e.target.value) || 0 })}
                                                 onFocus={(e) => e.target.select()}
                                                 required
                                             />
                                         </div>
-                                    )}
+                                        <div>
+                                            <label className="block text-rpg-gold text-xs uppercase font-cinzel mb-1">
+                                                Iniciativa {phase !== 'preparation' && <span className="text-red-500">*</span>}
+                                            </label>
+                                            <input
+                                                type="number"
+                                                className="w-full bg-rpg-slate border border-white/10 p-2 text-sm sm:p-3 sm:text-base rounded font-medieval text-rpg-parchment focus:border-rpg-gold outline-none"
+                                                value={newCombatant.initiative}
+                                                onChange={(e) => setNewCombatant({ ...newCombatant, initiative: e.target.value })}
+                                                onFocus={(e) => e.target.select()}
+                                                required={phase !== 'preparation'}
+                                                placeholder={phase !== 'preparation' ? "Número..." : "0"}
+                                            />
+                                        </div>
+                                    </div>
                                 </div>
-                            </div>
-                        )}
+                            ) : (
+                                <div className="col-span-1 sm:col-span-2 space-y-4">
+                                    <div>
+                                        <label className="block text-rpg-gold text-xs uppercase font-cinzel mb-1">
+                                            Selecionar da Biblioteca ({newCombatant.type === 'monster' ? 'Monstros' : 'NPCs'})
+                                        </label>
+                                        <select
+                                            className="w-full bg-rpg-slate border border-white/10 p-2 text-sm sm:p-3 sm:text-base rounded font-medieval text-rpg-parchment focus:border-rpg-gold outline-none"
+                                            onChange={(e) => {
+                                                if (newCombatant.type === 'monster') {
+                                                    const m = dndMonsters.find(dm => dm.name === e.target.value);
+                                                    if (m) {
+                                                        setNewCombatant({
+                                                            ...newCombatant,
+                                                            name: m.name,
+                                                            hp: m.hp,
+                                                            ac: m.ac,
+                                                            cr: m.challenge,
+                                                            xp: m.xp
+                                                        });
+                                                    }
+                                                } else {
+                                                    const n = npcTemplates.find(nt => nt.name === e.target.value);
+                                                    if (n) {
+                                                        setNewCombatant({
+                                                            ...newCombatant,
+                                                            name: n.name,
+                                                            hp: n.hp,
+                                                            ac: n.ac,
+                                                            cr: n.challenge,
+                                                            xp: n.xp
+                                                        });
+                                                    }
+                                                }
+                                            }}
+                                            defaultValue=""
+                                        >
+                                            <option value="" disabled>-- Escolha um {newCombatant.type === 'monster' ? 'Monstro' : 'NPC'} --</option>
+                                            {newCombatant.type === 'monster'
+                                                ? dndMonsters.map(m => (
+                                                    <option key={m.name} value={m.name}>{m.name} (CR {m.challenge} • {m.hp} HP)</option>
+                                                ))
+                                                : npcTemplates.map(n => (
+                                                    <option key={n.name} value={n.name}>{n.name} (CR {n.challenge} • {n.hp} HP)</option>
+                                                ))
+                                            }
+                                        </select>
+                                    </div>
+
+                                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
+                                        <div className="col-span-2 sm:col-span-4">
+                                            <label className="block text-rpg-gold text-xs uppercase font-cinzel mb-1">Nome Personalizado</label>
+                                            <input
+                                                type="text"
+                                                className="w-full bg-rpg-slate border border-white/10 p-2 text-sm sm:p-3 sm:text-base rounded font-medieval text-rpg-parchment focus:border-rpg-gold outline-none"
+                                                placeholder="Nome..."
+                                                value={newCombatant.name}
+                                                onChange={(e) => setNewCombatant({ ...newCombatant, name: e.target.value })}
+                                                required
+                                            />
+                                        </div>
+                                        <div className="col-span-1">
+                                            <label className="block text-rpg-gold text-xs uppercase font-cinzel mb-1">HP</label>
+                                            <input
+                                                type="number"
+                                                className="w-full bg-rpg-slate border border-white/10 p-2 text-sm sm:p-3 sm:text-base rounded font-medieval text-rpg-parchment focus:border-rpg-gold outline-none"
+                                                value={newCombatant.hp}
+                                                onChange={(e) => setNewCombatant({ ...newCombatant, hp: Number(e.target.value) || 0 })}
+                                                onFocus={(e) => e.target.select()}
+                                                required
+                                            />
+                                        </div>
+                                        <div className="col-span-1">
+                                            <label className="block text-rpg-gold text-xs uppercase font-cinzel mb-1">CA</label>
+                                            <input
+                                                type="number"
+                                                className="w-full bg-rpg-slate border border-white/10 p-2 text-sm sm:p-3 sm:text-base rounded font-medieval text-rpg-parchment focus:border-rpg-gold outline-none"
+                                                value={newCombatant.ac}
+                                                onChange={(e) => setNewCombatant({ ...newCombatant, ac: Number(e.target.value) || 0 })}
+                                                onFocus={(e) => e.target.select()}
+                                                required
+                                            />
+                                        </div>
+                                        <div className="col-span-1">
+                                            <label className="block text-rpg-gold text-xs uppercase font-cinzel mb-1">CR</label>
+                                            <input
+                                                type="text"
+                                                className="w-full bg-rpg-slate border border-white/10 p-2 text-sm sm:p-3 sm:text-base rounded font-medieval text-rpg-parchment focus:border-rpg-gold outline-none"
+                                                value={newCombatant.cr}
+                                                onChange={(e) => setNewCombatant({ ...newCombatant, cr: e.target.value })}
+                                                placeholder="Ex: 5"
+                                            />
+                                        </div>
+                                        <div className="col-span-1">
+                                            <label className="block text-rpg-gold text-xs uppercase font-cinzel mb-1">XP</label>
+                                            <input
+                                                type="number"
+                                                className="w-full bg-rpg-slate border border-white/10 p-2 text-sm sm:p-3 sm:text-base rounded font-medieval text-rpg-parchment focus:border-rpg-gold outline-none"
+                                                value={newCombatant.xp}
+                                                onChange={(e) => setNewCombatant({ ...newCombatant, xp: Number(e.target.value) || 0 })}
+                                                onFocus={(e) => e.target.select()}
+                                                placeholder="0"
+                                            />
+                                        </div>
+                                        <div className="col-span-1">
+                                            <label className="block text-rpg-gold text-xs uppercase font-cinzel mb-1">Ini {phase !== 'preparation' && <span className="text-red-500">*</span>}</label>
+                                            <input
+                                                type="number"
+                                                className="w-full bg-rpg-slate border border-white/10 p-2 text-sm sm:p-3 sm:text-base rounded font-medieval text-rpg-parchment focus:border-rpg-gold outline-none"
+                                                value={newCombatant.initiative}
+                                                onChange={(e) => setNewCombatant({ ...newCombatant, initiative: e.target.value })}
+                                                onFocus={(e) => e.target.select()}
+                                                required={phase !== 'preparation'}
+                                                placeholder="0"
+                                            />
+                                        </div>
+                                        {(newCombatant.type === 'monster' || newCombatant.type === 'npc') && (
+                                            <div className="col-span-1">
+                                                <label className="block text-rpg-gold text-xs uppercase font-cinzel mb-1">Qtd</label>
+                                                <input
+                                                    type="number"
+                                                    min="1"
+                                                    max="20"
+                                                    className="w-full bg-rpg-slate border border-rpg-gold/30 p-2 text-sm sm:p-3 sm:text-base rounded font-medieval text-rpg-parchment focus:border-rpg-gold outline-none"
+                                                    value={newCombatant.quantity}
+                                                    onChange={(e) => setNewCombatant({ ...newCombatant, quantity: Number(e.target.value) || 1 })}
+                                                    onFocus={(e) => e.target.select()}
+                                                    required
+                                                />
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
                     </div>
 
-                    <div className="pt-4 flex justify-end gap-3 border-t border-white/10">
+                    <div className="pt-4 flex flex-col sm:flex-row justify-end gap-3 border-t border-white/10">
                         <button
                             type="button"
                             onClick={() => setIsAddModalOpen(false)}
-                            className="p-3 px-6 font-medieval text-rpg-grey hover:text-white"
+                            className="p-3 px-6 font-medieval text-rpg-grey hover:text-white order-2 sm:order-1"
                         >
                             Cancelar
                         </button>
                         <button
                             type="submit"
-                            className="bg-rpg-gold hover:bg-rpg-gold-light text-rpg-dark p-3 px-8 rounded font-bold font-cinzel transition-all"
+                            className="bg-rpg-gold hover:bg-rpg-gold-light text-rpg-dark p-3 px-8 rounded font-bold font-cinzel transition-all order-1 sm:order-2"
                         >
                             Adicionar à Arena
                         </button>
@@ -1206,17 +1242,17 @@ export default function ConfrontosPage() {
                         <p className="text-[10px] text-rpg-grey mt-1">O efeito diminuirá 1 rodada no início de cada turno deste combatente.</p>
                     </div>
 
-                    <div className="pt-4 flex justify-end gap-3 border-t border-white/10">
+                    <div className="pt-4 flex flex-col sm:flex-row justify-end gap-3 border-t border-white/10">
                         <button
                             type="button"
                             onClick={() => setIsEffectModalOpen(false)}
-                            className="p-3 px-6 font-medieval text-rpg-grey hover:text-white"
+                            className="p-3 px-6 font-medieval text-rpg-grey hover:text-white order-2 sm:order-1"
                         >
                             Cancelar
                         </button>
                         <button
                             type="submit"
-                            className="bg-purple-600 hover:bg-purple-500 text-white p-3 px-8 rounded font-bold font-cinzel shadow-glow-purple/20 transition-all"
+                            className="bg-purple-600 hover:bg-purple-500 text-white p-3 px-8 rounded font-bold font-cinzel shadow-glow-purple/20 transition-all order-1 sm:order-2"
                         >
                             Aplicar Magia
                         </button>
@@ -1298,18 +1334,18 @@ export default function ConfrontosPage() {
                         </div>
                     </div>
 
-                    <div className="pt-4 flex justify-end gap-3 border-t border-white/10">
+                    <div className="pt-4 flex flex-col sm:flex-row justify-end gap-3 border-t border-white/10">
                         <button
                             type="button"
                             onClick={() => setIsXPModalOpen(false)}
-                            className="p-3 px-6 font-medieval text-rpg-grey hover:text-white"
+                            className="p-3 px-6 font-medieval text-rpg-grey hover:text-white order-2 sm:order-1"
                         >
                             Continuar Luta
                         </button>
                         <button
                             type="button"
                             onClick={handleAwardXP}
-                            className="bg-green-700 hover:bg-green-600 text-white p-3 px-8 rounded font-bold font-cinzel shadow-glow-green/20 transition-all"
+                            className="bg-green-700 hover:bg-green-600 text-white p-3 px-8 rounded font-bold font-cinzel shadow-glow-green/20 transition-all order-1 sm:order-2"
                         >
                             Confirmar & Finalizar
                         </button>

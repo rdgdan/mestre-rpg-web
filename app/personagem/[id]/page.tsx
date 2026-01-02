@@ -111,6 +111,7 @@ export default function CharacterSheetPage() {
 
     const [weaponSearchTerm, setWeaponSearchTerm] = useState('');
     const [equipmentSearchTerm, setEquipmentSearchTerm] = useState('');
+    const [expandedSpellLevels, setExpandedSpellLevels] = useState<Record<number, boolean>>({ 0: true });
 
     const [isLevelUpModalOpen, setLevelUpModalOpen] = useState(false);
     const lastLevelRef = useRef<number | null>(null);
@@ -197,8 +198,67 @@ export default function CharacterSheetPage() {
                     const docRef = doc(db, 'personagens', id);
                     const docSnap = await getDoc(docRef);
                     if (docSnap.exists() && docSnap.data().ownerId === user.uid) {
-                        setCharacter(hydrateCharacter(docSnap.data() as Partial<Character>, docSnap.id));
+                        const hydratedChar = hydrateCharacter(docSnap.data() as Partial<Character>, docSnap.id);
+
+                        // Enriquecer magias se necessário
+                        const { fetchGlobalSpells } = await import('@/lib/spells-data');
+                        const globalSpells = await fetchGlobalSpells();
+
+                        let needsUpdate = false;
+                        const enrichedSpells = hydratedChar.spells.map(s => {
+                            if (s.description && s.description !== 'Sem descrição.' && s.castingTime) return s;
+
+                            const match = globalSpells.find(gs => gs.name.toLowerCase() === s.name.toLowerCase());
+                            if (match) {
+                                needsUpdate = true;
+                                return { ...s, ...match, id: s.id };
+                            }
+                            return s;
+                        });
+
+                        hydratedChar.spells = enrichedSpells;
+
+                        // Enriquecer itens se necessário
+                        const { fetchGlobalItems } = await import('@/lib/items-data');
+                        const globalItems = await fetchGlobalItems();
+
+                        const enrichedWeapons = hydratedChar.inventory.weapons.map(w => {
+                            if (w.damage && w.weight !== undefined) return w;
+                            const match = globalItems.find(gi => gi.name.toLowerCase() === w.name.toLowerCase() && gi.itemType === 'WEAPON');
+                            if (match) {
+                                needsUpdate = true;
+                                return { ...w, ...match, id: w.id };
+                            }
+                            return w;
+                        });
+
+                        const enrichedEquipment = hydratedChar.inventory.otherEquipment.map(e => {
+                            if (e.description && e.weight !== undefined && e.type !== 'other') return e;
+                            const match = globalItems.find(gi => gi.name.toLowerCase() === e.name.toLowerCase() && gi.itemType !== 'WEAPON');
+                            if (match) {
+                                needsUpdate = true;
+                                return {
+                                    ...e,
+                                    ...match,
+                                    id: e.id,
+                                    type: (match.itemType === 'ARMOR' ? 'armor' : match.itemType === 'SHIELD' ? 'shield' : 'other'),
+                                    armorClass: match.ac || e.armorClass,
+                                    weight: match.weight || e.weight
+                                };
+                            }
+                            return e;
+                        });
+
+                        hydratedChar.inventory.weapons = enrichedWeapons;
+                        hydratedChar.inventory.otherEquipment = enrichedEquipment;
+
+                        setCharacter(hydratedChar);
                         characterLoaded.current = true;
+
+                        // Se houve enriquecimento, salva de volta para evitar re-enriquecer
+                        if (needsUpdate) {
+                            debouncedSave(hydratedChar);
+                        }
                     } else {
                         setError("Ficha não encontrada ou acesso negado.");
                         router.push('/personagens');
@@ -367,7 +427,25 @@ export default function CharacterSheetPage() {
                     </div>
                     <div className="flex flex-wrap items-end gap-3 w-full md:w-auto">
                         <div className="w-full sm:w-40"><label className="block text-[10px] font-bold text-rpg-gold uppercase tracking-wider mb-1 font-cinzel text-center sm:text-left">Classe</label><button onClick={() => openSelectionModal('class')} className="w-full bg-rpg-slate border border-rpg-gold/20 rounded-md px-3 py-2 text-left hover:border-rpg-gold/50 font-medieval text-sm">{character.class || 'Selecione...'}</button></div>
-                        <div className="w-20"><label className="block text-[10px] font-bold text-rpg-gold uppercase tracking-wider mb-1 font-cinzel text-center">Nível</label><input type="number" value={character.level || ''} onChange={e => handleFieldChange('level', e.target.value === '' ? '' : parseInt(e.target.value))} className="bg-rpg-slate border border-rpg-gold/20 rounded-md px-2 py-2 text-center font-bold w-full font-medieval text-sm" /></div>
+                        <div className="w-32 text-center group">
+                            <label className="block text-[10px] font-bold text-rpg-gold uppercase tracking-wider mb-1 font-cinzel transition-colors group-hover:text-yellow-400">Nível</label>
+                            <div className="relative flex items-center justify-between bg-rpg-slate border-2 border-rpg-gold/30 rounded-lg p-1 shadow-lg shadow-black/40 group-hover:border-rpg-gold transition-all">
+                                <div className="absolute -top-1 -left-1 w-3 h-3 border-t-2 border-l-2 border-rpg-gold rounded-tl"></div>
+                                <div className="absolute -bottom-1 -right-1 w-3 h-3 border-b-2 border-r-2 border-rpg-gold rounded-br"></div>
+
+                                <button
+                                    onClick={() => handleFieldChange('level', Math.max(1, (character.level || 1) - 1))}
+                                    className="w-8 h-8 flex items-center justify-center bg-rpg-dark/50 hover:bg-rpg-red/20 text-rpg-grey hover:text-rpg-red rounded transition-all font-bold z-10"
+                                >-</button>
+
+                                <span className="text-3xl font-black text-rpg-gold font-medieval drop-shadow-glow-gold px-2">{character.level || 1}</span>
+
+                                <button
+                                    onClick={() => handleFieldChange('level', Math.min(20, (character.level || 1) + 1))}
+                                    className="w-8 h-8 flex items-center justify-center bg-rpg-dark/50 hover:bg-green-900/20 text-rpg-grey hover:text-green-500 rounded transition-all font-bold z-10"
+                                >+</button>
+                            </div>
+                        </div>
                         <div className="w-32"><label className="block text-[10px] font-bold text-rpg-gold uppercase tracking-wider mb-1 font-cinzel text-center">Experiência</label><input type="number" value={character.experience === 0 ? '0' : (character.experience || '')} onChange={(e) => handleFieldChange('experience', e.target.value === '' ? '' : parseInt(e.target.value))} className="bg-rpg-dark/50 border border-rpg-gold/20 rounded-md px-2 py-2 text-center font-bold w-full font-medieval text-sm text-rpg-gold" /></div>
                         <div className="w-full sm:w-40"><label className="block text-[10px] font-bold text-rpg-gold uppercase tracking-wider mb-1 font-cinzel text-center sm:text-left">Raça</label><button onClick={() => openSelectionModal('race')} className="w-full bg-rpg-slate border border-rpg-gold/20 rounded-md px-3 py-2 text-left hover:border-rpg-gold/50 font-medieval text-sm">{character.race || 'Selecione...'}</button></div>
                     </div>
@@ -436,95 +514,140 @@ export default function CharacterSheetPage() {
                     )}
 
                     {/* ABA EQUIPAMENTO */}
-                    {activeTab === 'Equipamento' && (
-                        <div className="space-y-8 animate-fade-in">
-                            <div>
-                                <h3 className="text-xl font-bold text-rpg-gold mb-3 font-cinzel flex items-center gap-2"><span className="w-2 h-2 bg-rpg-gold rounded-full"></span> Moedas</h3>
-                                <div className="grid grid-cols-3 sm:grid-cols-5 gap-4 p-4 bg-rpg-panel border border-rpg-gold/10 rounded-lg shadow-md">
-                                    {(Object.keys(character.inventory.currency) as Array<keyof typeof character.inventory.currency>).map(key => (
-                                        <div key={key}>
-                                            <label className="block text-[10px] font-bold text-rpg-gold uppercase text-center mb-1 font-cinzel">{key}</label>
-                                            <input type="number" value={character.inventory.currency[key]} onChange={e => handleNestedChange(`inventory.currency.${key}`, parseInt(e.target.value) || 0)} className="w-full p-2 text-xl font-bold text-center bg-rpg-slate rounded-md border border-rpg-gold/10 font-medieval focus:border-rpg-gold/50 outline-none" />
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
+                    {activeTab === 'Equipamento' && (() => {
+                        const totalWeight = (character.inventory.weapons.reduce((acc, w) => acc + (w.weight || 0) * (w.quantity || 1), 0) +
+                            character.inventory.otherEquipment.reduce((acc, e) => acc + (e.weight || 0) * (e.quantity || 1), 0)).toFixed(1);
+                        const weightLimit = (character.attributes.strength * 7.5).toFixed(1);
+                        const weightPercentage = Math.min(100, (parseFloat(totalWeight) / parseFloat(weightLimit)) * 100);
 
-                            <div>
-                                <div className="flex justify-between items-center mb-3">
-                                    <h3 className="text-xl font-bold text-rpg-gold font-cinzel flex items-center gap-2"><span className="w-2 h-2 bg-rpg-gold rounded-full"></span> Armas</h3>
-                                    <div className="flex gap-2">
-                                        <button onClick={() => openSelectionModal('weapon')} className="px-3 py-1 text-xs font-bold bg-rpg-slate border border-rpg-gold/20 rounded hover:bg-rpg-dark transition-all uppercase tracking-tighter">Biblioteca</button>
-                                        <button onClick={() => handleOpenWeaponModal(null)} className="px-3 py-1 text-xs font-bold bg-rpg-gold text-rpg-dark rounded hover:brightness-110 transition-all uppercase tracking-tighter shadow-glow-gold/20">+ Nova Arma</button>
+                        return (
+                            <div className="space-y-8 animate-fade-in">
+                                {/* Barra de Carga */}
+                                <div className="bg-rpg-panel border border-rpg-gold/20 rounded-xl p-5 shadow-inner">
+                                    <div className="flex justify-between items-end mb-2">
+                                        <div>
+                                            <h3 className="text-sm font-bold text-rpg-gold uppercase tracking-widest font-cinzel">Capacidade de Carga</h3>
+                                            <p className="text-xs text-rpg-grey">Baseado em sua Força ({character.attributes.strength})</p>
+                                        </div>
+                                        <div className="text-right">
+                                            <span className={`text-xl font-bold font-medieval ${parseFloat(totalWeight) > parseFloat(weightLimit) ? 'text-rpg-red shadow-glow-red' : 'text-rpg-parchment'}`}>{totalWeight} kg</span>
+                                            <span className="text-rpg-grey/60 text-sm font-medieval ml-1">/ {weightLimit} kg</span>
+                                        </div>
+                                    </div>
+                                    <div className="h-3 bg-black/40 rounded-full border border-rpg-gold/10 overflow-hidden">
+                                        <div
+                                            className={`h-full transition-all duration-500 rounded-full ${parseFloat(totalWeight) > parseFloat(weightLimit) ? 'bg-gradient-to-r from-red-600 to-rpg-red shadow-[0_0_10px_rgba(239,68,68,0.4)]' : 'bg-gradient-to-r from-rpg-gold/40 to-rpg-gold'}`}
+                                            style={{ width: `${weightPercentage}%` }}
+                                        />
+                                    </div>
+                                    {parseFloat(totalWeight) > parseFloat(weightLimit) && (
+                                        <p className="text-[10px] text-rpg-red font-bold uppercase mt-2 text-center animate-pulse">⚠️ Sobrecarga! Sua velocidade é reduzida.</p>
+                                    )}
+                                </div>
+                                <div>
+                                    <h3 className="text-xl font-bold text-rpg-gold mb-3 font-cinzel flex items-center gap-2"><span className="w-2 h-2 bg-rpg-gold rounded-full"></span> Moedas</h3>
+                                    <div className="grid grid-cols-3 sm:grid-cols-5 gap-4 p-4 bg-rpg-panel border border-rpg-gold/10 rounded-lg shadow-md">
+                                        {(Object.keys(character.inventory.currency) as Array<keyof typeof character.inventory.currency>).map(key => (
+                                            <div key={key}>
+                                                <label className="block text-[10px] font-bold text-rpg-gold uppercase text-center mb-1 font-cinzel">{key}</label>
+                                                <input type="number" value={character.inventory.currency[key]} onChange={e => handleNestedChange(`inventory.currency.${key}`, parseInt(e.target.value) || 0)} className="w-full p-2 text-xl font-bold text-center bg-rpg-slate rounded-md border border-rpg-gold/10 font-medieval focus:border-rpg-gold/50 outline-none" />
+                                            </div>
+                                        ))}
                                     </div>
                                 </div>
-                                <div className="bg-rpg-panel border border-rpg-gold/10 rounded-lg p-4 space-y-3 shadow-inner">
-                                    {filteredWeapons.length > 0 ? filteredWeapons.map((weapon) => {
-                                        const abilityMod = (weapon.properties?.includes('Acuidade') && character.attributeModifiers.dexterity > character.attributeModifiers.strength) || weapon.properties?.includes('Munição') ? character.attributeModifiers.dexterity : character.attributeModifiers.strength;
-                                        const atkBonus = (weapon.isProficient !== false ? character.proficiencyBonus : 0) + abilityMod + (weapon.magicalBonus || 0);
-                                        const dmgBonus = abilityMod + (weapon.magicalBonus || 0);
 
-                                        return (
-                                            <div key={weapon.id} className={`p-4 bg-rpg-slate/80 border ${weapon.isMagical ? 'border-purple-500/50 shadow-[0_0_15px_-3px_rgba(168,85,247,0.4)]' : 'border-rpg-gold/10'} rounded-lg flex flex-col md:flex-row justify-between gap-4 hover:border-rpg-gold/30 transition-all group shadow-md relative overflow-hidden`}>
-                                                {weapon.isMagical && <div className="absolute top-0 right-0 w-16 h-16 bg-gradient-to-br from-purple-500/10 to-transparent -rotate-45 translate-x-8 -translate-y-8 pointer-events-none" />}
-                                                <div className="flex-grow">
-                                                    <div className="flex flex-wrap items-center gap-2 mb-1">
-                                                        <h4 className={`font-bold text-lg font-medieval ${weapon.isMagical ? 'text-purple-200' : 'text-rpg-parchment'}`}>{weapon.name}</h4>
-                                                        {weapon.isMagical && <span className="bg-purple-600 text-[8px] text-white px-1.5 py-0.5 rounded font-black uppercase tracking-widest shadow-lg">Mágico ✨</span>}
-                                                        <span className="bg-rpg-gold text-rpg-dark px-2 py-0.5 rounded text-[10px] font-black uppercase shadow-black/30 shadow-sm">ATK: {atkBonus >= 0 ? `+${atkBonus}` : atkBonus}</span>
-                                                        <span className="bg-rpg-red text-white px-2 py-0.5 rounded text-[10px] font-black uppercase shadow-black/30 shadow-sm">DANO: {weapon.damage}{dmgBonus !== 0 ? ` + ${dmgBonus}` : ''}</span>
+                                <div>
+                                    <div className="flex justify-between items-center mb-3">
+                                        <h3 className="text-xl font-bold text-rpg-gold font-cinzel flex items-center gap-2"><span className="w-2 h-2 bg-rpg-gold rounded-full"></span> Armas</h3>
+                                        <div className="flex gap-2">
+                                            <button onClick={() => openSelectionModal('weapon')} className="px-3 py-1 text-xs font-bold bg-rpg-slate border border-rpg-gold/20 rounded hover:bg-rpg-dark transition-all uppercase tracking-tighter">Biblioteca</button>
+                                            <button onClick={() => handleOpenWeaponModal(null)} className="px-3 py-1 text-xs font-bold bg-rpg-gold text-rpg-dark rounded hover:brightness-110 transition-all uppercase tracking-tighter shadow-glow-gold/20">+ Nova Arma</button>
+                                        </div>
+                                    </div>
+                                    <div className="bg-rpg-panel border border-rpg-gold/10 rounded-lg p-4 space-y-3 shadow-inner">
+                                        {filteredWeapons.length > 0 ? filteredWeapons.map((weapon) => {
+                                            const abilityMod = (weapon.properties?.includes('Acuidade') && character.attributeModifiers.dexterity > character.attributeModifiers.strength) || weapon.properties?.includes('Munição') ? character.attributeModifiers.dexterity : character.attributeModifiers.strength;
+                                            const atkBonus = (weapon.isProficient !== false ? character.proficiencyBonus : 0) + abilityMod + (weapon.magicalBonus || 0);
+                                            const dmgBonus = abilityMod + (weapon.magicalBonus || 0);
+
+                                            return (
+                                                <div key={weapon.id} className={`p-4 bg-rpg-slate/80 border ${weapon.isMagical ? 'border-purple-500/50 shadow-[0_0_15px_-3px_rgba(168,85,247,0.4)]' : 'border-rpg-gold/10'} rounded-lg flex flex-col md:flex-row justify-between gap-4 hover:border-rpg-gold/30 transition-all group shadow-md relative overflow-hidden`}>
+                                                    {weapon.isMagical && <div className="absolute top-0 right-0 w-16 h-16 bg-gradient-to-br from-purple-500/10 to-transparent -rotate-45 translate-x-8 -translate-y-8 pointer-events-none" />}
+                                                    <div className="flex-grow">
+                                                        <div className="flex flex-wrap items-center gap-2 mb-1">
+                                                            <h4 className={`font-bold text-lg font-medieval ${weapon.isMagical ? 'text-purple-200' : 'text-rpg-parchment'}`}>{weapon.name}</h4>
+                                                            {weapon.isMagical && <span className="bg-purple-600 text-[8px] text-white px-1.5 py-0.5 rounded font-black uppercase tracking-widest shadow-lg">Mágico ✨</span>}
+                                                            <span className="bg-rpg-gold text-rpg-dark px-2 py-0.5 rounded text-[10px] font-black uppercase shadow-black/30 shadow-sm">ATK: {atkBonus >= 0 ? `+${atkBonus}` : atkBonus}</span>
+                                                            <span className="bg-rpg-red text-white px-2 py-0.5 rounded text-[10px] font-black uppercase shadow-black/30 shadow-sm">DANO: {weapon.damage}{dmgBonus !== 0 ? ` + ${dmgBonus}` : ''}</span>
+                                                        </div>
+                                                        <p className="text-[10px] font-bold text-rpg-grey uppercase tracking-wider bg-black/20 px-2 py-1 rounded inline-block">{weapon.damageType} | {weapon.properties?.join(', ')}</p>
+                                                        {weapon.magicalEffect && <p className="text-[10px] text-purple-300 italic mt-1 font-sans">{weapon.magicalEffect}</p>}
                                                     </div>
-                                                    <p className="text-[10px] font-bold text-rpg-grey uppercase tracking-wider bg-black/20 px-2 py-1 rounded inline-block">{weapon.damageType} | {weapon.properties?.join(', ')}</p>
-                                                    {weapon.magicalEffect && <p className="text-[10px] text-purple-300 italic mt-1 font-sans">{weapon.magicalEffect}</p>}
+                                                    <div className="flex gap-2 items-center self-end md:self-center">
+                                                        <button onClick={() => handleOpenWeaponModal(weapon)} className="px-3 py-1 text-xs font-medium bg-rpg-slate/50 border border-rpg-grey/30 hover:border-rpg-gold text-rpg-grey hover:text-rpg-parchment rounded-md transition-colors uppercase">Editar</button>
+                                                        <button onClick={() => handleRemoveWeapon(weapon.id)} className="px-3 py-1 text-xs font-medium bg-rpg-red/20 border border-rpg-red/30 hover:bg-rpg-red/40 text-red-200 rounded-md transition-colors">×</button>
+                                                    </div>
                                                 </div>
-                                                <div className="flex gap-2 items-center self-end md:self-center">
-                                                    <button onClick={() => handleOpenWeaponModal(weapon)} className="px-3 py-1 text-xs font-medium bg-rpg-slate/50 border border-rpg-grey/30 hover:border-rpg-gold text-rpg-grey hover:text-rpg-parchment rounded-md transition-colors uppercase">Editar</button>
-                                                    <button onClick={() => handleRemoveWeapon(weapon.id)} className="px-3 py-1 text-xs font-medium bg-rpg-red/20 border border-rpg-red/30 hover:bg-rpg-red/40 text-red-200 rounded-md transition-colors">×</button>
-                                                </div>
-                                            </div>
-                                        );
-                                    }) : (
-                                        <p className="text-center text-rpg-grey py-8 italic">O cinto de utilidades está vazio.</p>
-                                    )}
-                                </div>
-                            </div>
-
-                            <div>
-                                <div className="flex justify-between items-center mb-3">
-                                    <h3 className="text-xl font-bold text-rpg-gold font-cinzel flex items-center gap-2"><span className="w-2 h-2 bg-rpg-gold rounded-full"></span> Mochila & Itens</h3>
-                                    <div className="flex gap-2">
-                                        <button onClick={() => handleOpenEquipmentModal(null)} className="px-3 py-1 text-xs font-bold bg-rpg-gold text-rpg-dark rounded hover:brightness-110 transition-all uppercase tracking-tighter shadow-glow-gold/20">+ Novo Item</button>
+                                            );
+                                        }) : (
+                                            <p className="text-center text-rpg-grey py-8 italic">O cinto de utilidades está vazio.</p>
+                                        )}
                                     </div>
                                 </div>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                    {filteredEquipment.length > 0 ? filteredEquipment.map((item) => (
-                                        <div key={item.id} className={`p-3 bg-rpg-panel border ${item.isMagical ? 'border-purple-500/40 shadow-[0_0_10px_-2px_rgba(168,85,247,0.3)]' : 'border-rpg-gold/10'} rounded-lg flex justify-between items-center hover:border-rpg-gold/40 transition-all group shadow-sm relative overflow-hidden`}>
-                                            <div className="relative z-10">
-                                                <div className="flex items-center gap-2">
-                                                    <span className={`${item.isMagical ? 'text-purple-300' : 'text-rpg-gold'} font-bold font-medieval`}>{item.quantity}x</span>
-                                                    <span className={`font-bold font-medieval ${item.isMagical ? 'text-purple-100 italic' : 'text-rpg-parchment'}`}>{item.name}</span>
-                                                    {item.isEquipped && <span className="text-[8px] bg-green-900/50 text-green-300 px-1 py-0.5 rounded border border-green-700/30 uppercase font-black">Equipado</span>}
-                                                    {item.isMagical && <span className="text-[7px] bg-purple-600/80 text-white px-1 py-0.5 rounded uppercase font-black tracking-tighter shadow-sm animate-pulse-slow">Mágico ✨</span>}
-                                                </div>
-                                                {item.weight && <span className="text-[10px] text-rpg-grey/60">{item.weight} kg</span>}
-                                                {item.magicalEffect && <p className="text-[9px] text-purple-300/80 italic mt-0.5 font-sans leading-tight line-clamp-1">{item.magicalEffect}</p>}
-                                            </div>
-                                            <div className="flex gap-2 opacity-40 group-hover:opacity-100 transition-opacity">
-                                                <button onClick={() => handleOpenEquipmentModal(item)} className="p-1 text-rpg-grey hover:text-rpg-gold transition-colors">
-                                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
-                                                </button>
-                                                <button onClick={() => handleRemoveEquipment(item.id)} className="p-1 text-rpg-red/50 hover:text-rpg-red transition-colors">
-                                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-4v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                                                </button>
-                                            </div>
+
+                                <div>
+                                    <div className="flex justify-between items-center mb-3">
+                                        <h3 className="text-xl font-bold text-rpg-gold font-cinzel flex items-center gap-2"><span className="w-2 h-2 bg-rpg-gold rounded-full"></span> Mochila & Itens</h3>
+                                        <div className="flex gap-2">
+                                            <button onClick={() => handleOpenEquipmentModal(null)} className="px-3 py-1 text-xs font-bold bg-rpg-gold text-rpg-dark rounded hover:brightness-110 transition-all uppercase tracking-tighter shadow-glow-gold/20">+ Novo Item</button>
                                         </div>
-                                    )) : (
-                                        <p className="col-span-full text-center text-rpg-grey py-8 italic bg-rpg-slate/20 rounded-lg border border-dashed border-rpg-gold/10">A mochila parece leve... nenhum item registrado.</p>
-                                    )}
+                                    </div>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                        {filteredEquipment.length > 0 ? filteredEquipment.map((item) => (
+                                            <div key={item.id} className={`p-3 bg-rpg-panel border ${item.isMagical ? 'border-purple-500/40 shadow-[0_0_10px_-2px_rgba(168,85,247,0.3)]' : 'border-rpg-gold/10'} rounded-lg flex justify-between items-center hover:border-rpg-gold/40 transition-all group shadow-sm relative overflow-hidden`}>
+                                                <div className="relative z-10">
+                                                    <div className="flex items-center gap-2">
+                                                        <span className={`${item.isMagical ? 'text-purple-300' : 'text-rpg-gold'} font-bold font-medieval`}>{item.quantity}x</span>
+                                                        <span className={`font-bold font-medieval ${item.isMagical ? 'text-purple-100 italic' : 'text-rpg-parchment'}`}>{item.name}</span>
+                                                        {item.isEquipped && <span className="text-[8px] bg-green-900/50 text-green-300 px-1 py-0.5 rounded border border-green-700/30 uppercase font-black">Equipado</span>}
+                                                        {item.isMagical && <span className="text-[7px] bg-purple-600/80 text-white px-1 py-0.5 rounded uppercase font-black tracking-tighter shadow-sm animate-pulse-slow">Mágico ✨</span>}
+                                                    </div>
+                                                    {item.weight && <span className="text-[10px] text-rpg-grey/60">{item.weight} kg</span>}
+                                                    {item.magicalEffect && <p className="text-[9px] text-purple-300/80 italic mt-0.5 font-sans leading-tight line-clamp-1">{item.magicalEffect}</p>}
+                                                </div>
+                                                <div className="flex gap-2 opacity-40 group-hover:opacity-100 transition-opacity">
+                                                    <button onClick={() => handleOpenEquipmentModal(item)} className="p-1 text-rpg-grey hover:text-rpg-gold transition-colors">
+                                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
+                                                    </button>
+                                                    <button onClick={() => handleRemoveEquipment(item.id)} className="p-1 text-rpg-red/50 hover:text-rpg-red transition-colors">
+                                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-4v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        )) : (
+                                            <p className="col-span-full text-center text-rpg-grey py-8 italic bg-rpg-slate/20 rounded-lg border border-dashed border-rpg-gold/10">A mochila parece leve... nenhum item registrado.</p>
+                                        )}
+                                    </div>
+                                </div>
+
+                                {/* Seção de Tesouros */}
+                                <div className="mt-8">
+                                    <h3 className="text-xl font-bold text-rpg-gold mb-3 font-cinzel flex items-center gap-2"><span className="w-2 h-2 bg-rpg-gold rounded-full"></span> Tesouros & Objetos de Valor</h3>
+                                    <div className="bg-rpg-panel border border-rpg-gold/10 rounded-lg p-5 shadow-inner">
+                                        <textarea
+                                            value={character.treasures || ''}
+                                            onChange={(e) => handleFieldChange('treasures', e.target.value)}
+                                            placeholder="Joias, pedras preciosas, obras de arte e outros itens valiosos que não ocupam espaço regular na mochila..."
+                                            className="w-full h-32 bg-transparent text-rpg-parchment font-handschrift text-lg focus:outline-none resize-none placeholder:text-rpg-grey/30 border-none"
+                                        />
+                                        <div className="mt-2 text-[10px] text-rpg-grey italic border-t border-rpg-gold/10 pt-2">
+                                            Ex: Colar de pérolas (250 po), Estatueta de obsidiana, Pergaminho antigo.
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
-                        </div>
-                    )}
+                        );
+                    })()}
 
                     {/* ABA HABILIDADES */}
                     {activeTab === 'Habilidades' && (
@@ -575,29 +698,97 @@ export default function CharacterSheetPage() {
                             <div className="flex justify-end mb-2">
                                 <button onClick={() => setSpellSelectOpen(true)} className="px-4 py-2 rounded bg-rpg-gold text-rpg-dark font-bold hover:bg-yellow-400 transition-all shadow-glow-gold/10 uppercase text-xs tracking-wider">+ Selecionar Magia</button>
                             </div>
-                            <div className="bg-rpg-panel border border-rpg-gold/10 p-6 rounded-lg shadow-md min-h-[400px]">
-                                <h3 className="text-xl font-bold text-rpg-gold mb-5 font-cinzel border-b border-rpg-gold/10 pb-2 uppercase tracking-widest">Grimório</h3>
-                                {character.spells && character.spells.length > 0 ? (
-                                    <div className="grid grid-cols-1 gap-4">
-                                        {character.spells.map((spell, idx) => (
-                                            <div key={idx} className="bg-rpg-slate/60 p-4 rounded-md border-l-4 border-purple-900 hover:border-rpg-gold hover:bg-rpg-slate/80 transition-all group shadow-sm">
-                                                <div className="flex justify-between items-baseline mb-2">
-                                                    <span className="font-bold text-rpg-parchment font-medieval text-xl group-hover:text-rpg-gold transition-colors">{spell.name}</span>
-                                                    <span className="text-[10px] text-purple-300 uppercase tracking-widest font-black bg-purple-900/40 px-2 py-0.5 rounded">Nível {spell.level}</span>
-                                                </div>
-                                                <p className="text-sm text-rpg-grey/90 leading-relaxed font-sans">{spell.description}</p>
-                                                <div className="flex gap-2 mt-4 opacity-70 group-hover:opacity-100 transition-opacity">
-                                                    <button onClick={() => handleRemoveSpell(spell.name)} className="px-3 py-1 text-[10px] font-black bg-rpg-red/20 border border-rpg-red/30 hover:bg-rpg-red/40 text-red-200 rounded uppercase tracking-tighter">Esquecer Magia</button>
-                                                </div>
+
+                            <div className="space-y-4">
+                                {(() => {
+                                    if (!character.spells || character.spells.length === 0) {
+                                        return (
+                                            <div className="bg-rpg-panel border border-rpg-gold/10 p-10 rounded-lg shadow-md flex flex-col items-center justify-center text-rpg-grey/40">
+                                                <p className="text-6xl mb-4">📜</p>
+                                                <p className="italic font-medieval text-xl">Sua mente está limpa de encantamentos.</p>
                                             </div>
-                                        ))}
-                                    </div>
-                                ) : (
-                                    <div className="flex flex-col items-center justify-center py-20 text-rpg-grey/40">
-                                        <p className="text-6xl mb-4">📜</p>
-                                        <p className="italic font-medieval text-xl">Sua mente está limpa de encantamentos.</p>
-                                    </div>
-                                )}
+                                        );
+                                    }
+
+                                    // Agrupar magias por nível
+                                    const groupedSpells = character.spells.reduce((acc, spell) => {
+                                        const level = spell.level || 0;
+                                        if (!acc[level]) acc[level] = [];
+                                        acc[level].push(spell);
+                                        return acc;
+                                    }, {} as Record<number, typeof character.spells>);
+
+                                    // Níveis ordenados
+                                    const levels = Object.keys(groupedSpells)
+                                        .map(Number)
+                                        .sort((a, b) => a - b);
+
+                                    return levels.map(level => {
+                                        const spells = groupedSpells[level];
+                                        const isExpanded = expandedSpellLevels[level];
+                                        const levelLabel = level === 0 ? 'Truques' : `${level}º Nível`;
+
+                                        return (
+                                            <div key={level} className="bg-rpg-panel border border-rpg-gold/10 rounded-lg shadow-md overflow-hidden transition-all">
+                                                <button
+                                                    onClick={() => setExpandedSpellLevels(prev => ({ ...prev, [level]: !prev[level] }))}
+                                                    className="w-full flex justify-between items-center p-4 bg-rpg-slate/40 hover:bg-rpg-slate/60 transition-colors border-b border-rpg-gold/5"
+                                                >
+                                                    <div className="flex items-center gap-3">
+                                                        <span className="w-8 h-8 flex items-center justify-center bg-purple-900/40 text-purple-300 rounded-full text-sm font-bold border border-purple-500/20">{level}</span>
+                                                        <h3 className="text-lg font-bold text-rpg-gold font-cinzel uppercase tracking-widest">{levelLabel}</h3>
+                                                        <span className="text-[10px] bg-black/40 text-rpg-grey px-2 py-0.5 rounded-full font-sans uppercase tracking-tighter border border-rpg-gold/5">{spells.length} {spells.length === 1 ? 'Magia' : 'Magias'}</span>
+                                                    </div>
+                                                    <span className={`text-rpg-gold transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`}>
+                                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                                            <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
+                                                        </svg>
+                                                    </span>
+                                                </button>
+
+                                                {isExpanded && (
+                                                    <div className="p-4 grid grid-cols-1 md:grid-cols-2 gap-4 animate-fade-in">
+                                                        {spells.sort((a, b) => a.name.localeCompare(b.name)).map((spell, idx) => (
+                                                            <div key={spell.id || idx} className="bg-rpg-slate/40 p-3 rounded-lg border border-rpg-gold/5 hover:border-purple-500/30 transition-all group relative">
+                                                                <div className="flex justify-between items-center mb-1">
+                                                                    <div className="flex items-center gap-2">
+                                                                        {spell.prepared && <span className="w-1.5 h-1.5 bg-green-500 rounded-full shadow-[0_0_5px_rgba(34,197,94,0.5)]" title="Preparada"></span>}
+                                                                        <span className="font-bold text-rpg-parchment font-medieval text-lg group-hover:text-rpg-gold transition-colors">{spell.name}</span>
+                                                                    </div>
+                                                                    <div className="flex gap-1">
+                                                                        {spell.concentration && <span className="text-[8px] bg-blue-900/60 text-blue-200 px-1.5 py-0.5 rounded font-black tracking-tighter" title="Concentração">C</span>}
+                                                                        {spell.ritual && <span className="text-[8px] bg-amber-900/60 text-amber-200 px-1.5 py-0.5 rounded font-black tracking-tighter" title="Ritual">R</span>}
+                                                                    </div>
+                                                                </div>
+
+                                                                <div className="flex flex-wrap gap-x-3 gap-y-1 mb-2 text-[10px] text-rpg-grey/70 uppercase font-sans tracking-tight border-b border-rpg-gold/5 pb-1">
+                                                                    <span>{spell.castingTime}</span>
+                                                                    <span>{spell.range}</span>
+                                                                    <span>{spell.duration}</span>
+                                                                    <span className="text-purple-400/60 italic">{spell.school}</span>
+                                                                </div>
+
+                                                                <p className="text-xs text-rpg-grey/90 leading-relaxed line-clamp-2 group-hover:line-clamp-none transition-all duration-300">{spell.description}</p>
+
+                                                                <div className="flex justify-end mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                                    <button
+                                                                        onClick={() => handleRemoveSpell(spell.name)}
+                                                                        className="p-1 text-rpg-red/60 hover:text-rpg-red transition-colors"
+                                                                        title="Esquecer Magia"
+                                                                    >
+                                                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-4v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                                                        </svg>
+                                                                    </button>
+                                                                </div>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        );
+                                    });
+                                })()}
                             </div>
                         </div>
                     )}

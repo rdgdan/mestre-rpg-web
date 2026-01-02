@@ -190,40 +190,40 @@ export default function HomePage() {
       <div className="min-h-screen bg-rpg-dark text-rpg-parchment flex flex-col bg-[url('https://www.transparenttextures.com/patterns/dark-matter.png')]">
 
         {/* HEADER / NAVIGATION */}
-        <header className="bg-rpg-panel p-4 shadow-lg border-b-2 border-rpg-gold/30 backdrop-blur-sm sticky top-0 z-20">
-          <div className="container mx-auto flex justify-between items-center">
-            <div className="group">
-              <h1 className="text-2xl font-bold font-cinzel text-rpg-gold cursor-default transition-colors text-shadow-sm">D&D Campanha e Álcool</h1>
+        <header className="bg-rpg-panel p-3 sm:p-4 shadow-lg border-b-2 border-rpg-gold/30 backdrop-blur-sm sticky top-0 z-20">
+          <div className="container mx-auto flex flex-col sm:flex-row justify-between items-center gap-4 sm:gap-2">
+            <div className="group text-center sm:text-left">
+              <h1 className="text-xl sm:text-2xl font-bold font-cinzel text-rpg-gold cursor-default transition-colors text-shadow-sm">D&D Campanha e Álcool</h1>
             </div>
-            <nav className="flex items-center gap-6">
-              <Link href="/confrontos" className="text-red-400 hover:text-red-300 transition-colors font-bold font-cinzel text-lg flex items-center gap-2 border-b-2 border-transparent hover:border-red-400 text-shadow-sm">
-                <span className="text-2xl">⚔️</span> Confrontos
+            <nav className="flex flex-wrap items-center justify-center sm:justify-end gap-3 sm:gap-6 w-full sm:w-auto">
+              <Link href="/confrontos" className="text-red-400 hover:text-red-300 transition-colors font-bold font-cinzel text-sm sm:text-lg flex items-center gap-1 sm:gap-2 border-b-2 border-transparent hover:border-red-400 text-shadow-sm">
+                <span className="text-xl sm:text-2xl">⚔️</span> Confrontos
               </Link>
-              <Link href="/biblioteca" className="text-rpg-parchment/80 hover:text-rpg-gold transition-colors font-bold font-cinzel text-lg hidden sm:block">
-                📚 Biblioteca
+              <Link href="/biblioteca" className="text-rpg-parchment/80 hover:text-rpg-gold transition-colors font-bold font-cinzel text-sm sm:text-lg flex items-center gap-1 sm:gap-2 border-b-2 border-transparent hover:border-rpg-gold text-shadow-sm">
+                <span className="text-xl sm:text-2xl">📚</span> Biblioteca
               </Link>
               {user && (
-                <div className="flex items-center gap-4">
+                <div className="flex items-center gap-3 sm:gap-4 border-l border-rpg-gold/20 pl-3 sm:pl-4">
                   <div className="flex items-center font-medieval">
-                    <span className="hidden md:inline text-rpg-grey mr-2">Mestre</span>
+                    <span className="hidden lg:inline text-rpg-grey mr-2">Mestre</span>
                     {isEditingName ? (
                       <div className="flex items-center gap-2">
                         <input
                           type="text"
                           value={newName}
                           onChange={(e) => setNewName(e.target.value)}
-                          className="bg-rpg-slate border border-rpg-gold/30 rounded px-2 py-1 text-sm text-rpg-parchment focus:outline-none focus:border-rpg-gold w-32"
+                          className="bg-rpg-slate border border-rpg-gold/30 rounded px-2 py-1 text-xs sm:text-sm text-rpg-parchment focus:outline-none focus:border-rpg-gold w-24 sm:w-32"
                           autoFocus
                         />
-                        <button onClick={handleUpdateName} className="text-green-500 hover:text-green-400 text-xl" title="Salvar">✓</button>
-                        <button onClick={() => setIsEditingName(false)} className="text-red-500 hover:text-red-400 text-xl" title="Cancelar">✕</button>
+                        <button onClick={handleUpdateName} className="text-green-500 hover:text-green-400 text-lg sm:text-xl" title="Salvar">✓</button>
+                        <button onClick={() => setIsEditingName(false)} className="text-red-500 hover:text-red-400 text-lg sm:text-xl" title="Cancelar">✕</button>
                       </div>
                     ) : (
                       <div className="flex items-center gap-2 group">
-                        <span className="text-rpg-parchment font-bold text-lg">{user.displayName || 'Viajante'}</span>
+                        <span className="text-rpg-parchment font-bold text-sm sm:text-lg max-w-[80px] sm:max-w-none truncate">{user.displayName || 'Viajante'}</span>
                         <button
                           onClick={() => { setNewName(user.displayName || ''); setIsEditingName(true); }}
-                          className="opacity-0 group-hover:opacity-100 transition-opacity text-rpg-grey hover:text-rpg-gold text-xs"
+                          className="opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity text-rpg-grey hover:text-rpg-gold text-[10px]"
                           title="Editar nome"
                         >
                           ✎
@@ -233,7 +233,7 @@ export default function HomePage() {
                   </div>
                   <button
                     onClick={handleLogout}
-                    className="bg-red-900/40 hover:bg-red-800 text-red-100 hover:text-white p-2 px-4 rounded border border-red-500/50 transition-all font-bold font-cinzel text-sm shadow-md hover:shadow-glow-red"
+                    className="bg-red-900/40 hover:bg-red-800 text-red-100 hover:text-white p-1.5 sm:p-2 px-3 sm:px-4 rounded border border-red-500/50 transition-all font-bold font-cinzel text-[10px] sm:text-sm shadow-md hover:shadow-glow-red"
                   >
                     Sair
                   </button>
@@ -247,15 +247,15 @@ export default function HomePage() {
         <main className="container mx-auto p-4 sm:p-8 flex-grow">
 
           {/* Quick Tools Section */}
-          <section className="mb-8 p-4 bg-rpg-panel rounded-lg border border-rpg-gold/10 shadow-lg flex flex-wrap gap-4 items-center justify-between">
+          <section className="mb-8 p-4 sm:p-5 bg-rpg-panel rounded-lg border border-rpg-gold/10 shadow-lg flex flex-col sm:flex-row gap-4 items-center sm:justify-between text-center sm:text-left">
             <div>
               <h3 className="text-xl font-cinzel text-rpg-gold">Painel do Mestre</h3>
               <p className="text-sm text-rpg-grey font-medieval">Ferramentas rápidas para sua sessão.</p>
             </div>
-            <div className="flex flex-wrap gap-3">
+            <div className="flex flex-wrap justify-center gap-3 w-full sm:w-auto">
               <button
                 onClick={() => { setGeneratedNpcs([]); setIsNpcModalOpen(true); }}
-                className="bg-rpg-slate hover:bg-rpg-slate/80 text-rpg-parchment border border-rpg-gold/20 p-2 px-4 rounded font-bold font-cinzel text-sm transition-all shadow-md hover:border-rpg-gold"
+                className="w-full sm:w-auto bg-rpg-slate hover:bg-rpg-slate/80 text-rpg-parchment border border-rpg-gold/20 p-2.5 sm:p-2 px-6 sm:px-4 rounded font-bold font-cinzel text-xs sm:text-sm transition-all shadow-md hover:border-rpg-gold active:scale-95"
               >
                 🎲 Gerador de NPC
               </button>
@@ -267,13 +267,13 @@ export default function HomePage() {
 
             {/* COLUMN 1: CAMPAIGNS */}
             <section>
-              <div className="flex justify-between items-center mb-6">
-                <h2 className="text-3xl font-bold font-cinzel text-rpg-gold border-b border-rpg-gold/20 pb-2 flex-grow mr-4">
+              <div className="flex justify-between items-center mb-6 gap-2">
+                <h2 className="text-2xl sm:text-3xl font-bold font-cinzel text-rpg-gold border-b border-rpg-gold/20 pb-2 flex-grow truncate">
                   🏰 Campanhas
                 </h2>
                 <button
                   onClick={() => setIsCampaignModalOpen(true)}
-                  className="bg-rpg-gold hover:bg-rpg-gold/80 text-rpg-dark p-2 px-4 rounded font-bold font-cinzel text-sm transition-all shadow-lg hover:shadow-glow-gold border border-rpg-gold/50 flex-shrink-0"
+                  className="bg-rpg-gold hover:bg-rpg-gold/80 text-rpg-dark p-2 px-3 sm:px-4 rounded font-bold font-cinzel text-[10px] sm:text-sm transition-all shadow-lg hover:shadow-glow-gold border border-rpg-gold/50 flex-shrink-0 active:scale-95"
                 >
                   + Nova
                 </button>
@@ -301,11 +301,11 @@ export default function HomePage() {
 
             {/* COLUMN 2: CHARACTERS */}
             <section>
-              <div className="flex justify-between items-center mb-6">
-                <h2 className="text-3xl font-bold font-cinzel text-rpg-gold border-b border-rpg-gold/20 pb-2 flex-grow mr-4">
+              <div className="flex justify-between items-center mb-6 gap-2">
+                <h2 className="text-2xl sm:text-3xl font-bold font-cinzel text-rpg-gold border-b border-rpg-gold/20 pb-2 flex-grow truncate">
                   👤 Personagens
                 </h2>
-                <Link href="/personagens" className="text-rpg-grey hover:text-rpg-gold text-sm font-medieval underline">
+                <Link href="/personagens" className="text-rpg-grey hover:text-rpg-gold text-xs sm:text-sm font-medieval underline flex-shrink-0">
                   Ver todos
                 </Link>
               </div>
@@ -374,7 +374,7 @@ export default function HomePage() {
           <div className="flex justify-end pt-4 border-t border-rpg-gold/10">
             <button
               type="submit"
-              className="bg-rpg-gold hover:bg-rpg-gold/80 p-3 px-8 rounded font-bold font-cinzel text-lg text-rpg-dark transition-all transform hover:scale-105 shadow-lg hover:shadow-glow-gold border border-rpg-gold/50"
+              className="w-full sm:w-auto bg-rpg-gold hover:bg-rpg-gold/80 p-3 px-8 rounded font-bold font-cinzel text-base sm:text-lg text-rpg-dark transition-all transform hover:scale-[1.02] active:scale-95 shadow-lg hover:shadow-glow-gold border border-rpg-gold/50"
             >
               Iniciar Saga
             </button>
@@ -410,7 +410,7 @@ export default function HomePage() {
             </div>
           </div>
           <div className="text-center pt-2">
-            <button type="submit" className="bg-blue-600 hover:bg-blue-700 text-white p-3 px-8 rounded font-bold font-cinzel text-lg transition-all transform hover:scale-105 shadow-lg border border-white/10">
+            <button type="submit" className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white p-3 px-8 rounded font-bold font-cinzel text-base sm:text-lg transition-all transform hover:scale-[1.02] active:scale-95 shadow-lg border border-white/10">
               Gerar NPCs
             </button>
           </div>

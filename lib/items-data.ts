@@ -1,5 +1,6 @@
-
 // lib/items-data.ts
+import { db } from './firebase';
+import { collection, getDocs } from 'firebase/firestore';
 
 export interface Weapon {
     id: string;
@@ -11,6 +12,7 @@ export interface Weapon {
     isMagical: boolean;
     magicalBonus: number;
     magicalEffect: string;
+    weight?: number;
     // Novos campos para sincronia com Biblioteca
     diceQty?: number;
     diceType?: string;
@@ -124,4 +126,25 @@ export function parseDamageString(damage: string) {
         diceBonus: 0,
         isCustomDamage: true
     };
+}
+
+// Buscar itens globais do Firestore
+export async function fetchGlobalItems() {
+    try {
+        const itemsRef = collection(db, 'itens');
+        const querySnapshot = await getDocs(itemsRef);
+        const items: any[] = [];
+        querySnapshot.forEach((doc) => {
+            const data = doc.data();
+            items.push({
+                id: doc.id,
+                ...data,
+                name: data.name || doc.id
+            });
+        });
+        return items;
+    } catch (error) {
+        console.error('Erro ao carregar itens globais:', error);
+        return [];
+    }
 }

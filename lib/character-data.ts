@@ -1,6 +1,7 @@
 
 // lib/character-data.ts
 import { Inventory, OtherEquipmentItem } from './items-data';
+import { Spell } from './spells-data';
 
 export const ATTRIBUTE_KEYS = ['strength', 'dexterity', 'constitution', 'intelligence', 'wisdom', 'charisma'] as const;
 export type AttributeKey = typeof ATTRIBUTE_KEYS[number];
@@ -60,10 +61,10 @@ export interface Character {
     flaws: string;
     notes: string;
     deathSaves: { successes: number; failures: number };
-    address?: string; // Adding optional address to suppressed potential errors if mapper uses it, though not seen.
+    treasures?: string;
     inventory: Inventory;
     features: { name: string; description: string }[];
-    spells: { name: string; level: number; castingTime: string; range: string; duration: string; description: string }[];
+    spells: Spell[];
     spellcasting: {
         ability: AttributeKey | '';
         saveDc: number;
@@ -224,6 +225,7 @@ export function createBlankCharacter(ownerId: string): Character {
         features: [],
         spells: [],
         deathSaves: { successes: 0, failures: 0 },
+        treasures: '',
     };
 
     return calculateComputedStats(blank);
@@ -233,6 +235,9 @@ export function createBlankCharacter(ownerId: string): Character {
 export function hydrateCharacter(partialData: Partial<Character> & { equipment?: string }, id: string): Character {
     const blank = createBlankCharacter(partialData.ownerId || '--');
     const hydrated = { ...blank, ...partialData, id };
+
+    // Garante que o campo treasures seja inicializado
+    hydrated.treasures = partialData.treasures || '';
 
     // Garante que campos aninhados sejam mesclados, não sobrescritos
     hydrated.attributes = { ...blank.attributes, ...partialData.attributes };
@@ -246,12 +251,53 @@ export function hydrateCharacter(partialData: Partial<Character> & { equipment?:
             ...finalInventory,
             ...partialData.inventory,
             currency: { ...blank.inventory.currency, ...(partialData.inventory.currency || {}) },
-            weapons: partialData.inventory.weapons || [],
         };
+
+        // Mapeamento de armas com suporte ao formato itens.json
+        if (partialData.inventory.weapons && Array.isArray(partialData.inventory.weapons)) {
+            finalInventory.weapons = partialData.inventory.weapons.map((raw: any) => {
+                const b = raw.b || raw;
+                // Se já estiver no formato novo e completo, mantém
+                if (b.damage && b.name) return b;
+
+                // Mapeia do formato do itens.json se necessário
+                let damage = b.damage || '';
+                if (!damage && raw.c && Array.isArray(raw.c) && raw.c.length > 0) {
+                    damage = `${raw.c.length}d${raw.c[0].a}`;
+                }
+
+                return {
+                    id: b.id || b.uuid || `weapon-${Date.now()}-${Math.random()}`,
+                    name: b.u || b.name || 'Arma Desconhecida',
+                    damage: damage || '1d8',
+                    damageType: b.b || b.damageType || '',
+                    properties: b.x ? b.x.split(',').map((s: string) => s.trim()) : (b.properties || []),
+                    quantity: raw.a?.c || b.quantity || 1,
+                    isMagical: b.isMagical || false,
+                    magicalBonus: b.magicalBonus || 0,
+                    magicalEffect: b.magicalEffect || '',
+                    weight: b.f || b.weight || 0
+                };
+            });
+        }
 
         const oldEquipment = partialData.inventory.otherEquipment as unknown;
         if (Array.isArray(oldEquipment)) {
-            finalInventory.otherEquipment = oldEquipment;
+            finalInventory.otherEquipment = oldEquipment.map((raw: any) => {
+                const b = raw.b || raw;
+                if (b.name && b.id) return b;
+
+                return {
+                    id: b.id || b.uuid || `item-${Date.now()}-${Math.random()}`,
+                    name: b.u || b.name || 'Item Desconhecido',
+                    quantity: raw.a?.c || b.quantity || 1,
+                    description: b.v || b.description || '',
+                    type: (b.i === 'ARMOR' ? 'armor' : b.i === 'SHIELD' ? 'shield' : 'other') as any,
+                    armorClass: b.j || b.o || b.armorClass || 0,
+                    isEquipped: b.isEquipped || false,
+                    weight: b.f || b.weight || 0
+                };
+            });
         } else if (typeof oldEquipment === 'string' && oldEquipment.trim() !== '') {
             finalInventory.otherEquipment = [{
                 id: new Date().toISOString(),
@@ -274,6 +320,32 @@ export function hydrateCharacter(partialData: Partial<Character> & { equipment?:
     // Remove o campo legado, se existir
     if ('equipment' in hydrated) {
         delete (hydrated as any).equipment;
+    }
+
+    // Suporte a magias do formato magia.json (legado)
+    if (partialData.spells && Array.isArray(partialData.spells)) {
+        hydrated.spells = partialData.spells.map((raw: any) => {
+            // Se for o formato { a, b }, pega o b, senão o próprio objeto
+            const s = raw.b || raw;
+
+            // Se já estiver no formato novo e completo, mantém
+            if (s.castingTime && s.description && (s.name && s.name !== 'Magia Desconhecida')) return s;
+
+            // Mapeamento resiliente
+            return {
+                id: s.uuid || raw.a?.c || s.id || `migrated-${Date.now()}-${Math.random()}`,
+                name: s.b || s.name || (s.d && s.d.length > 15 ? 'Magia' : s.d) || 'Magia Desconhecida',
+                level: s.k !== undefined ? s.k : (s.level || 0),
+                castingTime: s.f || s.castingTime || '1 ação',
+                range: s.g || s.h || s.range || 'Toque',
+                duration: s.e || s.duration || 'Instantânea',
+                description: s.c || s.description || '',
+                school: s.d || s.school || '',
+                components: s.i || s.components || '',
+                concentration: (s.e && typeof s.e === 'string' && s.e.toLowerCase().includes('concentração')) || s.concentration || false,
+                classes: s.classes || []
+            };
+        });
     }
 
     // Garante que a estrutura de magias seja mesclada corretamente

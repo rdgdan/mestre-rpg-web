@@ -1,5 +1,7 @@
 // Base de dados de Magias D&D 5e (Português)
 // Fonte: SRD 5.1 traduzido
+import { db } from './firebase';
+import { collection, getDocs, query, orderBy } from 'firebase/firestore';
 
 export interface Spell {
     id: string;
@@ -15,6 +17,7 @@ export interface Spell {
     ritual?: boolean;
     concentration?: boolean;
     subclass?: string; // New field for user categorization
+    prepared?: boolean; // Se a magia está preparada (para classes que preparam)
 }
 
 export const spellsDatabase: Spell[] = [
@@ -460,17 +463,33 @@ export const spellsDatabase: Spell[] = [
     }
 ];
 
+// Função para buscar magias do Firestore
+export async function fetchGlobalSpells(): Promise<Spell[]> {
+    try {
+        const spellsRef = collection(db, 'magias');
+        const q = query(spellsRef, orderBy('name'));
+        const snapshot = await getDocs(q);
+        return snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+        } as Spell));
+    } catch (error) {
+        console.error('Erro ao buscar magias globais:', error);
+        return [];
+    }
+}
+
 // Função auxiliar para buscar magias
-export function searchSpells(query: string, filters?: {
+export function searchSpells(queryText: string, filters?: {
     level?: number;
     school?: string;
     class?: string;
-}): Spell[] {
-    let results = spellsDatabase;
+}, baseSpells?: Spell[]): Spell[] {
+    let results = baseSpells || spellsDatabase;
 
     // Filtro de texto
-    if (query) {
-        const lowerQuery = query.toLowerCase();
+    if (queryText) {
+        const lowerQuery = queryText.toLowerCase();
         results = results.filter(spell =>
             spell.name.toLowerCase().includes(lowerQuery) ||
             spell.description.toLowerCase().includes(lowerQuery)

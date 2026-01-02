@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
-import { searchSpells, Spell } from '@/lib/spells-data';
+import { searchSpells, Spell, fetchGlobalSpells } from '@/lib/spells-data';
 import { searchMonsters, getMonsterTypes, MonsterDataExtended } from '@/lib/monsters-search';
 import { dndWeapons } from '@/lib/items-data';
 import { db } from '@/lib/firebase';
@@ -40,7 +40,9 @@ function GrimorioTab({ searchQuery }: { searchQuery: string }) {
     const [classFilter, setClassFilter] = useState<string>('');
     const [selectedSpell, setSelectedSpell] = useState<Spell | null>(null);
     const [customSpells, setCustomSpells] = useState<Spell[]>([]);
+    const [globalSpells, setGlobalSpells] = useState<Spell[]>([]);
     const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+    const [isSyncing, setIsSyncing] = useState(false);
     const [newSpell, setNewSpell] = useState({
         name: '',
         level: 0,
@@ -70,6 +72,15 @@ function GrimorioTab({ searchQuery }: { searchQuery: string }) {
         }
     }, [user]);
 
+    const loadGlobalSpells = useCallback(async () => {
+        try {
+            const spells = await fetchGlobalSpells();
+            setGlobalSpells(spells);
+        } catch (error) {
+            console.error('Erro ao carregar magias globais:', error);
+        }
+    }, []);
+
     const loadMetadata = useCallback(async () => {
         if (!user) return;
         try {
@@ -90,7 +101,8 @@ function GrimorioTab({ searchQuery }: { searchQuery: string }) {
             loadCustomSpells();
             loadMetadata();
         }
-    }, [user, loadCustomSpells, loadMetadata]);
+        loadGlobalSpells();
+    }, [user, loadCustomSpells, loadMetadata, loadGlobalSpells]);
 
     const saveMetadata = async (type: string, value: string) => {
         if (!user) return;
@@ -173,9 +185,66 @@ function GrimorioTab({ searchQuery }: { searchQuery: string }) {
         level: levelFilter,
         school: schoolFilter || undefined,
         class: classFilter || undefined
-    }), ...customSpells.filter(spell =>
+    }, [...globalSpells]), ...customSpells.filter(spell =>
         spell.name.toLowerCase().includes(searchQuery.toLowerCase())
     )];
+
+    const handleSyncSpells = async () => {
+        if (!user || isSyncing) return;
+        if (!confirm('Deseja sincronizar as magias do arquivo local para o Firestore?')) return;
+
+        setIsSyncing(true);
+        try {
+            const { writeBatch, collection, doc } = await import('firebase/firestore');
+            // Usando dynamic import para o JSON para evitar poluir o bundle inicial se não necessário
+            const magiaData = (await import('@/magia.json')).default;
+
+            const spellsRef = collection(db, 'magias');
+            let batch = writeBatch(db);
+            let count = 0;
+            let total = 0;
+
+            if (magiaData.r && Array.isArray(magiaData.r)) {
+                for (const item of magiaData.r) {
+                    const s = item.b;
+                    if (!s || !s.b) continue;
+
+                    const spellData = {
+                        name: s.b,
+                        level: s.k || 0,
+                        school: s.d || '',
+                        castingTime: s.f || '',
+                        range: s.g || s.h || '',
+                        duration: s.e || '',
+                        description: s.c || '',
+                        components: s.i || '',
+                        concentration: (s.e && s.e.toLowerCase().includes('concentração')) || false,
+                        classes: []
+                    };
+
+                    const spellDoc = doc(spellsRef, s.uuid || s.b.toLowerCase().replace(/\s+/g, '-'));
+                    batch.set(spellDoc, spellData, { merge: true });
+
+                    count++;
+                    total++;
+
+                    if (count >= 400) {
+                        await batch.commit();
+                        batch = writeBatch(db);
+                        count = 0;
+                    }
+                }
+                await batch.commit();
+                alert(`${total} magias sincronizadas com sucesso!`);
+                loadGlobalSpells();
+            }
+        } catch (error) {
+            console.error('Erro na sincronização:', error);
+            alert('Erro ao sincronizar magias. Veja o console.');
+        } finally {
+            setIsSyncing(false);
+        }
+    };
     const schools = [...DEFAULT_SCHOOLS, ...customSchools];
     const classes = DEFAULT_CLASSES;
 
@@ -184,12 +253,21 @@ function GrimorioTab({ searchQuery }: { searchQuery: string }) {
         <div>
             <div className="flex justify-between items-center mb-4">
                 <h2 className="text-2xl font-bold font-cinzel text-rpg-gold">✨ Grimório de Magias</h2>
-                <button
-                    onClick={() => setIsAddModalOpen(true)}
-                    className="bg-rpg-gold text-rpg-dark px-4 py-2 rounded font-bold hover:scale-105 transition-all text-sm"
-                >
-                    + Adicionar Magia
-                </button>
+                <div className="flex gap-2">
+                    <button
+                        onClick={handleSyncSpells}
+                        disabled={isSyncing}
+                        className="bg-rpg-slate text-rpg-gold border border-rpg-gold/30 px-4 py-2 rounded font-bold hover:bg-rpg-dark transition-all text-sm disabled:opacity-50"
+                    >
+                        {isSyncing ? '🔄 Sincronizando...' : '🔄 Sincronizar'}
+                    </button>
+                    <button
+                        onClick={() => setIsAddModalOpen(true)}
+                        className="bg-rpg-gold text-rpg-dark px-4 py-2 rounded font-bold hover:scale-105 transition-all text-sm"
+                    >
+                        + Adicionar Magia
+                    </button>
+                </div>
             </div>
 
             {/* Modal de Adicionar Magia */}
@@ -414,61 +492,71 @@ function GrimorioTab({ searchQuery }: { searchQuery: string }) {
                 </div>
 
                 {/* Detalhes da Magia */}
-                <div className="bg-rpg-slate border border-rpg-gold/20 rounded p-6 sticky top-4">
-                    {selectedSpell ? (
-                        <div>
-                            <h3 className="text-2xl font-bold text-rpg-gold mb-2">{selectedSpell.name}</h3>
-                            <p className="text-sm text-rpg-grey mb-4">
-                                {selectedSpell.level === 0 ? 'Truque' : `Magia de Nível ${selectedSpell.level}`} • {selectedSpell.school}
-                            </p>
-                            <div className="space-y-3 text-sm">
-                                <div>
-                                    <span className="font-bold text-rpg-gold">Tempo de Conjuração:</span> {selectedSpell.castingTime}
-                                </div>
-                                <div>
-                                    <span className="font-bold text-rpg-gold">Alcance:</span> {selectedSpell.range}
-                                </div>
-                                <div>
-                                    <span className="font-bold text-rpg-gold">Componentes:</span> {selectedSpell.components}
-                                </div>
-                                <div>
-                                    <span className="font-bold text-rpg-gold">Duração:</span> {selectedSpell.duration}
-                                </div>
-                                <div>
-                                    <span className="font-bold text-rpg-gold">Classes:</span> {selectedSpell.classes.join(', ')}
-                                </div>
-                                {selectedSpell.subclass && (
+                <div className={`${selectedSpell ? 'fixed inset-0 z-[60] bg-black/90 p-4 overflow-y-auto' : 'hidden'} md:block md:static md:bg-transparent md:p-0 md:overflow-visible`}>
+                    <div className="bg-rpg-slate border border-rpg-gold/20 rounded p-6 md:sticky md:top-4 relative shadow-2xl md:shadow-none min-h-[50vh]">
+                        {selectedSpell && (
+                            <button
+                                onClick={() => setSelectedSpell(null)}
+                                className="md:hidden absolute top-4 right-4 text-rpg-gold bg-black/40 hover:bg-black/60 rounded-full w-8 h-8 flex items-center justify-center transition-colors z-10"
+                            >
+                                ✕
+                            </button>
+                        )}
+                        {selectedSpell ? (
+                            <div>
+                                <h3 className="text-2xl font-bold text-rpg-gold mb-2">{selectedSpell.name}</h3>
+                                <p className="text-sm text-rpg-grey mb-4">
+                                    {selectedSpell.level === 0 ? 'Truque' : `Magia de Nível ${selectedSpell.level}`} • {selectedSpell.school}
+                                </p>
+                                <div className="space-y-3 text-sm">
                                     <div>
-                                        <span className="font-bold text-rpg-gold">Temas/Tags:</span> {selectedSpell.subclass}
+                                        <span className="font-bold text-rpg-gold">Tempo de Conjuração:</span> {selectedSpell.castingTime}
                                     </div>
-                                )}
-                                <div className="pt-3 border-t border-rpg-gold/20">
-                                    <p className="text-rpg-parchment leading-relaxed">{selectedSpell.description}</p>
+                                    <div>
+                                        <span className="font-bold text-rpg-gold">Alcance:</span> {selectedSpell.range}
+                                    </div>
+                                    <div>
+                                        <span className="font-bold text-rpg-gold">Componentes:</span> {selectedSpell.components}
+                                    </div>
+                                    <div>
+                                        <span className="font-bold text-rpg-gold">Duração:</span> {selectedSpell.duration}
+                                    </div>
+                                    <div>
+                                        <span className="font-bold text-rpg-gold">Classes:</span> {selectedSpell.classes.join(', ')}
+                                    </div>
+                                    {selectedSpell.subclass && (
+                                        <div>
+                                            <span className="font-bold text-rpg-gold">Temas/Tags:</span> {selectedSpell.subclass}
+                                        </div>
+                                    )}
+                                    <div className="pt-3 border-t border-rpg-gold/20">
+                                        <p className="text-rpg-parchment leading-relaxed">{selectedSpell.description}</p>
+                                    </div>
+                                    {selectedSpell.id.startsWith('custom-') && (
+                                        <div className="pt-4 flex gap-2">
+                                            <button
+                                                onClick={() => openEditModal(selectedSpell)}
+                                                className="bg-blue-600/20 hover:bg-blue-600/40 text-blue-400 border border-blue-600/30 px-3 py-1.5 rounded text-xs font-bold transition-all"
+                                            >
+                                                ✏️ Editar
+                                            </button>
+                                            <button
+                                                onClick={() => deleteCustomSpell(selectedSpell.id)}
+                                                className="bg-red-600/20 hover:bg-red-600/40 text-red-400 border border-red-600/30 px-3 py-1.5 rounded text-xs font-bold transition-all"
+                                            >
+                                                🗑️ Excluir
+                                            </button>
+                                        </div>
+                                    )}
                                 </div>
-                                {selectedSpell.id.startsWith('custom-') && (
-                                    <div className="pt-4 flex gap-2">
-                                        <button
-                                            onClick={() => openEditModal(selectedSpell)}
-                                            className="bg-blue-600/20 hover:bg-blue-600/40 text-blue-400 border border-blue-600/30 px-3 py-1.5 rounded text-xs font-bold transition-all"
-                                        >
-                                            ✏️ Editar
-                                        </button>
-                                        <button
-                                            onClick={() => deleteCustomSpell(selectedSpell.id)}
-                                            className="bg-red-600/20 hover:bg-red-600/40 text-red-400 border border-red-600/30 px-3 py-1.5 rounded text-xs font-bold transition-all"
-                                        >
-                                            🗑️ Excluir
-                                        </button>
-                                    </div>
-                                )}
                             </div>
-                        </div>
-                    ) : (
-                        <div className="text-center text-rpg-grey py-12">
-                            <p className="text-4xl mb-4">📖</p>
-                            <p>Selecione uma magia para ver os detalhes</p>
-                        </div>
-                    )}
+                        ) : (
+                            <div className="text-center text-rpg-grey py-12">
+                                <p className="text-4xl mb-4">📖</p>
+                                <p>Selecione uma magia para ver os detalhes</p>
+                            </div>
+                        )}
+                    </div>
                 </div>
             </div>
         </div>
@@ -861,63 +949,73 @@ function BestiarioTab({ searchQuery }: { searchQuery: string }) {
                 </div>
 
                 {/* Detalhes do Monstro */}
-                <div className="bg-rpg-slate border border-rpg-gold/20 rounded p-6 sticky top-4">
-                    {selectedMonster ? (
-                        <div>
-                            <h3 className="text-2xl font-bold text-rpg-gold mb-2">{selectedMonster.name}</h3>
-                            <p className="text-sm text-rpg-grey mb-4">{selectedMonster.type}</p>
-                            <div className="space-y-3 text-sm">
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div>
-                                        <span className="font-bold text-rpg-gold">CA:</span> {selectedMonster.ac}
-                                    </div>
-                                    <div>
-                                        <span className="font-bold text-rpg-gold">HP:</span> {selectedMonster.hp}
-                                    </div>
-                                    <div>
-                                        <span className="font-bold text-rpg-gold">CR:</span> {selectedMonster.challenge}
-                                    </div>
-                                    <div>
-                                        <span className="font-bold text-rpg-gold">XP:</span> {selectedMonster.xp}
-                                    </div>
-                                    {selectedMonster.classes && selectedMonster.classes.length > 0 && (
+                <div className={`${selectedMonster ? 'fixed inset-0 z-[60] bg-black/90 p-4 overflow-y-auto' : 'hidden'} md:block md:static md:bg-transparent md:p-0 md:overflow-visible`}>
+                    <div className="bg-rpg-slate border border-rpg-gold/20 rounded p-6 md:sticky md:top-4 relative shadow-2xl md:shadow-none min-h-[50vh]">
+                        {selectedMonster && (
+                            <button
+                                onClick={() => setSelectedMonster(null)}
+                                className="md:hidden absolute top-4 right-4 text-rpg-gold bg-black/40 hover:bg-black/60 rounded-full w-8 h-8 flex items-center justify-center transition-colors z-10"
+                            >
+                                ✕
+                            </button>
+                        )}
+                        {selectedMonster ? (
+                            <div>
+                                <h3 className="text-2xl font-bold text-rpg-gold mb-2">{selectedMonster.name}</h3>
+                                <p className="text-sm text-rpg-grey mb-4">{selectedMonster.type}</p>
+                                <div className="space-y-3 text-sm">
+                                    <div className="grid grid-cols-2 gap-4">
                                         <div>
-                                            <span className="font-bold text-rpg-gold">Classes:</span> {selectedMonster.classes.join(', ')}
+                                            <span className="font-bold text-rpg-gold">CA:</span> {selectedMonster.ac}
                                         </div>
-                                    )}
-                                    {selectedMonster.subclass && (
                                         <div>
-                                            <span className="font-bold text-rpg-gold">Subtipo/Tags:</span> {selectedMonster.subclass}
+                                            <span className="font-bold text-rpg-gold">HP:</span> {selectedMonster.hp}
+                                        </div>
+                                        <div>
+                                            <span className="font-bold text-rpg-gold">CR:</span> {selectedMonster.challenge}
+                                        </div>
+                                        <div>
+                                            <span className="font-bold text-rpg-gold">XP:</span> {selectedMonster.xp}
+                                        </div>
+                                        {selectedMonster.classes && selectedMonster.classes.length > 0 && (
+                                            <div>
+                                                <span className="font-bold text-rpg-gold">Classes:</span> {selectedMonster.classes.join(', ')}
+                                            </div>
+                                        )}
+                                        {selectedMonster.subclass && (
+                                            <div>
+                                                <span className="font-bold text-rpg-gold">Subtipo/Tags:</span> {selectedMonster.subclass}
+                                            </div>
+                                        )}
+                                    </div>
+                                    <div className="pt-3 border-t border-rpg-gold/20">
+                                        <p className="text-rpg-parchment leading-relaxed">{selectedMonster.description}</p>
+                                    </div>
+                                    {customMonsters.some(m => m.name === selectedMonster.name) && (
+                                        <div className="pt-4 flex gap-2">
+                                            <button
+                                                onClick={() => openEditModal(selectedMonster)}
+                                                className="bg-blue-600/20 hover:bg-blue-600/40 text-blue-400 border border-blue-600/30 px-3 py-1.5 rounded text-xs font-bold transition-all"
+                                            >
+                                                ✏️ Editar
+                                            </button>
+                                            <button
+                                                onClick={() => deleteCustomMonster(selectedMonster.name)}
+                                                className="bg-red-600/20 hover:bg-red-600/40 text-red-400 border border-red-600/30 px-3 py-1.5 rounded text-xs font-bold transition-all"
+                                            >
+                                                🗑️ Excluir
+                                            </button>
                                         </div>
                                     )}
                                 </div>
-                                <div className="pt-3 border-t border-rpg-gold/20">
-                                    <p className="text-rpg-parchment leading-relaxed">{selectedMonster.description}</p>
-                                </div>
-                                {customMonsters.some(m => m.name === selectedMonster.name) && (
-                                    <div className="pt-4 flex gap-2">
-                                        <button
-                                            onClick={() => openEditModal(selectedMonster)}
-                                            className="bg-blue-600/20 hover:bg-blue-600/40 text-blue-400 border border-blue-600/30 px-3 py-1.5 rounded text-xs font-bold transition-all"
-                                        >
-                                            ✏️ Editar
-                                        </button>
-                                        <button
-                                            onClick={() => deleteCustomMonster(selectedMonster.name)}
-                                            className="bg-red-600/20 hover:bg-red-600/40 text-red-400 border border-red-600/30 px-3 py-1.5 rounded text-xs font-bold transition-all"
-                                        >
-                                            🗑️ Excluir
-                                        </button>
-                                    </div>
-                                )}
                             </div>
-                        </div>
-                    ) : (
-                        <div className="text-center text-rpg-grey py-12">
-                            <p className="text-4xl mb-4">🐲</p>
-                            <p>Selecione uma criatura para ver os detalhes</p>
-                        </div>
-                    )}
+                        ) : (
+                            <div className="text-center text-rpg-grey py-12">
+                                <p className="text-4xl mb-4">🐲</p>
+                                <p>Selecione uma criatura para ver os detalhes</p>
+                            </div>
+                        )}
+                    </div>
                 </div>
             </div>
         </div>
@@ -949,6 +1047,9 @@ function ItensTab({ searchQuery }: { searchQuery: string }) {
     const [customProperties, setCustomProperties] = useState<string[]>([]);
     const [newMetadataName, setNewMetadataName] = useState('');
 
+    const [isSyncing, setIsSyncing] = useState(false);
+    const [categoryFilter, setCategoryFilter] = useState('all');
+
     const loadMetadata = useCallback(async () => {
         if (!user) return;
         try {
@@ -964,6 +1065,121 @@ function ItensTab({ searchQuery }: { searchQuery: string }) {
             console.error('Erro ao carregar metadados:', error);
         }
     }, [user]);
+
+    const loadGlobalItems = useCallback(async () => {
+        try {
+            const { collection, getDocs, query, orderBy } = await import('firebase/firestore');
+            const itemsRef = collection(db, 'itens');
+            const q = query(itemsRef, orderBy('name'));
+            const querySnapshot = await getDocs(q);
+            const items: any[] = [];
+            querySnapshot.forEach((doc) => {
+                items.push({ id: doc.id, ...doc.data() });
+            });
+            return items;
+        } catch (error) {
+            console.error('Erro ao carregar itens globais:', error);
+            return [];
+        }
+    }, []);
+
+    const [globalItems, setGlobalItems] = useState<any[]>([]);
+
+    const refreshGlobalItems = useCallback(async () => {
+        const items = await loadGlobalItems();
+        setGlobalItems(items);
+    }, [loadGlobalItems]);
+
+    useEffect(() => {
+        if (user) {
+            refreshGlobalItems();
+        }
+    }, [user, refreshGlobalItems]);
+
+    const handleSyncItems = async () => {
+        if (!user || isSyncing) return;
+        if (!confirm('Deseja sincronizar os itens do arquivo local para o Firestore?')) return;
+
+        setIsSyncing(true);
+        try {
+            const { writeBatch, collection, doc } = await import('firebase/firestore');
+            const itemData = (await import('@/itens.json')).default;
+
+            const itemsRef = collection(db, 'itens');
+            let batch = writeBatch(db);
+            let count = 0;
+            let total = 0;
+
+            if (itemData.i && Array.isArray(itemData.i)) {
+                for (const itemWrapper of itemData.i) {
+                    const b = itemWrapper.b;
+                    if (!b || !b.u) continue;
+
+                    const itemType = b.i || 'NORMAL';
+                    let damage = '';
+                    let ac = 0;
+                    let strengthReq = 0;
+                    let stealthDisadvantage = false;
+                    let maxDex = 0;
+
+                    if (itemType === 'WEAPON') {
+                        const diceParts = itemWrapper.c || [];
+                        if (diceParts.length > 0) {
+                            const qty = diceParts.length;
+                            const type = diceParts[0].a;
+                            damage = `${qty}d${type}`;
+                        } else {
+                            damage = '1';
+                        }
+                    } else if (itemType === 'ARMOR') {
+                        ac = b.j || 0;
+                        strengthReq = b.n || 0;
+                        stealthDisadvantage = b.m || false;
+                        maxDex = b.l || 0;
+                    } else if (itemType === 'SHIELD') {
+                        ac = b.o || 0;
+                    }
+
+                    const normalizedData = {
+                        name: b.u,
+                        itemType: itemType,
+                        description: b.v || '',
+                        weight: b.f || 0,
+                        price: b.c || 0,
+                        currency: b.d || 'GP',
+                        damage: damage,
+                        damageType: b.b || '',
+                        properties: b.x ? b.x.split(',').map((s: string) => s.trim()) : [],
+                        ac: ac,
+                        strengthReq: strengthReq,
+                        stealthDisadvantage: stealthDisadvantage,
+                        maxDex: maxDex,
+                        rarity: 'Common'
+                    };
+
+                    const itemDoc = doc(itemsRef, b.uuid || b.u.toLowerCase().replace(/\s+/g, '-'));
+                    batch.set(itemDoc, normalizedData, { merge: true });
+
+                    count++;
+                    total++;
+
+                    if (count >= 400) {
+                        await batch.commit();
+                        batch = writeBatch(db);
+                        count = 0;
+                    }
+                }
+                await batch.commit();
+                alert(`${total} itens sincronizados com sucesso!`);
+                refreshGlobalItems();
+            }
+        } catch (error) {
+            console.error('Erro na sincronização de itens:', error);
+            alert('Erro ao sincronizar itens. Veja o console.');
+        } finally {
+            setIsSyncing(false);
+        }
+    };
 
     const saveMetadata = async (type: string, value: string) => {
         if (!user) return;
@@ -1075,21 +1291,58 @@ function ItensTab({ searchQuery }: { searchQuery: string }) {
         setIsAddModalOpen(true);
     };
 
-    const items = [...dndWeapons.map(w => ({ ...w, id: w.name })), ...customItems].filter(item =>
-        item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (item.damageType && item.damageType.toLowerCase().includes(searchQuery.toLowerCase()))
-    );
+    const allItems = [...globalItems, ...customItems].filter(item => {
+        const matchesSearch = item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            (item.damageType && item.damageType.toLowerCase().includes(searchQuery.toLowerCase())) ||
+            (item.description && item.description.toLowerCase().includes(searchQuery.toLowerCase()));
+
+        const matchesCategory = categoryFilter === 'all' || item.itemType === categoryFilter;
+
+        return matchesSearch && matchesCategory;
+    });
 
     return (
         <div>
             <div className="flex justify-between items-center mb-4">
                 <h2 className="text-2xl font-bold font-cinzel text-rpg-gold">⚗️ Enciclopédia de Itens</h2>
-                <button
-                    onClick={() => setIsAddModalOpen(true)}
-                    className="bg-rpg-gold text-rpg-dark px-4 py-2 rounded font-bold hover:scale-105 transition-all text-sm"
-                >
-                    + Adicionar Item
-                </button>
+                <div className="flex gap-2">
+                    <button
+                        onClick={handleSyncItems}
+                        disabled={isSyncing}
+                        className="bg-rpg-slate text-rpg-gold border border-rpg-gold/30 px-4 py-2 rounded font-bold hover:bg-rpg-dark transition-all text-sm disabled:opacity-50"
+                    >
+                        {isSyncing ? '🔄 Sincronizando...' : '🔄 Sincronizar'}
+                    </button>
+                    <button
+                        onClick={() => setIsAddModalOpen(true)}
+                        className="bg-rpg-gold text-rpg-dark px-4 py-2 rounded font-bold hover:scale-105 transition-all text-sm"
+                    >
+                        + Adicionar Item
+                    </button>
+                </div>
+            </div>
+
+            {/* Filtros por Categoria */}
+            <div className="flex flex-wrap gap-2 mb-6 overflow-x-auto pb-2">
+                {[
+                    { id: 'all', label: 'Todos', icon: '📦' },
+                    { id: 'WEAPON', label: 'Armas', icon: '⚔️' },
+                    { id: 'ARMOR', label: 'Armaduras', icon: '🛡️' },
+                    { id: 'SHIELD', label: 'Escudos', icon: '🛡️' },
+                    { id: 'NORMAL', label: 'Equipamentos', icon: '🎒' },
+                ].map(cat => (
+                    <button
+                        key={cat.id}
+                        onClick={() => setCategoryFilter(cat.id)}
+                        className={`px-4 py-2 rounded-full text-sm font-bold flex items-center gap-2 whitespace-nowrap transition-all border ${categoryFilter === cat.id
+                            ? 'bg-rpg-gold text-rpg-dark border-rpg-gold shadow-lg shadow-rpg-gold/20'
+                            : 'bg-rpg-slate text-rpg-grey border-rpg-gold/10 hover:border-rpg-gold/30'
+                            }`}
+                    >
+                        <span>{cat.icon}</span>
+                        {cat.label}
+                    </button>
+                ))}
             </div>
 
             {/* Modal de Adicionar Item */}
@@ -1318,95 +1571,150 @@ function ItensTab({ searchQuery }: { searchQuery: string }) {
 
             <div className="grid md:grid-cols-2 gap-4">
                 <div className="space-y-3 max-h-[600px] overflow-y-auto pr-2">
-                    {items.length === 0 ? (
+                    {allItems.length === 0 ? (
                         <p className="text-rpg-grey text-center py-8">Nenhum item encontrado.</p>
                     ) : (
-                        items.map(item => (
+                        allItems.map(item => (
                             <div
-                                key={item.name}
+                                key={item.id || item.name}
                                 onClick={() => setSelectedItem(item)}
-                                className={`bg-rpg-slate border rounded p-4 cursor-pointer transition-all hover:border-rpg-gold/50 ${selectedItem?.name === item.name ? 'border-rpg-gold ring-1 ring-rpg-gold/30' : 'border-rpg-gold/10'
+                                className={`bg-rpg-panel border rounded p-4 cursor-pointer transition-all hover:border-rpg-gold/50 ${selectedItem?.name === item.name ? 'border-rpg-gold ring-1 ring-rpg-gold/30' : 'border-rpg-gold/10'
                                     }`}
                             >
-                                <h3 className="font-bold text-rpg-gold flex items-center gap-2">
-                                    ⚔️ {item.name}
-                                </h3>
-                                <p className="text-sm text-rpg-grey">
-                                    {item.damage} {item.damageType}
-                                </p>
+                                <div className="flex justify-between items-start">
+                                    <h3 className="font-bold text-rpg-gold flex items-center gap-2">
+                                        {item.itemType === 'WEAPON' ? '⚔️' : item.itemType === 'ARMOR' || item.itemType === 'SHIELD' ? '🛡️' : '🎒'} {item.name}
+                                    </h3>
+                                    {item.price > 0 && (
+                                        <span className="text-[10px] text-rpg-gold/60 font-bold uppercase">
+                                            {item.price} {item.currency}
+                                        </span>
+                                    )}
+                                </div>
+                                <div className="flex gap-2 mt-1">
+                                    {item.itemType === 'WEAPON' && item.damage && (
+                                        <span className="text-[10px] bg-red-900/40 text-red-200 px-1.5 py-0.5 rounded border border-red-500/20">
+                                            {item.damage} {item.damageType}
+                                        </span>
+                                    )}
+                                    {(item.itemType === 'ARMOR' || item.itemType === 'SHIELD') && item.ac > 0 && (
+                                        <span className="text-[10px] bg-blue-900/40 text-blue-200 px-1.5 py-0.5 rounded border border-blue-500/20">
+                                            CA {item.itemType === 'SHIELD' ? '+' : ''}{item.ac}
+                                        </span>
+                                    )}
+                                    {item.weight > 0 && (
+                                        <span className="text-[10px] bg-rpg-slate text-rpg-grey px-1.5 py-0.5 rounded border border-rpg-gold/10">
+                                            {item.weight} kg
+                                        </span>
+                                    )}
+                                </div>
                             </div>
                         ))
                     )}
                 </div>
 
-                <div className="bg-rpg-slate border border-rpg-gold/20 rounded p-6 sticky top-4">
-                    {selectedItem ? (
-                        <div>
-                            <h3 className="text-2xl font-bold text-rpg-gold mb-2">{selectedItem.name}</h3>
-                            <div className="space-y-3 text-sm">
-                                <div>
-                                    <span className="font-bold text-rpg-gold">Dano:</span> {selectedItem.damage}
-                                </div>
-                                <div>
-                                    <span className="font-bold text-rpg-gold">Tipo/Efeito:</span> {selectedItem.damageType}
-                                </div>
-                                {selectedItem.type && (
-                                    <div>
-                                        <span className="font-bold text-rpg-gold">Categoria:</span> {selectedItem.type}
+                <div className={`${selectedItem ? 'fixed inset-0 z-[60] bg-black/90 p-4 overflow-y-auto' : 'hidden'} md:block md:static md:bg-transparent md:p-0 md:overflow-visible`}>
+                    <div className="bg-rpg-slate border border-rpg-gold/20 rounded p-6 md:sticky md:top-4 relative shadow-2xl md:shadow-none min-h-[50vh]">
+                        {selectedItem && (
+                            <button
+                                onClick={() => setSelectedItem(null)}
+                                className="md:hidden absolute top-4 right-4 text-rpg-gold bg-black/40 hover:bg-black/60 rounded-full w-8 h-8 flex items-center justify-center transition-colors z-10"
+                            >
+                                ✕
+                            </button>
+                        )}
+                        {selectedItem ? (
+                            <div>
+                                <h3 className="text-2xl font-bold text-rpg-gold mb-2">{selectedItem.name}</h3>
+                                <div className="space-y-4 text-sm">
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div className="bg-black/20 p-3 rounded border border-rpg-gold/10">
+                                            <span className="text-[10px] text-rpg-grey uppercase block mb-1">Tipo de Item</span>
+                                            <span className="font-bold text-rpg-gold">{selectedItem.itemType || 'NORMAL'}</span>
+                                        </div>
+                                        <div className="bg-black/20 p-3 rounded border border-rpg-gold/10">
+                                            <span className="text-[10px] text-rpg-grey uppercase block mb-1">Preço</span>
+                                            <span className="font-bold text-rpg-gold">{selectedItem.price || 0} {selectedItem.currency || 'GP'}</span>
+                                        </div>
+                                        {selectedItem.itemType === 'WEAPON' && (
+                                            <div className="bg-black/20 p-3 rounded border border-rpg-gold/10">
+                                                <span className="text-[10px] text-rpg-grey uppercase block mb-1">Dano</span>
+                                                <span className="font-bold text-rpg-gold">{selectedItem.damage} {selectedItem.damageType}</span>
+                                            </div>
+                                        )}
+                                        {(selectedItem.itemType === 'ARMOR' || selectedItem.itemType === 'SHIELD') && (
+                                            <div className="bg-black/20 p-3 rounded border border-rpg-gold/10">
+                                                <span className="text-[10px] text-rpg-grey uppercase block mb-1">{selectedItem.itemType === 'SHIELD' ? 'Bônus CA' : 'Classe de Armadura'}</span>
+                                                <span className="font-bold text-rpg-gold">{selectedItem.itemType === 'SHIELD' ? '+' : ''}{selectedItem.ac}</span>
+                                            </div>
+                                        )}
+                                        <div className="bg-black/20 p-3 rounded border border-rpg-gold/10">
+                                            <span className="text-[10px] text-rpg-grey uppercase block mb-1">Peso</span>
+                                            <span className="font-bold text-rpg-gold">{selectedItem.weight || 0} kg</span>
+                                        </div>
                                     </div>
-                                )}
-                                <div className="pt-3 border-t border-rpg-gold/20">
-                                    <span className="font-bold text-rpg-gold">Propriedades:</span>
-                                    <ul className="list-disc list-inside mt-2 text-rpg-parchment">
-                                        {selectedItem.properties?.map((prop: string, idx: number) => (
-                                            <li key={idx}>{prop}</li>
-                                        ))}
-                                    </ul>
-                                    {selectedItem.classes && selectedItem.classes.length > 0 && (
-                                        <div className="mt-2">
-                                            <span className="font-bold text-rpg-gold">Classes:</span> {selectedItem.classes.join(', ')}
+
+                                    {selectedItem.itemType === 'ARMOR' && (
+                                        <div className="flex gap-4">
+                                            {selectedItem.strengthReq > 0 && (
+                                                <div className="px-3 py-1 bg-red-900/20 border border-red-500/30 rounded text-red-200 text-xs">
+                                                    Força Requerida: {selectedItem.strengthReq}
+                                                </div>
+                                            )}
+                                            {selectedItem.stealthDisadvantage && (
+                                                <div className="px-3 py-1 bg-orange-900/20 border border-orange-500/30 rounded text-orange-200 text-xs">
+                                                    Desvantagem Furtividade
+                                                </div>
+                                            )}
                                         </div>
                                     )}
-                                    {selectedItem.class && !selectedItem.classes && (
-                                        <div className="mt-2">
-                                            <span className="font-bold text-rpg-gold">Classe:</span> {selectedItem.class}
-                                        </div>
-                                    )}
-                                    {selectedItem.subclass && (
-                                        <div className="mt-1">
-                                            <span className="font-bold text-rpg-gold">Subclasse:</span> {selectedItem.subclass}
-                                        </div>
-                                    )}
-                                </div>
-                                {selectedItem.description && (
+
                                     <div className="pt-3 border-t border-rpg-gold/20">
-                                        <p className="text-rpg-parchment leading-relaxed">{selectedItem.description}</p>
+                                        <span className="text-[10px] text-rpg-grey uppercase block mb-2">Propriedades</span>
+                                        <div className="flex flex-wrap gap-2">
+                                            {selectedItem.properties && selectedItem.properties.length > 0 ? (
+                                                selectedItem.properties.map((prop: string, idx: number) => (
+                                                    <span key={idx} className="bg-rpg-slate border border-rpg-gold/10 px-2 py-1 rounded text-xs text-rpg-parchment italic">
+                                                        {prop}
+                                                    </span>
+                                                ))
+                                            ) : (
+                                                <span className="text-rpg-grey italic">Nenhuma</span>
+                                            )}
+                                        </div>
                                     </div>
-                                )}
-                                {selectedItem.id?.toString().startsWith('custom-item-') && (
-                                    <div className="pt-4 flex gap-2">
-                                        <button
-                                            onClick={() => openEditModal(selectedItem)}
-                                            className="bg-blue-600/20 hover:bg-blue-600/40 text-blue-400 border border-blue-600/30 px-3 py-1.5 rounded text-xs font-bold transition-all"
-                                        >
-                                            ✏️ Editar
-                                        </button>
-                                        <button
-                                            onClick={() => deleteCustomItem(selectedItem.id)}
-                                            className="bg-red-600/20 hover:bg-red-600/40 text-red-400 border border-red-600/30 px-3 py-1.5 rounded text-xs font-bold transition-all"
-                                        >
-                                            🗑️ Excluir
-                                        </button>
-                                    </div>
-                                )}
+
+                                    {selectedItem.description && (
+                                        <div className="pt-3 border-t border-rpg-gold/20">
+                                            <span className="text-[10px] text-rpg-grey uppercase block mb-2">Descrição</span>
+                                            <p className="text-rpg-parchment leading-relaxed">{selectedItem.description}</p>
+                                        </div>
+                                    )}
+                                    {selectedItem.id?.toString().startsWith('custom-item-') && (
+                                        <div className="pt-4 flex gap-2">
+                                            <button
+                                                onClick={() => openEditModal(selectedItem)}
+                                                className="bg-blue-600/20 hover:bg-blue-600/40 text-blue-400 border border-blue-600/30 px-3 py-1.5 rounded text-xs font-bold transition-all"
+                                            >
+                                                ✏️ Editar
+                                            </button>
+                                            <button
+                                                onClick={() => deleteCustomItem(selectedItem.id)}
+                                                className="bg-red-600/20 hover:bg-red-600/40 text-red-400 border border-red-600/30 px-3 py-1.5 rounded text-xs font-bold transition-all"
+                                            >
+                                                🗑️ Excluir
+                                            </button>
+                                        </div>
+                                    )}
+                                </div>
                             </div>
-                        </div>
-                    ) : (
-                        <div className="text-center text-rpg-grey py-12">
-                            <p className="text-4xl mb-4">⚔️</p>
-                            <p>Selecione um item para ver os detalhes</p>
-                        </div>
-                    )}
+                        ) : (
+                            <div className="text-center text-rpg-grey py-12">
+                                <p className="text-4xl mb-4">⚔️</p>
+                                <p>Selecione um item para ver os detalhes</p>
+                            </div>
+                        )}
+                    </div>
                 </div>
             </div>
         </div>

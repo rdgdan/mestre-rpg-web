@@ -1,20 +1,5 @@
-import React, { useState } from 'react';
-import { spellsDatabase } from '@/lib/spells-data';
-
-export interface Spell {
-  id: string;
-  name: string;
-  level: number;
-  school: string;
-  castingTime: string;
-  range: string;
-  components: string;
-  duration: string;
-  description: string;
-  classes: string[];
-  ritual?: boolean;
-  concentration?: boolean;
-}
+import React, { useState, useEffect } from 'react';
+import { spellsDatabase, Spell, fetchGlobalSpells, searchSpells } from '@/lib/spells-data';
 
 interface SpellSelectModalProps {
   isOpen: boolean;
@@ -25,10 +10,21 @@ interface SpellSelectModalProps {
 
 const SpellSelectModal: React.FC<SpellSelectModalProps> = ({ isOpen, onClose, onSelect, onCreate }) => {
   const [search, setSearch] = useState('');
-  const filtered = spellsDatabase.filter(s =>
-    s.name.toLowerCase().includes(search.toLowerCase()) ||
-    s.description.toLowerCase().includes(search.toLowerCase())
-  );
+  const [globalSpells, setGlobalSpells] = useState<Spell[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+
+  useEffect(() => {
+    if (isOpen) {
+      setIsLoading(true);
+      fetchGlobalSpells().then(spells => {
+        setGlobalSpells(spells);
+        setIsLoading(false);
+      });
+    }
+  }, [isOpen]);
+
+  const filtered = searchSpells(search, {}, [...globalSpells]);
+
   if (!isOpen) return null;
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">

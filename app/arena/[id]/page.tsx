@@ -425,41 +425,43 @@ export default function SharedArenaPage() {
         <div className="min-h-screen bg-rpg-dark text-rpg-parchment bg-[url('https://www.transparenttextures.com/patterns/dark-matter.png')] flex flex-col font-lato">
 
             {/* HEADER */}
-            <header className="bg-rpg-panel p-4 shadow-lg border-b-2 border-rpg-gold/30 sticky top-0 z-30 backdrop-blur-sm">
-                <div className="container mx-auto flex justify-between items-center">
-                    <div className="flex items-center gap-4">
-                        <Link href="/" className="text-rpg-gold hover:text-rpg-gold-light transition-all text-2xl">⚔️</Link>
-                        <div>
-                            <h1 className="text-2xl font-bold font-cinzel text-rpg-gold text-shadow-md">Campo de Batalha</h1>
-                            <p className="text-[10px] text-rpg-grey uppercase tracking-widest leading-none">Mestre: {session.hostName} {isHost && <span className="text-green-500 font-bold ml-1">(VOCÊ)</span>}</p>
+            {session.phase === 'preparation' && (
+                <header className="bg-rpg-panel p-4 shadow-lg border-b-2 border-rpg-gold/30 relative sm:sticky top-0 z-30 backdrop-blur-sm">
+                    <div className="container mx-auto flex justify-between items-center">
+                        <div className="flex items-center gap-4">
+                            <Link href="/" className="text-rpg-gold hover:text-rpg-gold-light transition-all text-2xl">⚔️</Link>
+                            <div>
+                                <h1 className="text-2xl font-bold font-cinzel text-rpg-gold text-shadow-md">Campo de Batalha</h1>
+                                <p className="text-[10px] text-rpg-grey uppercase tracking-widest leading-none">Mestre: {session.hostName} {isHost && <span className="text-green-500 font-bold ml-1">(VOCÊ)</span>}</p>
+                            </div>
+                        </div>
+                        <div className="flex items-center gap-3">
+                            <div className="bg-black/40 border border-rpg-gold/20 px-3 py-1 rounded text-xs font-cinzel text-rpg-gold">
+                                ID: {session.id}
+                            </div>
+                            <div className={`px-3 py-1 rounded text-[10px] font-bold font-cinzel border uppercase ${isHost ? 'bg-green-900/30 text-green-400 border-green-500/30' : 'bg-blue-900/30 text-blue-400 border-blue-500/30'}`}>
+                                {isHost ? 'Modo Mestre' : 'Modo Jogador'}
+                            </div>
+                            <button
+                                className="bg-rpg-gold/10 hover:bg-rpg-gold/20 border border-rpg-gold/40 text-rpg-gold text-[10px] px-3 py-1 rounded font-bold uppercase transition-all"
+                                onClick={async () => {
+                                    if (isHost && session) {
+                                        const sessionRef = doc(db, 'arenas_online', session.id);
+                                        await updateDoc(sessionRef, { phase: 'preparation' });
+                                        await import('firebase/firestore').then(({ deleteDoc }) => deleteDoc(sessionRef));
+                                    }
+                                    window.location.href = '/';
+                                }}
+                            >
+                                Sair da Batalha
+                            </button>
                         </div>
                     </div>
-                    <div className="flex items-center gap-3">
-                        <div className="bg-black/40 border border-rpg-gold/20 px-3 py-1 rounded text-xs font-cinzel text-rpg-gold">
-                            ID: {session.id}
-                        </div>
-                        <div className={`px-3 py-1 rounded text-[10px] font-bold font-cinzel border uppercase ${isHost ? 'bg-green-900/30 text-green-400 border-green-500/30' : 'bg-blue-900/30 text-blue-400 border-blue-500/30'}`}>
-                            {isHost ? 'Modo Mestre' : 'Modo Jogador'}
-                        </div>
-                        <button
-                            className="bg-rpg-gold/10 hover:bg-rpg-gold/20 border border-rpg-gold/40 text-rpg-gold text-[10px] px-3 py-1 rounded font-bold uppercase transition-all"
-                            onClick={async () => {
-                                if (isHost && session) {
-                                    const sessionRef = doc(db, 'arenas_online', session.id);
-                                    await updateDoc(sessionRef, { phase: 'preparation' });
-                                    await import('firebase/firestore').then(({ deleteDoc }) => deleteDoc(sessionRef));
-                                }
-                                window.location.href = '/';
-                            }}
-                        >
-                            Sair da Batalha
-                        </button>
-                    </div>
-                </div>
-            </header>
+                </header>
+            )}
 
             {/* STATUS BAR */}
-            <section className="bg-rpg-slate/40 border-b border-rpg-gold/10 p-4 sticky top-[68px] z-20 backdrop-blur-md">
+            <section className={`bg-rpg-slate/40 border-b border-rpg-gold/10 p-4 sticky top-0 ${session.phase === 'preparation' ? 'sm:top-[74px]' : 'sm:top-0'} z-20 backdrop-blur-md transition-[top]`}>
                 <div className="container mx-auto flex justify-between items-center">
                     <div className="flex items-center gap-8">
                         <div className="flex flex-col">
