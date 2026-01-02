@@ -117,7 +117,7 @@ export default function InvitePage() {
             <div className="min-h-screen bg-rpg-dark flex flex-col items-center justify-center text-center p-4 bg-[url('https://www.transparenttextures.com/patterns/dark-matter.png')]">
                 <div className="bg-rpg-panel border border-rpg-gold/20 p-8 rounded-lg max-w-md w-full shadow-2xl">
                     <h1 className="text-2xl font-cinzel text-rpg-gold mb-2">Convite para Aventura</h1>
-                    <h2 className="text-xl font-bold text-rpg-parchment mb-6">"{campaign?.name}"</h2>
+                    <h2 className="text-xl font-bold text-rpg-parchment mb-6">&quot;{campaign?.name}&quot;</h2>
 
                     <p className="text-rpg-grey font-medieval mb-8">
                         Você foi convocado para uma jornada épica. <br />
@@ -158,7 +158,7 @@ export default function InvitePage() {
                         {campaign?.name}
                     </h2>
                     <p className="text-rpg-grey text-sm mt-4 italic max-w-md mx-auto">
-                        "{campaign?.description || 'Uma jornada sem descrição...'}"
+                        &quot;{campaign?.description || 'Uma jornada sem descrição...'}&quot;
                     </p>
                 </div>
 

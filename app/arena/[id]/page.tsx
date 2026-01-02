@@ -746,7 +746,7 @@ export default function SharedArenaPage() {
                             </select>
                             {myCharacters.length === 0 && (
                                 <p className="text-[10px] text-red-400 mt-2 font-medieval">
-                                    Você não possui personagens criados. Use a aba "Importar Herói" para entrar manualmente.
+                                    Você não possui personagens criados. Use a aba &quot;Importar Herói&quot; para entrar manualmente.
                                 </p>
                             )}
                         </div>
