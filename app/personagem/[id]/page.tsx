@@ -279,20 +279,25 @@ export default function CharacterSheetPage() {
                                 // MAS se o nome bater com global, pode ser melhor enriquecer para garantir peso e regras novas?
                                 // Vamos priorizar o banco global se não for customizado.
 
-                                const match = allWeapons.find(gi => normalizeStr(gi.name) === normalizeStr(w.name));
+                                const wNameNormalized = normalizeStr(w.name);
+                                const match = allWeapons.find(gi => normalizeStr(gi.name) === wNameNormalized);
+
+                                console.log(`[DEBUG] Buscando Arma: "${w.name}" (Normalizado: "${wNameNormalized}")`);
                                 if (match) {
+                                    console.log(`[DEBUG] Correspondência ENCONTRADA:`, match);
                                     needsUpdate = true;
-                                    // Sobrescreve dados do import com dados oficiais, exceto IDs e Qtd
-                                    // Mantém magical bonus se tiver
                                     return {
                                         ...w,
                                         ...match,
                                         id: w.id,
                                         quantity: w.quantity,
-                                        isMagical: w.isMagical || match.isMagical, // Preserva magia se o usuário marcou? Ou o banco manda? Banco manda default false.
+                                        isMagical: w.isMagical || match.isMagical,
                                         magicalBonus: w.magicalBonus,
-                                        magicalEffect: w.magicalEffect
+                                        magicalEffect: w.magicalEffect,
+                                        isCustomDamage: false // Se achou oficial, reseta flag custom
                                     };
+                                } else {
+                                    console.warn(`[DEBUG] Não encontrado: "${w.name}" no pool de ${allWeapons.length} armas.`);
                                 }
                                 return w;
                             });

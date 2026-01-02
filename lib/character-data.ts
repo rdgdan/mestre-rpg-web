@@ -289,8 +289,8 @@ export function hydrateCharacter(partialData: Partial<Character> & { equipment?:
         if (partialData.inventory.weapons && Array.isArray(partialData.inventory.weapons)) {
             finalInventory.weapons = partialData.inventory.weapons.map((raw: any) => {
                 const b = raw.b || raw;
-                // Se já estiver no formato novo e completo, mantém
-                if (b.damage && b.name) return b;
+                // Removido o guard que pulava o mapeamento se já tivesse nome/dano
+                // para garantir que a normalização de 1d06 -> 1d6 e isCustomDamage ocorra sempre.
 
                 // Mapeia do formato do itens.json se necessário
                 let damage = b.damage || '';
