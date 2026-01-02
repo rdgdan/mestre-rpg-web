@@ -1,6 +1,6 @@
 
 // lib/character-data.ts
-import { Inventory, OtherEquipmentItem, parseDamageString } from './items-data';
+import { Inventory, OtherEquipmentItem, parseDamageString, dndWeapons } from './items-data';
 import { Spell } from './spells-data';
 
 export const ATTRIBUTE_KEYS = ['strength', 'dexterity', 'constitution', 'intelligence', 'wisdom', 'charisma'] as const;
@@ -170,31 +170,29 @@ export function calculateComputedStats(character: Omit<Character, 'proficiencyBo
 
         // Calcular slots máximos baseados no nível e classe
         const { getSpellSlots } = require('./level-progression');
-        const maxSlots = getSpellSlots(className, level);
+        const maxSlots = getSpellSlots(className, level) as Record<string, number>;
 
         // Mesclar slots atuais com máximos calculados
         const mergedSlots: Record<string, { current: number; max: number }> = {};
 
         // Se for Warlock, lida com Pact Magic
         if (maxSlots.pact !== undefined) {
-            const pactLevel = maxSlots.pactLevel;
-            const totalPactSlots = maxSlots.pact;
+            const totalPactSlots = Number(maxSlots.pact);
             // Slot de pacto é único e recuperável em curto descanso
-            const currentPact = existingSlots['pact']?.current !== undefined ? existingSlots['pact'].current : totalPactSlots;
+            const currentPactValue = existingSlots['pact']?.current !== undefined ? Number(existingSlots['pact'].current) : totalPactSlots;
 
             mergedSlots['pact'] = {
-                current: Math.min(currentPact, totalPactSlots),
-                max: totalPactSlots // maxSlots.pact
+                current: Math.min(currentPactValue, totalPactSlots),
+                max: totalPactSlots
             };
-            // Guardamos o nível do slot de pacto em outro lugar? Warlock sempre conjura no nível max.
-            // Simplicidade: UI mostra "Slots de Pacto (Nv X)"
         } else {
             // Full/Half/Third casters
             Object.entries(maxSlots).forEach(([lvl, count]) => {
-                const current = existingSlots[lvl]?.current !== undefined ? Number(existingSlots[lvl].current) : count; // Inicia cheio se não existir
+                const countNum = Number(count);
+                const current = existingSlots[lvl]?.current !== undefined ? Number(existingSlots[lvl].current) : countNum;
                 mergedSlots[lvl] = {
-                    current: Math.min(current, count),
-                    max: count
+                    current: Math.min(current, countNum),
+                    max: countNum
                 };
             });
         }
@@ -299,16 +297,14 @@ export function hydrateCharacter(partialData: Partial<Character> & { equipment?:
                 }
 
                 // Normalizar string de dano (ex: 1d06 -> 1d6)
-                if (damage) {
-                    const parsed = parseDamageString(damage);
-                    if (!parsed.isCustomDamage) {
-                        damage = `${parsed.diceQty}${parsed.diceType}${parsed.diceBonus ? '+' + parsed.diceBonus : ''}`;
-                    }
+                const parsed = parseDamageString(damage || '1d8');
+                if (damage && !parsed.isCustomDamage) {
+                    damage = `${parsed.diceQty}${parsed.diceType}${parsed.diceBonus ? '+' + parsed.diceBonus : ''}`;
                 }
 
                 return {
                     id: b.id || b.uuid || `weapon-${Date.now()}-${Math.random()}`,
-                    name: b.u || b.name || 'Arma Desconhecida',
+                    name: b.u || b.name || raw.name || 'Arma Desconhecida',
                     damage: damage || '1d8',
                     damageType: b.b || b.damageType || '',
                     properties: b.x ? b.x.split(',').map((s: string) => s.trim()) : (b.properties || []),
@@ -316,20 +312,28 @@ export function hydrateCharacter(partialData: Partial<Character> & { equipment?:
                     isMagical: b.isMagical || false,
                     magicalBonus: b.magicalBonus || 0,
                     magicalEffect: b.magicalEffect || '',
-                    weight: b.f || b.weight || 0
+                    weight: b.f || b.weight || 0,
+                    diceQty: parsed.diceQty,
+                    diceType: parsed.diceType,
+                    diceBonus: parsed.diceBonus,
+                    isCustomDamage: parsed.isCustomDamage
                 };
             });
         }
 
         const oldEquipment = partialData.inventory.otherEquipment as unknown;
         if (Array.isArray(oldEquipment)) {
-            finalInventory.otherEquipment = oldEquipment.map((raw: any) => {
+            // Pool de nomes de armas para detecção
+            const weaponNames = new Set(dndWeapons.map(w => w.name.normalize('NFC').trim().toLowerCase()));
+
+            const processedEquipment = oldEquipment.map((raw: any) => {
                 const b = raw.b || raw;
                 if (b.name && b.id) return b;
 
+                // Normalização básica
                 return {
                     id: b.id || b.uuid || `item-${Date.now()}-${Math.random()}`,
-                    name: b.u || b.name || 'Item Desconhecido',
+                    name: b.u || b.name || raw.name || 'Item Desconhecido',
                     quantity: raw.a?.c || b.quantity || 1,
                     description: b.v || b.description || '',
                     type: (b.i === 'ARMOR' ? 'armor' : b.i === 'SHIELD' ? 'shield' : 'other') as any,
@@ -338,6 +342,27 @@ export function hydrateCharacter(partialData: Partial<Character> & { equipment?:
                     weight: b.f || b.weight || 0
                 };
             });
+
+            // Separa o que realmente é arma mas caiu em equipamento
+            const equipmentToKeep: any[] = [];
+            processedEquipment.forEach(item => {
+                const normalizedName = item.name.normalize('NFC').trim().toLowerCase();
+                // Se o nome bate com uma arma oficial ou se tem damage/dice (indicativo de arma)
+                if (weaponNames.has(normalizedName) || (item as any).damage || (item as any).diceType) {
+                    // Adiciona às armas (se já não estiver lá)
+                    const weaponCandidate = {
+                        ...item,
+                        damage: (item as any).damage || '',
+                        damageType: (item as any).damageType || '',
+                        properties: (item as any).properties || []
+                    };
+                    finalInventory.weapons.push(weaponCandidate as any);
+                } else {
+                    equipmentToKeep.push(item);
+                }
+            });
+
+            finalInventory.otherEquipment = equipmentToKeep;
         } else if (typeof oldEquipment === 'string' && oldEquipment.trim() !== '') {
             finalInventory.otherEquipment = [{
                 id: new Date().toISOString(),

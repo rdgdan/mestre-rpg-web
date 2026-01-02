@@ -107,8 +107,8 @@ export const dndEquipments = [
 
 // Utilitário para converter strings de dano em dados estruturados
 export function parseDamageString(damage: string) {
-    // Regex para capturar [quantidade]d[faces] [+ bônus]
-    const regex = /^(\d+)d(\d+)\s*(?:\+\s*(\d+))?$/i;
+    // Regex para capturar [quantidade]d[faces] [+ bônus] - mais flexível com texto depois
+    const regex = /^(\d+)d(\d+)\s*(?:\+\s*(\d+))?.*$/i;
     const match = damage.trim().match(regex);
 
     if (match) {

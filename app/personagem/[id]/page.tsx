@@ -180,17 +180,19 @@ export default function CharacterSheetPage() {
                     return snapshot.docs.map(doc => ({ ...doc.data() as any, id: doc.id })).sort((a, b) => a[sortField]?.localeCompare(b[sortField]));
                 };
 
-                const [classData, raceData, weaponData, equipmentData] = await Promise.all([
+                const [classData, raceData, allItemsData] = await Promise.all([
                     populateCollection('classes', dndClasses.map(name => ({ name }))),
                     populateCollection('races', dndRaces.map(name => ({ name }))),
-                    populateCollection('armas', dndWeapons),
-                    populateCollection('equipamentos', dndEquipments)
+                    populateCollection('itens', [
+                        ...dndWeapons.map(w => ({ ...w, itemType: 'WEAPON' })),
+                        ...dndEquipments.map(e => ({ ...e, itemType: 'EQUIPMENT' }))
+                    ])
                 ]);
 
                 setClasses(classData.map(c => c.name));
                 setRaces(raceData.map(r => r.name));
-                setWeapons(weaponData);
-                setAllEquipment(equipmentData);
+                setWeapons(allItemsData.filter(i => i.itemType === 'WEAPON' || i.damage || i.diceType));
+                setAllEquipment(allItemsData.filter(i => i.itemType !== 'WEAPON' && !i.damage && !i.diceType));
             } catch (err) {
                 console.error("Falha ao carregar dados do jogo:", err);
                 setError("Falha ao carregar dados essenciais do jogo.");
@@ -255,17 +257,19 @@ export default function CharacterSheetPage() {
                             hydratedChar.spells = enrichedSpells;
 
                             // Enriquecer itens se necessário
-                            const { fetchGlobalItems, dndWeapons, dndEquipments } = await import('@/lib/items-data');
-                            const firestoreItems = await fetchGlobalItems();
+                            const { fetchGlobalItems, dndWeapons, dndEquipments, parseDamageString: parseDmg } = await import('@/lib/items-data');
+
+                            // Busca na coleção centralizada 'itens'
+                            const firestoreItens = await fetchGlobalItems();
 
                             const allWeapons = [
-                                ...firestoreItems.filter(i => i.itemType === 'WEAPON'),
-                                ...dndWeapons.map(w => ({ ...w, itemType: 'WEAPON' }))
+                                ...dndWeapons.map(w => ({ ...w, itemType: 'WEAPON', origin: 'code' })), // Prioridade para regras oficiais
+                                ...firestoreItens.filter(i => i.itemType === 'WEAPON' || i.damage || i.diceType).map(w => ({ ...w, origin: 'database' }))
                             ];
 
                             const allEquipment = [
-                                ...firestoreItems.filter(i => i.itemType !== 'WEAPON'),
-                                ...dndEquipments.map(e => ({ ...e, itemType: 'other', description: '' }))
+                                ...dndEquipments.map(e => ({ ...e, itemType: 'other', origin: 'code' })),
+                                ...firestoreItens.filter(i => i.itemType !== 'WEAPON' && !i.damage).map(e => ({ ...e, origin: 'database' }))
                             ];
 
                             const normalizeStr = (str: string) => str ? str.normalize('NFC').trim().toLowerCase() : '';
@@ -280,33 +284,53 @@ export default function CharacterSheetPage() {
                                 // Vamos priorizar o banco global se não for customizado.
 
                                 const wNameNormalized = normalizeStr(w.name);
-                                const match = allWeapons.find(gi => normalizeStr(gi.name) === wNameNormalized);
+                                const matches = allWeapons.filter(gi => normalizeStr(gi.name) === wNameNormalized);
 
                                 console.log(`[DEBUG] Buscando Arma: "${w.name}" (Normalizado: "${wNameNormalized}")`);
-                                if (match) {
-                                    console.log(`[DEBUG] Correspondência ENCONTRADA:`, match);
+                                if (matches.length > 0) {
+                                    // Prioridade: code > database
+                                    const match = matches.find(m => (m as any).origin === 'code') ||
+                                        matches.find(m => (m as any).origin === 'database') ||
+                                        matches[0];
+
+                                    if (matches.length > 1) {
+                                        console.warn(`[AVISO] Múltiplos registros para "${w.name}":`, matches.map(m => (m as any).origin));
+                                    }
+
+                                    console.log(`[DEBUG] Correspondência ENCONTRADA (${(match as any).origin || 'unknown'}):`, match);
+                                    const p = parseDmg(match.damage || '1d8');
                                     needsUpdate = true;
+
+                                    const oldWeight = w.weight || 0;
+                                    const newWeight = match.weight || 0;
+                                    if (oldWeight !== newWeight) {
+                                        console.log(`[DEBUG] Corrigindo Peso de "${w.name}": ${oldWeight} -> ${newWeight}`);
+                                    }
+
+                                    // ESTRATÉGIA: Pega tudo do banco/código, mas mantém o que é específico do import
                                     return {
                                         ...w,
                                         ...match,
                                         id: w.id,
                                         quantity: w.quantity,
-                                        isMagical: w.isMagical || match.isMagical,
-                                        magicalBonus: w.magicalBonus,
-                                        magicalEffect: w.magicalEffect,
-                                        isCustomDamage: false // Se achou oficial, reseta flag custom
+                                        weight: match.weight !== undefined ? match.weight : w.weight,
+                                        diceQty: p.diceQty,
+                                        diceType: p.diceType,
+                                        diceBonus: p.diceBonus,
+                                        isCustomDamage: false
                                     };
                                 } else {
                                     console.warn(`[DEBUG] Não encontrado: "${w.name}" no pool de ${allWeapons.length} armas.`);
+                                    return w;
                                 }
-                                return w;
                             });
 
                             const enrichedEquipment = (hydratedChar.inventory.otherEquipment || []).map(e => {
                                 if (!e || !e.name) return e;
-                                if (e.description && e.weight !== undefined && e.type !== 'other') return e;
+                                // Removido o guard para sempre tentar enriquecer por nome (preferência por dados oficiais)
                                 const match = allEquipment.find(gi => normalizeStr(gi.name) === normalizeStr(e.name));
                                 if (match) {
+                                    console.log(`[DEBUG] Equipamento ENCONTRADO (${(match as any).origin || 'unknown'}):`, match);
                                     needsUpdate = true;
                                     return {
                                         ...e,
