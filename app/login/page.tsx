@@ -37,7 +37,10 @@ function LoginContent() {
       await signInWithPopup(auth, provider);
       router.push(redirectUrl);
     } catch (error: any) {
-      setError("Não foi possível fazer login com o Google. Tente novamente.");
+      console.error("Erro no Login Google:", error);
+      console.error("Code:", error.code);
+      console.error("Message:", error.message);
+      setError(`Erro no Login Google: ${error.code} - ${error.message}`);
     }
   };
 

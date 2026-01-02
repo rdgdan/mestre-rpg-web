@@ -240,7 +240,8 @@ export default function CharacterSheetPage() {
                             const globalSpells = await fetchGlobalSpells();
 
                             let needsUpdate = false;
-                            const enrichedSpells = hydratedChar.spells.map(s => {
+                            const enrichedSpells = (hydratedChar.spells || []).map(s => {
+                                if (!s || !s.name) return s;
                                 if (s.description && s.description !== 'Sem descrição.' && s.castingTime) return s;
 
                                 const match = globalSpells.find(gs => gs.name.toLowerCase() === s.name.toLowerCase());
@@ -257,7 +258,8 @@ export default function CharacterSheetPage() {
                             const { fetchGlobalItems } = await import('@/lib/items-data');
                             const globalItems = await fetchGlobalItems();
 
-                            const enrichedWeapons = hydratedChar.inventory.weapons.map(w => {
+                            const enrichedWeapons = (hydratedChar.inventory.weapons || []).map(w => {
+                                if (!w || !w.name) return w;
                                 if (w.damage && w.weight !== undefined) return w;
                                 const match = globalItems.find(gi => gi.name.toLowerCase() === w.name.toLowerCase() && gi.itemType === 'WEAPON');
                                 if (match) {
@@ -267,7 +269,8 @@ export default function CharacterSheetPage() {
                                 return w;
                             });
 
-                            const enrichedEquipment = hydratedChar.inventory.otherEquipment.map(e => {
+                            const enrichedEquipment = (hydratedChar.inventory.otherEquipment || []).map(e => {
+                                if (!e || !e.name) return e;
                                 if (e.description && e.weight !== undefined && e.type !== 'other') return e;
                                 const match = globalItems.find(gi => gi.name.toLowerCase() === e.name.toLowerCase() && gi.itemType !== 'WEAPON');
                                 if (match) {
