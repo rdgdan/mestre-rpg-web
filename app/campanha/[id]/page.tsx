@@ -127,7 +127,7 @@ export default function CampaignDetailsPage() {
         <div className="min-h-screen bg-rpg-dark text-rpg-parchment flex flex-col bg-[url('https://www.transparenttextures.com/patterns/dark-matter.png')]">
 
             {/* Header Simplificado */}
-            <header className="bg-rpg-panel p-4 border-b border-rpg-gold/20 sticky top-0 z-10">
+            <header className="bg-rpg-panel p-4 border-b border-rpg-gold/20 sticky top-0 z-[100] shadow-lg">
                 <div className="container mx-auto flex justify-between items-center">
                     <div className="flex items-center gap-4">
                         <Link href="/" className="text-rpg-grey hover:text-rpg-gold transition-colors font-cinzel">
