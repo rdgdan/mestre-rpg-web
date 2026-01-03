@@ -9,8 +9,9 @@ import { doc, getDoc, updateDoc, collection, query, where, onSnapshot } from 'fi
 import { Campaign } from '@/types/campaign';
 import { Character } from '@/lib/character-data';
 import CampaignOracle from '@/components/CampaignOracle';
+import MapGenerator from '@/components/MapGenerator';
 
-type Tab = 'overview' | 'characters' | 'oracle';
+type Tab = 'overview' | 'characters' | 'oracle' | 'maps';
 
 export default function CampaignDetailsPage() {
     const { id } = useParams();
@@ -163,6 +164,15 @@ export default function CampaignDetailsPage() {
                         <span>🔮</span> Oráculo I.A.
                     </button>
                     <button
+                        onClick={() => setActiveTab('maps')}
+                        className={`px-6 py-3 font-cinzel font-bold transition-all flex items-center gap-2 ${activeTab === 'maps'
+                            ? 'text-rpg-gold border-b-2 border-rpg-gold bg-rpg-gold/5'
+                            : 'text-rpg-grey hover:text-rpg-parchment hover:bg-white/5'
+                            }`}
+                    >
+                        <span>🗺️</span> Mapas
+                    </button>
+                    <button
                         onClick={() => setActiveTab('characters')}
                         className={`px-6 py-3 font-cinzel font-bold transition-all ${activeTab === 'characters'
                             ? 'text-rpg-gold border-b-2 border-rpg-gold bg-rpg-gold/5'
@@ -245,6 +255,12 @@ export default function CampaignDetailsPage() {
                     {activeTab === 'oracle' && (
                         <div className="h-full">
                             <CampaignOracle campaign={campaign} />
+                        </div>
+                    )}
+
+                    {activeTab === 'maps' && (
+                        <div className="h-full space-y-6">
+                            <MapGenerator campaign={campaign} characters={linkedCharacters} />
                         </div>
                     )}
 

@@ -15,7 +15,7 @@ interface CampaignOracleProps {
 
 export default function CampaignOracle({ campaign }: CampaignOracleProps) {
     const [apiKey, setApiKey] = useState('');
-    const [selectedModel, setSelectedModel] = useState('gemini-2.0-flash');
+    const [selectedModel, setSelectedModel] = useState('gemini-1.5-flash');
     const [isConfigured, setIsConfigured] = useState(false);
     const [messages, setMessages] = useState<Message[]>([]);
     const [inputText, setInputText] = useState('');
@@ -70,8 +70,25 @@ export default function CampaignOracle({ campaign }: CampaignOracleProps) {
         try {
             const genAI = new GoogleGenerativeAI(apiKey);
 
-            // Lista de prioridade de modelos (Gratuito -> Mais Capaz -> Legacy)
-            const modelsToTry = ['gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-1.5-flash-latest', 'gemini-1.5-pro', 'gemini-pro'];
+            // Lista exaustiva de modelos (Atualizada com log do usuário)
+            const modelsToTry = [
+                'gemini-2.0-flash',
+                'gemini-2.0-flash-lite-preview',
+                'gemini-exp-1206',
+                'gemini-2.5-flash-preview-tts',
+                'gemini-2.5-pro-preview-tts',
+                'gemma-3-27b-it',
+                'gemma-3-12b-it',
+                'gemma-3-4b-it',
+                'gemma-3-1b-it',
+                'gemini-1.5-flash',
+                'gemini-1.5-flash-8b',
+                'gemini-1.5-pro',
+                'gemini-flash-latest',
+                'gemini-2.0-pro-exp-02-05',
+                'gemini-1.5-pro-latest',
+                'gemini-pro'
+            ];
 
             let responseText = "";
             let successModel = "";
