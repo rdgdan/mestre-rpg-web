@@ -250,7 +250,7 @@ export default function MapGenerator({ campaign, characters }: MapGeneratorProps
 
                                     <div className="max-h-[300px] sm:max-h-none overflow-y-auto sm:overflow-visible pr-4 custom-scrollbar">
                                         <p className="text-2xl sm:text-4xl font-medieval text-[#2b1b17] leading-relaxed italic first-letter:text-6xl sm:first-letter:text-8xl first-letter:font-cinzel first-letter:float-left first-letter:mr-4 first-letter:mt-1">
-                                            "{selectedPoi ? selectedPoi.description : mapData.mastersVoice}"
+                                            &quot;{selectedPoi ? selectedPoi.description : mapData.mastersVoice}&quot;
                                         </p>
                                     </div>
 
@@ -281,7 +281,7 @@ export default function MapGenerator({ campaign, characters }: MapGeneratorProps
                                         <ul className="space-y-6 sm:space-y-8">
                                             {mapData.rumors.map((r, i) => (
                                                 <li key={i} className="font-medieval italic text-lg sm:text-2xl opacity-80 border-l-4 border-[#e0d0b0]/30 pl-6 leading-tight hover:opacity-100 transition-opacity">
-                                                    "{r}"
+                                                    &quot;{r}&quot;
                                                 </li>
                                             ))}
                                         </ul>
