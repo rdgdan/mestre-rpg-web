@@ -10,17 +10,14 @@ interface POI {
     name: string;
     description: string;
     type: 'cidade' | 'vila' | 'taverna' | 'templo' | 'ruina' | 'porto' | 'segredo' | 'perigo';
-    x: number;
-    y: number;
+    grid: string; // Ex: "A5", "C10"
 }
 
 interface Geography {
     type: 'montanha' | 'floresta' | 'mar' | 'lago' | 'rio' | 'colina' | 'navio' | 'monstro' | 'cachoeira' | 'torre' | 'farol' | 'recife' | 'caverna' | 'rosa_dos_ventos';
-    x: number;
-    y: number;
+    grid: string; // Ex: "A5"
     rotation?: number;
     scale?: number;
-    label?: string;
 }
 
 interface MapData {
@@ -44,6 +41,16 @@ export default function MapGenerator({ campaign, characters }: MapGeneratorProps
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [selectedPoi, setSelectedPoi] = useState<POI | null>(null);
+
+    // Converte coordenadas de Grid (A5) para porcentagem (x, y)
+    const gridToPos = (grid: string) => {
+        const col = grid.charAt(0).toUpperCase().charCodeAt(0) - 65; // A=0, J=9
+        const row = parseInt(grid.slice(1)) - 1; // 1=0, 10=9
+        return {
+            x: (col * 10) + 5,
+            y: (row * 10) + 5
+        };
+    };
 
     const generateMap = async () => {
         if (!description.trim()) return;
@@ -81,29 +88,30 @@ export default function MapGenerator({ campaign, characters }: MapGeneratorProps
             ];
 
             const prompt = `
-                Você é um MESTRE ILUSTRADOR DE MAPAS. Crie um GRANDE ATLAS ILUSTRADO DE RPG (Estilo Hand-Drawn / Watercolor).
+                Você é um MESTRE CARTÓGRAFO REALISTA. Crie um ATLAS ILUSTRADO ANTIGO (Estilo Nanquim / Ink-wash).
                 
-                REFERÊNCIA ESTÉTICA: Mapas feitos à mão, rascunhados, com aquarela e tinta nanquim.
-                PEDIDO: "${description}"
+                SISTEMA DE COORDENADAS: O mapa usa um grid 10x10. 
+                - Colunas: A até J.
+                - Linhas: 1 até 10.
+                - Exemplo: "A1" é o topo-esquerdo, "J10" é o fundo-direito.
 
-                REGRAS DE OURO (CARTOGRAFIA ILUSTRADA):
-                1. DENSIDADE MASSIVA: Gere entre 80 e 120 elementos em "geography".
-                2. COMPOSIÇÃO: Crie "massas de terra" (agrupando montanhas e florestas) e "oceanos" (agrupando ondas, recifes e navios).
-                3. NOVOS ELEMENTOS:
-                   - Marítimos: 'navio' (⛵), 'monstro' (🦑), 'recife' (🪸), 'farol' (🚨).
-                   - Geográficos: 'cachoeira' (🌊), 'caverna' (🕳️), 'torre' (🏰), 'montanha' (🏔️).
-                4. RÓTULOS (POIs): O mapa deve ter nomes escritos de forma artística.
-                5. CLAREZA: Use o campo "mastersVoice" para um relato rico e detalhado para o mestre.
+                INSTRUCÃO: "${description}"
+
+                REGRAS TÉCNICAS:
+                1. DENSIDADE GEOGRÁFICA: Gere entre 60 e 90 elementos em "geography". Use as coordenadas do GRID.
+                2. ESTILO: Evite emojis coloridos e brilhantes na descrição mental, pense em símbolos de tinta preta.
+                3. NOVOS ELEMENTOS: 'navio', 'monstro', 'recife', 'farol', 'cachoeira', 'caverna', 'torre', 'montanha', 'floresta'.
+                4. POSICIONAMENTO LÓGICO: Use o grid para criar massas contínuas (ex: Floresta em A5, A6, B5, B6).
 
                 JSON VÁLIDO:
                 {
                   "title": "Nome da Região",
-                  "regionType": "Arquipélago, Península, Continental...",
-                  "mastersVoice": "Relato imersivo detalhado para o mestre",
+                  "regionType": "Arquipélago...",
+                  "mastersVoice": "Relato imersivo para o mestre",
                   "sensory": { "smell": "...", "sound": "...", "climate": "..." },
                   "rumors": ["...", "..."],
-                  "pois": [{ "id": "1", "name": "Nome do Local", "x": 35, "y": 60, "type": "cidade", "description": "..." }],
-                  "geography": [{ "type": "navio", "x": 15, "y": 20, "scale": 1.2, "rotation": 5 }]
+                  "pois": [{ "id": "1", "name": "Local", "grid": "D4", "type": "cidade", "description": "..." }],
+                  "geography": [{ "type": "montanha", "grid": "B2", "scale": 1.1, "rotation": 0 }]
                 }
             `;
 
@@ -153,103 +161,115 @@ export default function MapGenerator({ campaign, characters }: MapGeneratorProps
     };
 
     return (
-        <div className="flex flex-col gap-4 sm:gap-8 p-3 sm:p-10 bg-[#e0d0b0] border-[8px] sm:border-[16px] border-[#2b1b17] rounded-sm shadow-[0_50px_100px_rgba(0,0,0,0.7)] relative overflow-hidden font-cinzel select-none min-h-screen sm:min-h-0"
+        <div className="flex flex-col gap-4 p-3 sm:p-6 bg-[#e0d0b0] border-[4px] sm:border-[8px] border-[#2b1b17] rounded-sm shadow-[0_25px_50px_rgba(0,0,0,0.5)] relative overflow-hidden font-cinzel select-none"
             style={{ backgroundImage: 'url("https://www.transparenttextures.com/patterns/old-map.png")' }}>
 
-            {/* Sombras e Texturas de Manuscrito */}
-            <div className="absolute inset-0 pointer-events-none opacity-50 shadow-[inset_0_0_150px_rgba(0,0,0,0.6)] bg-[radial-gradient(circle_at_center,rgba(139,69,19,0.05)_0%,transparent_100%)]"></div>
+            <div className="absolute inset-0 pointer-events-none opacity-40 shadow-[inset_0_0_100px_rgba(0,0,0,0.5)]"></div>
 
-            <div className="relative z-10 space-y-6 sm:space-y-12">
-                <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 border-b-4 border-[#2b1b17]/20 pb-6 sm:pb-10">
+            <div className="relative z-10 space-y-4 sm:space-y-6">
+                <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b-2 border-[#2b1b17]/20 pb-4">
                     <div className="w-full md:w-auto">
-                        <h2 className="text-4xl sm:text-6xl font-black text-[#2b1b17] tracking-tight uppercase leading-none drop-shadow-sm">
+                        <h2 className="text-2xl sm:text-3xl font-black text-[#2b1b17] tracking-tighter uppercase leading-none">
                             {mapData?.title || 'Grande Atlas'}
                         </h2>
-                        <div className="flex items-center gap-3 mt-2">
-                            <span className="h-1 lg:w-20 w-10 bg-[#2b1b17]/30"></span>
-                            <p className="text-[#2b1b17]/70 italic text-lg sm:text-2xl font-medieval tracking-[0.2em]">Obras do Mestre Ilustrador</p>
-                        </div>
+                        <p className="text-[#2b1b17]/60 italic text-sm sm:text-base font-medieval mt-1">Crônicas Geográficas</p>
                     </div>
 
-                    <div className="flex flex-col sm:flex-row gap-4 w-full md:w-auto">
+                    <div className="flex flex-col sm:flex-row gap-2 w-full md:w-auto">
                         <input
                             type="text"
                             value={description}
                             onChange={(e) => setDescription(e.target.value)}
-                            placeholder="Descreva o reino (ex: Arquipélago da Morte)..."
-                            className="bg-[#f5e6ca]/60 border-b-4 border-[#2b1b17]/40 p-3 text-[#2b1b17] placeholder-[#2b1b17]/40 focus:outline-none focus:border-[#2b1b17] transition-all w-full sm:w-80 lg:w-96 text-lg sm:text-2xl font-medieval"
+                            placeholder="Descreva o reino..."
+                            className="bg-[#f5e6ca]/60 border-b-2 border-[#2b1b17]/40 p-2 text-[#2b1b17] placeholder-[#2b1b17]/30 focus:outline-none focus:border-[#2b1b17] transition-all w-full sm:w-64 text-sm sm:text-base font-medieval"
                         />
                         <button
                             onClick={generateMap}
                             disabled={isLoading}
-                            className="bg-[#2b1b17] text-[#e0d0b0] px-8 py-3 hover:brightness-125 transition-all font-bold tracking-[0.2em] uppercase text-sm sm:text-base shadow-xl active:scale-95"
+                            className="bg-[#2b1b17] text-[#e0d0b0] px-6 py-2 hover:brightness-125 transition-all font-bold uppercase text-xs sm:text-sm shadow-lg active:scale-95"
                         >
-                            {isLoading ? 'Ilustrando...' : 'Traçar'}
+                            {isLoading ? 'Traçando...' : 'Traçar'}
                         </button>
                     </div>
                 </header>
 
                 {error && (
-                    <div className="text-red-900 text-center font-bold p-6 bg-red-950/10 border-2 border-red-950/20 rounded shadow-inner font-medieval text-lg sm:text-xl">
+                    <div className="text-red-900 text-center font-bold p-3 bg-red-950/10 border border-red-950/20 rounded font-medieval text-sm">
                         🚨 {error}
                     </div>
                 )}
 
                 {mapData && (
-                    <div className="flex flex-col gap-8 sm:gap-14 animate-fade-in">
-                        {/* O MANUSCRITO ILUSTRADO */}
-                        <div className="relative aspect-[16/10] sm:aspect-[16/8] bg-[#d2bf99] border-[6px] sm:border-[10px] border-[#2b1b17]/80 shadow-[0_20px_50px_rgba(0,0,0,0.4)] overflow-hidden group">
+                    <div className="flex flex-col gap-6 animate-fade-in">
+                        {/* O MAPA COM GRID */}
+                        <div className="relative aspect-[16/10] bg-[#d2bf99] border-[4px] border-[#2b1b17]/80 shadow-xl overflow-hidden group rounded-sm">
 
-                            {/* Overlay de Aquarela (Watercolor effect) */}
-                            <div className="absolute inset-0 bg-[#8b4513]/5 mix-blend-multiply opacity-20 pointer-events-none"></div>
-                            <div className="absolute inset-0 shadow-[inset_0_0_100px_rgba(0,0,0,0.2)]"></div>
-
-                            {/* Camada Geográfica Densa (O Mundo) */}
-                            {mapData.geography.map((geo, i) => (
-                                <div
-                                    key={`geo-${i}`}
-                                    className={`absolute transition-all duration-1000 select-none grayscale contrast-125 brightness-75 hover:brightness-100
-                                               ${geo.type === 'rosa_dos_ventos' ? 'text-7xl sm:text-[12rem] opacity-30 z-10' : 'text-4xl sm:text-7xl opacity-40 hover:opacity-60'}`}
-                                    style={{
-                                        left: `${geo.x}%`,
-                                        top: `${geo.y}%`,
-                                        transform: `scale(${geo.scale || 1}) rotate(${geo.rotation || 0}deg) translate(-50%, -50%)`,
-                                        pointerEvents: 'none'
-                                    }}
-                                >
-                                    {getGeographyEmoji(geo.type)}
+                            {/* Grid Visual (A-J, 1-10) */}
+                            <div className="absolute inset-0 pointer-events-none border border-[#2b1b17]/10">
+                                {[...Array(11)].map((_, i) => (
+                                    <div key={`v-${i}`} className="absolute top-0 bottom-0 border-l border-[#2b1b17]/5" style={{ left: `${i * 10}%` }}></div>
+                                ))}
+                                {[...Array(11)].map((_, i) => (
+                                    <div key={`h-${i}`} className="absolute left-0 right-0 border-t border-[#2b1b17]/5" style={{ top: `${i * 10}%` }}></div>
+                                ))}
+                                {/* Rótulos do Grid */}
+                                <div className="absolute top-0 left-0 right-0 flex justify-around text-[8px] sm:text-[10px] text-[#2b1b17]/30 font-bold p-0.5">
+                                    {['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J'].map(l => <span key={l}>{l}</span>)}
                                 </div>
-                            ))}
+                                <div className="absolute top-0 bottom-0 left-0 flex flex-col justify-around text-[8px] sm:text-[10px] text-[#2b1b17]/30 font-bold p-0.5">
+                                    {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(n => <span key={n}>{n}</span>)}
+                                </div>
+                            </div>
 
-                            {/* Rótulos Artísticos (POIs) */}
-                            {mapData.pois.map((poi) => (
-                                <button
-                                    key={poi.id}
-                                    onClick={() => setSelectedPoi(poi)}
-                                    className={`absolute transform -translate-x-1/2 -translate-y-1/2 group/label transition-all z-40
-                                               ${selectedPoi?.id === poi.id ? 'scale-110 sm:scale-150 z-50 text-[#2b1b17] font-black' : 'text-[#2b1b17]/80 hover:text-[#2b1b17]'}`}
-                                    style={{ left: `${poi.x}%`, top: `${poi.y}%` }}
-                                >
-                                    <div className="relative">
-                                        <div className="w-1.5 h-1.5 bg-[#2b1b17]/60 rounded-full mx-auto mb-1"></div>
-                                        <span className="text-sm sm:text-2xl font-medieval tracking-tighter block whitespace-nowrap bg-[#f0e2b0]/50 px-2 rounded-sm shadow-md border-b-2 border-[#2b1b17]/10 backdrop-blur-[1px]">
-                                            {poi.name}
-                                        </span>
-                                        <div className="h-0.5 bg-[#2b1b17]/40 w-0 group-hover/label:w-full transition-all duration-500 mx-auto"></div>
+                            {/* Camada Geográfica (Nanquim) */}
+                            {mapData.geography.map((geo, i) => {
+                                const pos = gridToPos(geo.grid);
+                                return (
+                                    <div
+                                        key={`geo-${i}`}
+                                        className="absolute transition-all duration-1000 select-none grayscale contrast-[1.8] brightness-[0.6] sepia-[0.3] opacity-60 hover:opacity-100 text-3xl sm:text-5xl"
+                                        style={{
+                                            left: `${pos.x}%`,
+                                            top: `${pos.y}%`,
+                                            transform: `scale(${geo.scale || 1}) rotate(${geo.rotation || 0}deg) translate(-50%, -50%)`,
+                                            pointerEvents: 'none'
+                                        }}
+                                    >
+                                        {getGeographyEmoji(geo.type)}
                                     </div>
-                                </button>
-                            ))}
+                                );
+                            })}
+
+                            {/* Rótulos dos POIs */}
+                            {mapData.pois.map((poi) => {
+                                const pos = gridToPos(poi.grid);
+                                return (
+                                    <button
+                                        key={poi.id}
+                                        onClick={() => setSelectedPoi(poi)}
+                                        className={`absolute transform -translate-x-1/2 -translate-y-1/2 group/label transition-all z-40
+                                                   ${selectedPoi?.id === poi.id ? 'scale-110 z-50 text-[#2b1b17] font-black' : 'text-[#2b1b17]/90 hover:text-[#2b1b17]'}`}
+                                        style={{ left: `${pos.x}%`, top: `${pos.y}%` }}
+                                    >
+                                        <div className="relative">
+                                            <div className="w-1 h-1 bg-[#2b1b17] rounded-full mx-auto mb-0.5"></div>
+                                            <span className="text-[10px] sm:text-base font-medieval tracking-tight block whitespace-nowrap bg-[#f0e2b0]/60 px-1.5 rounded-sm shadow border border-[#2b1b17]/10 backdrop-blur-[1px]">
+                                                {poi.name}
+                                            </span>
+                                        </div>
+                                    </button>
+                                );
+                            })}
                         </div>
 
-                        {/* ÁREA NARRATIVA (CORRIGIDA) */}
-                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 sm:gap-14 pb-10 sm:pb-20">
-                            <div className="lg:col-span-2 space-y-6 sm:space-y-10">
-                                <div className="p-8 sm:p-14 border-l-[12px] sm:border-l-[20px] border-[#2b1b17] bg-[#fdfaf5]/40 relative shadow-2xl rounded-r-lg min-h-[250px] sm:min-h-[400px]">
-                                    <div className="absolute top-4 right-6 text-5xl sm:text-7xl opacity-5 pointer-events-none italic font-black">Atlas Ilustrado</div>
-                                    <h4 className="text-xs sm:text-lg font-bold tracking-[0.5em] text-[#2b1b17]/50 uppercase mb-6 sm:mb-10">Crônicas do Cartógrafo</h4>
+                        {/* ÁREA NARRATIVA (ESCALA REDUZIDA) */}
+                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 pb-6">
+                            <div className="lg:col-span-2 space-y-4">
+                                <div className="p-6 sm:p-8 border-l-[8px] border-[#2b1b17] bg-[#fdfaf5]/40 relative shadow-lg rounded-r-lg min-h-[200px]">
+                                    <h4 className="text-[10px] font-bold tracking-[0.3em] text-[#2b1b17]/50 uppercase mb-4">Crônicas do Cartógrafo</h4>
 
-                                    <div className="max-h-[300px] sm:max-h-none overflow-y-auto sm:overflow-visible pr-4 custom-scrollbar">
-                                        <p className="text-2xl sm:text-4xl font-medieval text-[#2b1b17] leading-relaxed italic first-letter:text-6xl sm:first-letter:text-8xl first-letter:font-cinzel first-letter:float-left first-letter:mr-4 first-letter:mt-1">
+                                    <div className="max-h-[200px] overflow-y-auto pr-2 custom-scrollbar">
+                                        <p className="text-lg sm:text-xl font-medieval text-[#2b1b17] leading-tight italic first-letter:text-4xl first-letter:mr-2">
                                             &quot;{selectedPoi ? selectedPoi.description : mapData.mastersVoice}&quot;
                                         </p>
                                     </div>
@@ -257,39 +277,35 @@ export default function MapGenerator({ campaign, characters }: MapGeneratorProps
                                     {selectedPoi && (
                                         <button
                                             onClick={() => setSelectedPoi(null)}
-                                            className="mt-8 sm:mt-16 text-sm sm:text-base underline opacity-50 hover:opacity-100 transition-opacity font-bold uppercase tracking-widest text-[#2b1b17]"
+                                            className="mt-4 text-[10px] underline opacity-50 hover:opacity-100 font-bold uppercase tracking-widest text-[#2b1b17]"
                                         >
-                                            ← Retornar à Visão Geral
+                                            ← Visão Geral
                                         </button>
                                     )}
                                 </div>
                             </div>
 
-                            <div className="flex flex-col gap-6 sm:gap-10">
-                                <div className="bg-[#2b1b17] text-[#e0d0b0] p-8 sm:p-12 space-y-8 sm:space-y-12 shadow-[0_30px_60px_rgba(0,0,0,0.5)] rounded-sm border-t-8 border-[#e0d0b0]/10">
+                            <div className="flex flex-col gap-4">
+                                <div className="bg-[#2b1b17] text-[#e0d0b0] p-6 space-y-6 shadow-xl rounded-sm">
                                     <div>
-                                        <h4 className="text-xs sm:text-sm font-bold tracking-[0.3em] uppercase opacity-40 mb-4 sm:mb-8 border-b border-[#e0d0b0]/20 pb-4">Ambiente do Registro</h4>
-                                        <div className="space-y-4">
-                                            <p className="font-medieval text-xl sm:text-3xl italic leading-tight text-white/90">👃 {mapData.sensory.smell}</p>
-                                            <p className="font-medieval text-xl sm:text-3xl italic leading-tight text-white/90">👂 {mapData.sensory.sound}</p>
-                                            <p className="font-medieval text-xl sm:text-3xl italic leading-tight text-white/90">🌡️ {mapData.sensory.climate}</p>
+                                        <h4 className="text-[10px] font-bold tracking-[0.2em] uppercase opacity-40 mb-3 border-b border-[#e0d0b0]/10 pb-2">Atmosfera</h4>
+                                        <div className="space-y-2 text-sm sm:text-base">
+                                            <p className="font-medieval italic">👃 {mapData.sensory.smell}</p>
+                                            <p className="font-medieval italic">👂 {mapData.sensory.sound}</p>
+                                            <p className="font-medieval italic">🌡️ {mapData.sensory.climate}</p>
                                         </div>
                                     </div>
 
-                                    <div className="space-y-6 sm:space-y-8">
-                                        <h4 className="text-xs sm:text-sm font-bold tracking-[0.3em] uppercase opacity-40 border-b border-[#e0d0b0]/20 pb-4">Boataria e Segredos</h4>
-                                        <ul className="space-y-6 sm:space-y-8">
+                                    <div>
+                                        <h4 className="text-[10px] font-bold tracking-[0.2em] uppercase opacity-40 border-b border-[#e0d0b0]/10 pb-2 mb-3">Boatos</h4>
+                                        <ul className="space-y-3">
                                             {mapData.rumors.map((r, i) => (
-                                                <li key={i} className="font-medieval italic text-lg sm:text-2xl opacity-80 border-l-4 border-[#e0d0b0]/30 pl-6 leading-tight hover:opacity-100 transition-opacity">
+                                                <li key={i} className="font-medieval italic text-xs sm:text-sm opacity-80 border-l-2 border-[#e0d0b0]/20 pl-3">
                                                     &quot;{r}&quot;
                                                 </li>
                                             ))}
                                         </ul>
                                     </div>
-                                </div>
-
-                                <div className="p-6 border-4 border-[#2b1b17]/20 rounded-sm text-center opacity-40">
-                                    <p className="text-[10px] sm:text-xs font-bold uppercase tracking-[0.5em] text-[#2b1b17]">Referência de Roleplay Narrativo</p>
                                 </div>
                             </div>
                         </div>

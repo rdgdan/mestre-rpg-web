@@ -127,13 +127,13 @@ export default function CampaignDetailsPage() {
         <div className="min-h-screen bg-rpg-dark text-rpg-parchment flex flex-col bg-[url('https://www.transparenttextures.com/patterns/dark-matter.png')]">
 
             {/* Header Simplificado */}
-            <header className="bg-rpg-panel p-4 border-b border-rpg-gold/20 sticky top-0 z-[100] shadow-lg">
+            <header className="bg-rpg-panel p-3 border-b border-rpg-gold/20 sticky top-0 z-[100] shadow-lg">
                 <div className="container mx-auto flex justify-between items-center">
-                    <div className="flex items-center gap-4">
-                        <Link href="/" className="text-rpg-grey hover:text-rpg-gold transition-colors font-cinzel">
+                    <div className="flex items-center gap-3">
+                        <Link href="/" className="text-rpg-grey hover:text-rpg-gold transition-colors font-cinzel text-sm">
                             &larr; Voltar
                         </Link>
-                        <h1 className="text-xl sm:text-2xl font-bold font-cinzel text-rpg-gold truncate max-w-[200px] sm:max-w-md">
+                        <h1 className="text-lg sm:text-xl font-bold font-cinzel text-rpg-gold truncate max-w-[200px] sm:max-w-md uppercase tracking-wider">
                             {campaign.name}
                         </h1>
                     </div>
@@ -141,13 +141,13 @@ export default function CampaignDetailsPage() {
                 </div>
             </header>
 
-            <main className="container mx-auto p-4 sm:p-8 flex-grow flex flex-col">
+            <main className="container mx-auto p-3 sm:p-6 flex-grow flex flex-col">
 
                 {/* Tabs */}
-                <div className="flex border-b border-rpg-gold/20 mb-6">
+                <div className="flex border-b border-rpg-gold/20 mb-4 sm:mb-6 overflow-x-auto custom-scrollbar">
                     <button
                         onClick={() => setActiveTab('overview')}
-                        className={`px-6 py-3 font-cinzel font-bold transition-all ${activeTab === 'overview'
+                        className={`px-4 py-2 sm:px-6 sm:py-3 font-cinzel font-bold transition-all text-sm whitespace-nowrap ${activeTab === 'overview'
                             ? 'text-rpg-gold border-b-2 border-rpg-gold bg-rpg-gold/5'
                             : 'text-rpg-grey hover:text-rpg-parchment hover:bg-white/5'
                             }`}
@@ -156,7 +156,7 @@ export default function CampaignDetailsPage() {
                     </button>
                     <button
                         onClick={() => setActiveTab('oracle')}
-                        className={`px-6 py-3 font-cinzel font-bold transition-all flex items-center gap-2 ${activeTab === 'oracle'
+                        className={`px-4 py-2 sm:px-6 sm:py-3 font-cinzel font-bold transition-all text-sm flex items-center gap-2 whitespace-nowrap ${activeTab === 'oracle'
                             ? 'text-purple-400 border-b-2 border-purple-400 bg-purple-900/10'
                             : 'text-rpg-grey hover:text-purple-300 hover:bg-purple-900/5'
                             }`}
@@ -165,7 +165,7 @@ export default function CampaignDetailsPage() {
                     </button>
                     <button
                         onClick={() => setActiveTab('maps')}
-                        className={`px-6 py-3 font-cinzel font-bold transition-all flex items-center gap-2 ${activeTab === 'maps'
+                        className={`px-4 py-2 sm:px-6 sm:py-3 font-cinzel font-bold transition-all text-sm flex items-center gap-2 whitespace-nowrap ${activeTab === 'maps'
                             ? 'text-rpg-gold border-b-2 border-rpg-gold bg-rpg-gold/5'
                             : 'text-rpg-grey hover:text-rpg-parchment hover:bg-white/5'
                             }`}
@@ -174,7 +174,7 @@ export default function CampaignDetailsPage() {
                     </button>
                     <button
                         onClick={() => setActiveTab('characters')}
-                        className={`px-6 py-3 font-cinzel font-bold transition-all ${activeTab === 'characters'
+                        className={`px-4 py-2 sm:px-6 sm:py-3 font-cinzel font-bold transition-all text-sm whitespace-nowrap ${activeTab === 'characters'
                             ? 'text-rpg-gold border-b-2 border-rpg-gold bg-rpg-gold/5'
                             : 'text-rpg-grey hover:text-rpg-parchment hover:bg-white/5'
                             }`}
