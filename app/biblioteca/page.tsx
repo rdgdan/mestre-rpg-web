@@ -20,8 +20,10 @@ import {
     DEFAULT_DICE
 } from '@/lib/dnd-data';
 import { searchNpcs, npcTemplates, NPCTemplate } from '@/lib/npc-combatants-data';
+import { ArchiveStorage } from '@/lib/archive-storage';
+import { ParsedMechanic } from '@/lib/dnd-parser';
 
-type TabType = 'grimorio' | 'bestiario' | 'itens' | 'regras' | 'notas' | 'npcs';
+type TabType = 'grimorio' | 'bestiario' | 'itens' | 'regras' | 'notas' | 'npcs' | 'arquivista';
 
 // Utilitário para normalizar nomes
 const normalizeName = (name: string) => {
@@ -2025,6 +2027,286 @@ function NotasTab() {
 }
 
 
+// Componente Arquivista (Processamento de PDFs)
+function ArquivistaTab() {
+    const [books, setBooks] = useState<string[]>([]);
+    const [isScanning, setIsScanning] = useState(false);
+    const [results, setResults] = useState<any>(null);
+    const { user } = useAuth();
+
+    useEffect(() => {
+        const fetchBooks = async () => {
+            try {
+                const res = await fetch('/api/books/list');
+                const data = await res.json();
+                setBooks(data);
+            } catch (error) {
+                console.error('Erro ao listar livros:', error);
+            }
+        };
+        fetchBooks();
+    }, []);
+
+    const processBook = async (filename: string) => {
+        setIsScanning(true);
+        setResults(null);
+        try {
+            const res = await fetch('/api/books/process', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ filename })
+            });
+            const data = await res.json();
+            if (res.ok) {
+                setResults(data);
+            } else {
+                alert(`Erro: ${data.error || 'Falha ao processar o livro'}`);
+            }
+        } catch (error) {
+            console.error('Erro ao processar livro:', error);
+            alert('Erro ao processar PDF.');
+        } finally {
+            setIsScanning(false);
+        }
+    };
+
+    const importMechanic = async (mechanic: ParsedMechanic) => {
+        if (!user || !results) return;
+        try {
+            const success = await ArchiveStorage.saveMechanic(user.uid, mechanic, results.info.title);
+            if (success) {
+                alert(`✅ ${mechanic.name} importado com sucesso!`);
+            } else {
+                alert(`❌ Erro ao importar ${mechanic.name}`);
+            }
+        } catch (error) {
+            console.error('Erro ao importar:', error);
+            alert('Erro crítico ao importar.');
+        }
+    };
+
+    const fetchFromAPI = async (type: string) => {
+        setIsScanning(true);
+        setResults(null);
+        try {
+            const res = await fetch(`/api/dnd-api?type=${type}`);
+            const data = await res.json();
+
+            if (res.ok) {
+                // Converter formato da API para nosso formato
+                const mechanics = data.items.map((item: any) => ({
+                    type: type === 'spells' ? 'spell' : type === 'monsters' ? 'monster' : 'item',
+                    name: item.name,
+                    content: item.desc?.join(' ') || item.description || JSON.stringify(item).substring(0, 200),
+                    raw: JSON.stringify(item),
+                    metadata: item
+                }));
+
+                setResults({
+                    count: mechanics.length,
+                    mechanics: mechanics,
+                    info: {
+                        title: `API D&D 5e - ${type}`,
+                        pages: Math.ceil(mechanics.length / 10)
+                    }
+                });
+            } else {
+                alert(`Erro: ${data.error || 'Falha ao buscar da API'}`);
+            }
+        } catch (error) {
+            console.error('Erro ao buscar da API:', error);
+            alert('Erro ao conectar com a API.');
+        } finally {
+            setIsScanning(false);
+        }
+    };
+
+    const fetchFrom5etools = async (type: string) => {
+        setIsScanning(true);
+        setResults(null);
+        try {
+            const res = await fetch(`/api/fivetools?type=${type}`);
+            const data = await res.json();
+
+            if (res.ok) {
+                const mechanics = data.items.map((item: any) => ({
+                    type: type === 'spells' ? 'spell' : type === 'monsters' ? 'monster' : type === 'classes' || type === 'races' ? 'rule' : 'item',
+                    name: item.name,
+                    content: item.entries?.map((e: any) => typeof e === 'string' ? e : JSON.stringify(e)).join(' ') || item.description || JSON.stringify(item).substring(0, 200),
+                    raw: JSON.stringify(item),
+                    metadata: item
+                }));
+
+                setResults({
+                    count: mechanics.length,
+                    mechanics: mechanics,
+                    info: {
+                        title: `5etools - ${type}`,
+                        pages: Math.ceil(mechanics.length / 10)
+                    }
+                });
+            } else {
+                alert(`Erro: ${data.error || 'Falha ao buscar do 5etools'}`);
+            }
+        } catch (error) {
+            console.error('Erro ao buscar do 5etools:', error);
+            alert('Erro ao conectar com o 5etools.');
+        } finally {
+            setIsScanning(false);
+        }
+    };
+
+    return (
+        <div className="space-y-6">
+            <div className="flex justify-between items-center">
+                <h2 className="text-2xl font-bold font-cinzel text-rpg-gold">🏛️ O Arquivista</h2>
+                <p className="text-rpg-grey text-sm italic">Processar PDFs e extrair mecânicas...</p>
+            </div>
+
+            <div className="grid md:grid-cols-3 gap-6">
+                {/* Lista de Livros */}
+                <div className="bg-rpg-slate/50 p-4 rounded-lg border border-rpg-gold/10 h-fit space-y-4">
+                    <h3 className="text-lg font-bold font-cinzel text-rpg-gold mb-2">Importar da API Oficial</h3>
+                    <p className="text-xs text-rpg-grey mb-3">Buscar dados do SRD D&D 5e</p>
+
+                    <div className="space-y-2">
+                        <button
+                            onClick={() => fetchFromAPI('spells')}
+                            disabled={isScanning}
+                            className="w-full bg-blue-600/20 hover:bg-blue-600/40 text-blue-200 border border-blue-500/30 px-3 py-2 rounded text-xs font-bold transition-all disabled:opacity-50"
+                        >
+                            🔮 Magias SRD
+                        </button>
+                        <button
+                            onClick={() => fetchFromAPI('monsters')}
+                            disabled={isScanning}
+                            className="w-full bg-red-600/20 hover:bg-red-600/40 text-red-200 border border-red-500/30 px-3 py-2 rounded text-xs font-bold transition-all disabled:opacity-50"
+                        >
+                            👹 Monstros SRD
+                        </button>
+                        <button
+                            onClick={() => fetchFromAPI('equipment')}
+                            disabled={isScanning}
+                            className="w-full bg-purple-600/20 hover:bg-purple-600/40 text-purple-200 border border-purple-500/30 px-3 py-2 rounded text-xs font-bold transition-all disabled:opacity-50"
+                        >
+                            ⚔️ Equipamentos SRD
+                        </button>
+                    </div>
+
+                    <div className="border-t border-rpg-gold/10 pt-4 mt-4">
+                        <h3 className="text-lg font-bold font-cinzel text-rpg-gold mb-2">5etools (Mais Conteúdo)</h3>
+                        <p className="text-xs text-rpg-grey mb-3">Classes, raças e mais</p>
+                        <div className="space-y-2 mb-4">
+                            <button
+                                onClick={() => fetchFrom5etools('classes')}
+                                disabled={isScanning}
+                                className="w-full bg-green-600/20 hover:bg-green-600/40 text-green-200 border border-green-500/30 px-3 py-2 rounded text-xs font-bold transition-all disabled:opacity-50"
+                            >
+                                📚 Classes
+                            </button>
+                            <button
+                                onClick={() => fetchFrom5etools('races')}
+                                disabled={isScanning}
+                                className="w-full bg-yellow-600/20 hover:bg-yellow-600/40 text-yellow-200 border border-yellow-500/30 px-3 py-2 rounded text-xs font-bold transition-all disabled:opacity-50"
+                            >
+                                👥 Raças
+                            </button>
+                        </div>
+                    </div>
+
+                    <div className="border-t border-rpg-gold/10 pt-4 mt-4">
+                        <h3 className="text-lg font-bold font-cinzel text-rpg-gold mb-4">Seus Livros (PDF)</h3>
+                        {books.length === 0 ? (
+                            <p className="text-xs text-rpg-grey italic">Nenhum PDF encontrado na pasta /books.</p>
+                        ) : (
+                            <div className="space-y-2">
+                                {books.map(book => (
+                                    <div key={book} className="flex flex-col gap-2 p-3 bg-rpg-panel border border-white/5 rounded">
+                                        <span className="text-xs truncate font-medieval" title={book}>{book}</span>
+                                        <button
+                                            onClick={() => processBook(book)}
+                                            disabled={isScanning}
+                                            className="bg-purple-600/20 hover:bg-purple-600/40 text-purple-200 border border-purple-500/30 px-3 py-1 rounded text-[10px] font-bold transition-all disabled:opacity-50"
+                                        >
+                                            {isScanning ? '⏳ Processando...' : '🔍 Processar Livro'}
+                                        </button>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                </div>
+
+                {/* Resultados */}
+                <div className="md:col-span-2">
+                    {results && results.info ? (
+                        <div className="space-y-4">
+                            <div className="bg-rpg-gold/10 border border-rpg-gold/30 p-4 rounded-lg flex justify-between items-center">
+                                <div>
+                                    <h4 className="font-bold text-rpg-gold">{results.info?.title || 'Livro'}</h4>
+                                    <p className="text-xs text-rpg-grey">{results.count} mecânicas detectadas.</p>
+                                </div>
+                                <span className="text-xs bg-rpg-gold/20 text-rpg-gold px-2 py-1 rounded">{results.info?.pages || 0} páginas</span>
+                            </div>
+
+                            <div className="max-h-[600px] overflow-y-auto space-y-3 pr-2 custom-scrollbar">
+                                {results.mechanics && results.mechanics.map((m: any, i: number) => (
+                                    <div key={i} className="bg-rpg-panel border border-rpg-gold/10 p-4 rounded hover:border-rpg-gold/30 transition-all">
+                                        <div className="flex justify-between items-start mb-2">
+                                            <div className="flex items-center gap-2">
+                                                <span className={`text-[10px] uppercase font-bold px-1.5 py-0.5 rounded ${m.type === 'spell' ? 'bg-blue-900/40 text-blue-300' :
+                                                    m.type === 'monster' ? 'bg-red-900/40 text-red-300' :
+                                                        m.type === 'item' ? 'bg-purple-900/40 text-purple-300' :
+                                                            'bg-gray-900/40 text-gray-300'
+                                                    }`}>
+                                                    {m.type === 'spell' ? 'Magia' : m.type === 'monster' ? 'Monstro' : m.type === 'item' ? 'Item' : 'Regra'}
+                                                </span>
+                                                <h5 className="font-bold text-rpg-gold-light">{m.name}</h5>
+                                            </div>
+                                            <button
+                                                onClick={() => importMechanic(m)}
+                                                className="bg-rpg-gold/80 hover:bg-rpg-gold text-rpg-dark px-3 py-1 rounded text-[10px] font-bold"
+                                            >
+                                                Importar
+                                            </button>
+                                        </div>
+                                        <div className="text-xs text-rpg-parchment/70 line-clamp-3 font-medieval">
+                                            {m.content}
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    ) : isScanning ? (
+                        <div className="flex flex-col items-center justify-center py-20 text-rpg-grey">
+                            <div className="relative w-16 h-16 mb-4">
+                                <div className="absolute inset-0 border-4 border-rpg-gold/20 rounded-full"></div>
+                                <div className="absolute inset-0 border-4 border-rpg-gold border-t-transparent rounded-full animate-spin"></div>
+                            </div>
+                            <p className="font-cinzel text-lg animate-pulse">Processando PDF...</p>
+                            <p className="text-xs mt-2 italic">Isso pode levar alguns minutos para PDFs grandes.</p>
+                        </div>
+                    ) : (
+                        <div className="bg-rpg-slate/20 border border-dashed border-rpg-gold/20 rounded-lg h-[500px] flex items-center justify-center text-rpg-grey">
+                            <div className="text-center p-8 max-w-md">
+                                <p className="text-4xl mb-4 opacity-50">📚</p>
+                                <p className="font-medieval mb-4">Selecione um livro ao lado para processar.</p>
+                                <div className="text-[10px] text-left space-y-2 bg-rpg-panel/50 p-4 rounded">
+                                    <p><strong>Como funciona:</strong></p>
+                                    <p>• O sistema lê o PDF automaticamente</p>
+                                    <p>• Usa Regex para identificar mecânicas</p>
+                                    <p>• Não gasta tokens de IA</p>
+                                    <p className="text-rpg-gold mt-2">✨ 100% automático!</p>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            </div>
+        </div>
+    );
+}
+
 // Componente NPCs
 function NpcTab({ searchQuery }: { searchQuery: string }) {
     const { user } = useAuth();
@@ -2406,7 +2688,8 @@ export default function BibliotecaPage() {
                         { id: 'itens' as TabType, label: '⚗️ Itens', icon: '💎' },
                         { id: 'npcs' as TabType, label: '👥 NPCs', icon: '👤' },
                         { id: 'regras' as TabType, label: '📕 Regras', icon: '⚖️' },
-                        { id: 'notas' as TabType, label: '📜 Anotações', icon: '🖋️' }
+                        { id: 'notas' as TabType, label: '📜 Anotações', icon: '🖋️' },
+                        { id: 'arquivista' as TabType, label: '🏛️ Arquivista', icon: '📜' }
                     ].map(tab => (
                         <button
                             key={tab.id}
@@ -2460,6 +2743,8 @@ export default function BibliotecaPage() {
                     {activeTab === 'regras' && <RegrasTab searchQuery={searchQuery} />}
 
                     {activeTab === 'notas' && <NotasTab />}
+
+                    {activeTab === 'arquivista' && <ArquivistaTab />}
                 </div>
             </section>
         </div>
