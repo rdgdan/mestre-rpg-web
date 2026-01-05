@@ -111,3 +111,18 @@ export const npcPersonalities = [
   "Alegre e adora uma boa festa.",
   "Melancólico e vive lamentando o passado."
 ];
+
+export const npcRaces = [
+  "Humano",
+  "Elfo",
+  "Anão",
+  "Halfling",
+  "Gnomo",
+  "Meio-Elfo",
+  "Meio-Orc",
+  "Tiefling",
+  "Draconato",
+  "Goblin",
+  "Orc",
+  "Genasi"
+];

@@ -194,7 +194,7 @@ export default function CharacterListPage() {
                   <div className="flex justify-end gap-2 mt-auto pt-4 relative">
                     <button
                       onClick={(e) => handleDeleteCharacter(e, char.id)}
-                      className="bg-rpg-red/80 hover:bg-rpg-red text-white font-bold py-2 px-4 rounded border border-rpg-red/50 text-xs transition-all opacity-0 group-hover:opacity-100 transform translate-y-2 group-hover:translate-y-0 font-cinzel shadow-md hover:shadow-glow-red"
+                      className="bg-rpg-red/80 hover:bg-rpg-red text-white font-bold py-2 px-4 rounded border border-rpg-red/50 text-xs transition-all md:opacity-0 md:group-hover:opacity-100 md:transform md:translate-y-2 md:group-hover:translate-y-0 font-cinzel shadow-md hover:shadow-glow-red"
                       title="Apagar Herói Permanentemente"
                     >
                       Exilar

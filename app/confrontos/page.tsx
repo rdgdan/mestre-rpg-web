@@ -5,10 +5,12 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import { db } from '@/lib/firebase';
-import { collection, query, where, onSnapshot, doc, updateDoc, increment, setDoc, deleteDoc, getDocs } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, doc, updateDoc, increment, setDoc, deleteDoc, getDocs, getDoc } from 'firebase/firestore';
 import Modal from '@/components/Modal';
 import { dndMonsters, MonsterData } from '@/lib/monsters-data';
 import { npcTemplates, NPCTemplate } from '@/lib/npc-combatants-data';
+import { BASE_EFFECTS, GameEffectTemplate } from '@/lib/effects-data';
+import { generateRandomName } from '@/lib/name-generator';
 
 // Função utilitária para rolar 1d20
 function rollD20() {
@@ -107,9 +109,12 @@ export default function ConfrontosPage() {
     const [isEffectModalOpen, setIsEffectModalOpen] = useState(false);
     const [isXPModalOpen, setIsXPModalOpen] = useState(false);
     const [selectedCombatantId, setSelectedCombatantId] = useState<string | null>(null);
+    const [hpAdjustmentValues, sethpAdjustmentValues] = useState<Record<string, string>>({});
     const [xpDonationActive, setXpDonationActive] = useState(false);
     const [xpSummary, setXpSummary] = useState({ totalXp: 0, xpPerPlayer: 0, playerCount: 0 });
     const [fallenHeroesStatus, setFallenHeroesStatus] = useState<Record<string, 'dead' | 'revive'>>({});
+    const [globalEffects, setGlobalEffects] = useState<GameEffectTemplate[]>([]);
+    const [isSyncingEffects, setIsSyncingEffects] = useState(false);
 
     // --- Estados de Formulário ---
     const [availablePlayers, setAvailablePlayers] = useState<PlayerReference[]>([]);
@@ -130,6 +135,71 @@ export default function ConfrontosPage() {
         name: '',
         duration: 1
     });
+    // Filtros de Monstros
+    const [monsterFilter, setMonsterFilter] = useState('');
+    const [crFilter, setCrFilter] = useState('all');
+    const [typeFilter, setTypeFilter] = useState('all');
+    // Filtros de NPCs
+    const [npcRoleFilter, setNpcRoleFilter] = useState('all');
+    const [npcRaceFilter, setNpcRaceFilter] = useState('all');
+    // Status de Sync
+    const [isSyncingData, setIsSyncingData] = useState(false);
+
+    // Carregar efeitos globais do Firestore
+    useEffect(() => {
+        const loadGlobalEffects = async () => {
+            try {
+                const docRef = doc(db, 'game_rules', 'effects');
+                const docSnap = await getDoc(docRef);
+                if (docSnap.exists()) {
+                    setGlobalEffects(docSnap.data().list || []);
+                }
+            } catch (error) {
+                console.error('Erro ao carregar efeitos:', error);
+            }
+        };
+        loadGlobalEffects();
+    }, []);
+
+    // Função para sincronizar efeitos base com Firestore
+    const syncEffectsToFirestore = async () => {
+        if (!confirm('Deseja popular o banco de dados com a lista base de efeitos e condições?')) return;
+        setIsSyncingEffects(true);
+        try {
+            const docRef = doc(db, 'game_rules', 'effects');
+            await setDoc(docRef, { list: BASE_EFFECTS });
+            setGlobalEffects(BASE_EFFECTS);
+            alert('Efeitos sincronizados com sucesso!');
+        } catch (error) {
+            console.error('Erro ao sincronizar efeitos:', error);
+            alert('Erro ao sincronizar. Verifique o console.');
+        } finally {
+            setIsSyncingEffects(false);
+        }
+    };
+
+    // Função para Sincronizar Tudo com Firestore (Admin/Mestre)
+    const syncAllDataToFirestore = async () => {
+        if (!confirm('Deseja enviar TODOS os monstros e NPCs do sistema para o banco de dados? Isso pode sobrescrever dados existentes nas coleções "game_rules/monsters" e "game_rules/npcs".')) return;
+
+        setIsSyncingData(true);
+        try {
+            // 1. Monstros
+            const monstersRef = doc(db, 'game_rules', 'monsters');
+            await setDoc(monstersRef, { list: dndMonsters }, { merge: true });
+
+            // 2. NPCs
+            const npcsRef = doc(db, 'game_rules', 'npcs');
+            await setDoc(npcsRef, { list: npcTemplates }, { merge: true });
+
+            alert('Bestiário e NPCs sincronizados com o banco de dados com sucesso!');
+        } catch (error) {
+            console.error('Erro ao sincronizar dados:', error);
+            alert('Erro ao sincronizar dados. Verifique o console.');
+        } finally {
+            setIsSyncingData(false);
+        }
+    };
 
     // Efeito para combinar personagens pessoais e de campanha
     useEffect(() => {
@@ -247,7 +317,15 @@ export default function ConfrontosPage() {
             return;
         }
         // Ordenar antes de começar o combate propriamente dito
-        const sorted = [...combatants].sort((a, b) => b.initiative - a.initiative);
+        const sorted = [...combatants].sort((a, b) => {
+            if (b.initiative !== a.initiative) return b.initiative - a.initiative;
+            // Desempate por Destreza
+            const dexA = getDexMod(a);
+            const dexB = getDexMod(b);
+            if (dexB !== dexA) return dexB - dexA;
+            // Desempate final aleatório
+            return Math.random() - 0.5;
+        });
         setCombatants(sorted);
 
         // Encontrar o primeiro combatente vivo para começar
@@ -611,7 +689,15 @@ export default function ConfrontosPage() {
     const updateHP = (id: string, amount: number) => {
         setCombatants(combatants.map(c => {
             if (c.id === id) {
-                return { ...c, hp: Math.max(0, c.hp + amount) };
+                const inputValue = hpAdjustmentValues[id];
+                const adjustAmount = (inputValue && !isNaN(Number(inputValue))) ? Number(inputValue) : 1;
+                const multiplier = amount > 0 ? 1 : -1;
+                const totalAdjust = adjustAmount * multiplier;
+
+                // Limpar o input após o uso
+                sethpAdjustmentValues(prev => ({ ...prev, [id]: '' }));
+
+                return { ...c, hp: Math.min(c.maxHp, Math.max(0, c.hp + totalAdjust)) };
             }
             return c;
         }));
@@ -836,7 +922,7 @@ export default function ConfrontosPage() {
                                 relative bg-rpg-panel border-2 rounded-lg p-1 transition-all
                                 ${c.hp <= 0 ? 'grayscale opacity-50 border-red-900/50 scale-[0.98]' : ''}
                                 ${phase === 'combat' && isCurrent
-                                            ? 'border-rpg-gold shadow-glow-gold/40 translate-x-4'
+                                            ? 'border-rpg-gold ring-4 ring-rpg-gold/30 shadow-glow-gold translate-x-4 bg-rpg-panel/80'
                                             : 'border-rpg-gold/10 opacity-75'}
                                 ${phase === 'initiative' ? 'border-sky-500/40 shadow-glow-sky' : ''}
                             `}
@@ -862,14 +948,15 @@ export default function ConfrontosPage() {
                                             ${phase === 'initiative' ? 'bg-sky-900/40 border-sky-500 shadow-glow-sky' : 'bg-rpg-slate border-rpg-gold/20'}
                                         `}>
                                             <span className="text-[8px] sm:text-[10px] text-rpg-grey uppercase font-cinzel">Ini</span>
-                                            {phase === 'initiative' ? (
+                                            {phase === 'initiative' || phase === 'preparation' ? (
                                                 <input
                                                     type="number"
                                                     value={c.initiative}
                                                     onChange={(e) => updateInitiative(c.id, Number(e.target.value))}
                                                     onFocus={(e) => e.target.select()}
-                                                    className="bg-transparent text-xl sm:text-2xl font-bold font-medieval text-white w-full text-center focus:outline-none"
-                                                    autoFocus={index === 0}
+                                                    className={`bg-transparent text-xl sm:text-2xl font-bold font-medieval text-white w-full text-center focus:outline-none ${phase === 'preparation' ? 'opacity-80' : ''}`}
+                                                    autoFocus={phase === 'initiative' && index === 0}
+                                                    placeholder="0"
                                                 />
                                             ) : (
                                                 <span className="text-xl sm:text-2xl font-bold font-medieval text-rpg-gold">{c.initiative}</span>
@@ -902,18 +989,18 @@ export default function ConfrontosPage() {
                                                     )}
                                                 </div>
 
-                                                <div className="flex gap-1.5 sm:gap-2 ml-auto">
-                                                    <div className="flex flex-col items-center justify-center bg-rpg-panel border border-rpg-gold/20 rounded px-1.5 sm:px-2 min-w-[32px] sm:min-w-[40px]">
-                                                        <span className="text-[7px] sm:text-[8px] text-rpg-grey uppercase font-cinzel">CA</span>
-                                                        <span className="text-[10px] sm:text-xs font-bold text-rpg-gold">{c.ac}</span>
+                                                <div className="flex gap-2 sm:gap-3 ml-auto">
+                                                    <div className="flex flex-col items-center justify-center bg-rpg-panel border border-rpg-gold/30 rounded px-2 sm:px-3 min-w-[40px] sm:min-w-[50px] py-1 shadow-inner">
+                                                        <span className="text-[8px] sm:text-[9px] text-rpg-grey uppercase font-cinzel">CA</span>
+                                                        <span className="text-sm sm:text-base font-bold text-rpg-gold leading-none">{c.ac}</span>
                                                     </div>
-                                                    <div className="flex flex-col items-center justify-center bg-rpg-panel border border-white/5 rounded px-1.5 sm:px-2 min-w-[32px] sm:min-w-[40px]">
-                                                        <span className="text-[7px] sm:text-[8px] text-rpg-grey uppercase font-cinzel">CR</span>
-                                                        <span className="text-[10px] sm:text-xs font-bold text-rpg-parchment">{c.cr}</span>
+                                                    <div className="flex flex-col items-center justify-center bg-rpg-panel border border-white/20 rounded px-2 sm:px-3 min-w-[40px] sm:min-w-[50px] py-1 shadow-inner">
+                                                        <span className="text-[8px] sm:text-[9px] text-rpg-grey uppercase font-cinzel">CR</span>
+                                                        <span className="text-sm sm:text-base font-bold text-rpg-parchment leading-none">{c.cr}</span>
                                                     </div>
-                                                    <div className="flex flex-col items-center justify-center bg-rpg-panel border border-rpg-gold/10 rounded px-1.5 sm:px-2 min-w-[32px] sm:min-w-[40px] hidden xs:flex">
-                                                        <span className="text-[7px] sm:text-[8px] text-rpg-grey uppercase font-cinzel">XP</span>
-                                                        <span className="text-[10px] sm:text-xs font-bold text-rpg-gold-light">{c.xp}</span>
+                                                    <div className="flex flex-col items-center justify-center bg-rpg-panel border border-rpg-gold/20 rounded px-2 sm:px-3 min-w-[40px] sm:min-w-[50px] py-1 hidden xs:flex shadow-inner">
+                                                        <span className="text-[8px] sm:text-[9px] text-rpg-grey uppercase font-cinzel">XP</span>
+                                                        <span className="text-sm sm:text-base font-bold text-rpg-gold-light leading-none">{c.xp}</span>
                                                     </div>
                                                 </div>
                                             </div>
@@ -921,18 +1008,18 @@ export default function ConfrontosPage() {
                                             {/* Detalhes Extra no Combat */}
                                             {phase === 'combat' && (
                                                 <div className="mt-1">
-                                                    <div className="flex flex-wrap gap-1.5 sm:gap-2 items-center mb-1">
+                                                    <div className="flex flex-wrap gap-2 items-center mb-2">
                                                         {c.statusEffects.map(effect => (
-                                                            <div key={effect.id} className="bg-purple-900/40 border border-purple-500/30 rounded px-1.5 sm:px-2 py-0.5 text-[10px] sm:text-xs flex items-center gap-1.5 sm:gap-2">
+                                                            <div key={effect.id} className="bg-purple-900/50 border-2 border-purple-500/40 rounded px-2 sm:px-3 py-1 text-xs sm:text-sm flex items-center gap-2 shadow-lg">
                                                                 <span className="text-purple-100 font-bold">✨ {effect.name}</span>
-                                                                <span className="bg-purple-500 text-white px-1 sm:px-1 rounded-full text-[8px] sm:text-[10px]">{effect.duration}</span>
+                                                                <span className="bg-purple-500 text-white px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-bold">{effect.duration}</span>
                                                             </div>
                                                         ))}
                                                         <button
                                                             onClick={() => { setSelectedCombatantId(c.id); setIsEffectModalOpen(true); }}
-                                                            className="text-rpg-grey hover:text-rpg-gold text-[8px] sm:text-[10px] uppercase font-bold tracking-tighter ml-1"
+                                                            className="bg-rpg-slate/60 hover:bg-rpg-gold/20 border border-rpg-gold/30 text-rpg-gold hover:text-white text-[10px] sm:text-xs uppercase font-bold tracking-widest px-3 py-1 rounded-full transition-all flex items-center gap-1 shadow-sm active:scale-95"
                                                         >
-                                                            + Efeito
+                                                            <span>+</span> Efeito
                                                         </button>
                                                     </div>
 
@@ -967,16 +1054,30 @@ export default function ConfrontosPage() {
                                                         <span className="text-[8px] sm:text-[10px] text-rpg-grey font-medieval">Vida</span>
                                                     </div>
                                                 </div>
-                                                <div className="flex gap-1">
+                                                <div className="flex gap-1 items-center">
+                                                    <input
+                                                        type="number"
+                                                        placeholder="0"
+                                                        value={hpAdjustmentValues[c.id] || ''}
+                                                        onChange={(e) => sethpAdjustmentValues(prev => ({ ...prev, [c.id]: e.target.value }))}
+                                                        onKeyDown={(e) => {
+                                                            if (e.key === 'Enter') {
+                                                                updateHP(c.id, -1); // Enter aplica dano por padrão
+                                                            }
+                                                        }}
+                                                        className="w-12 h-7 sm:h-8 bg-black/40 border border-white/10 rounded px-1 text-xs text-center focus:border-rpg-gold outline-none font-medieval [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                                    />
                                                     <button
                                                         onClick={() => updateHP(c.id, -1)}
                                                         className="w-7 h-7 sm:w-8 sm:h-8 rounded bg-red-900/40 border border-red-500/30 flex items-center justify-center hover:bg-red-800 text-red-500 font-bold active:scale-95"
+                                                        title="Aplicar Dano (ou valor do campo)"
                                                     >
                                                         -
                                                     </button>
                                                     <button
                                                         onClick={() => updateHP(c.id, 1)}
                                                         className="w-7 h-7 sm:w-8 sm:h-8 rounded bg-green-900/40 border border-green-500/30 flex items-center justify-center hover:bg-green-800 text-green-500 font-bold active:scale-95"
+                                                        title="Aplicar Cura (ou valor do campo)"
                                                     >
                                                         +
                                                     </button>
@@ -1135,60 +1236,159 @@ export default function ConfrontosPage() {
                                         <label className="block text-rpg-gold text-xs uppercase font-cinzel mb-1">
                                             Selecionar da Biblioteca ({newCombatant.type === 'monster' ? 'Monstros' : 'NPCs'})
                                         </label>
-                                        <select
-                                            className="w-full bg-rpg-slate border border-white/10 p-2 text-sm sm:p-3 sm:text-base rounded font-medieval text-rpg-parchment focus:border-rpg-gold outline-none"
-                                            onChange={(e) => {
-                                                if (newCombatant.type === 'monster') {
-                                                    const m = dndMonsters.find(dm => dm.name === e.target.value);
-                                                    if (m) {
-                                                        setNewCombatant({
-                                                            ...newCombatant,
-                                                            name: m.name,
-                                                            hp: m.hp,
-                                                            ac: m.ac,
-                                                            cr: m.challenge,
-                                                            xp: m.xp
-                                                        });
-                                                    }
-                                                } else {
-                                                    const n = npcTemplates.find(nt => nt.name === e.target.value);
-                                                    if (n) {
-                                                        setNewCombatant({
-                                                            ...newCombatant,
-                                                            name: n.name,
-                                                            hp: n.hp,
-                                                            ac: n.ac,
-                                                            cr: n.challenge,
-                                                            xp: n.xp
-                                                        });
-                                                    }
-                                                }
-                                            }}
-                                            defaultValue=""
-                                        >
-                                            <option value="" disabled>-- Escolha um {newCombatant.type === 'monster' ? 'Monstro' : 'NPC'} --</option>
-                                            {newCombatant.type === 'monster'
-                                                ? dndMonsters.map(m => (
-                                                    <option key={m.name} value={m.name}>{m.name} (CR {m.challenge} • {m.hp} HP)</option>
-                                                ))
-                                                : npcTemplates.map(n => (
-                                                    <option key={n.name} value={n.name}>{n.name} (CR {n.challenge} • {n.hp} HP)</option>
-                                                ))
-                                            }
-                                        </select>
+                                        <div className="space-y-2">
+                                            {/* Filtros */}
+                                            {newCombatant.type === 'monster' && (
+                                                <div className="flex gap-2 flex-wrap">
+                                                    <input
+                                                        type="text"
+                                                        placeholder="🔍 Buscar..."
+                                                        className="flex-grow bg-rpg-slate border border-rpg-gold/20 p-2 text-xs rounded text-rpg-parchment focus:border-rpg-gold outline-none"
+                                                        value={monsterFilter}
+                                                        onChange={(e) => setMonsterFilter(e.target.value)}
+                                                    />
+                                                    <select
+                                                        className="bg-rpg-slate border border-rpg-gold/20 p-2 text-xs rounded text-rpg-parchment outline-none"
+                                                        value={crFilter}
+                                                        onChange={(e) => setCrFilter(e.target.value)}
+                                                    >
+                                                        <option value="all">CR: Td</option>
+                                                        {Array.from(new Set(dndMonsters.map(m => m.challenge))).sort((a, b) => {
+                                                            const val = (v: string) => v.includes('/') ? eval(v) : Number(v);
+                                                            return val(a) - val(b);
+                                                        }).map(cr => (
+                                                            <option key={cr} value={cr}>CR {cr}</option>
+                                                        ))}
+                                                    </select>
+                                                    <select
+                                                        className="bg-rpg-slate border border-rpg-gold/20 p-2 text-xs rounded text-rpg-parchment outline-none max-w-[100px]"
+                                                        value={typeFilter}
+                                                        onChange={(e) => setTypeFilter(e.target.value)}
+                                                    >
+                                                        <option value="all">Tipo: Td</option>
+                                                        {Array.from(new Set(dndMonsters.map(m => m.type))).sort().map(t => (
+                                                            <option key={t} value={t}>{t}</option>
+                                                        ))}
+                                                    </select>
+                                                </div>
+                                            )}
+
+
+
+                                            {/* Filtros de NPCs */}
+                                            {newCombatant.type === 'npc' && (
+                                                <div className="flex gap-2 flex-wrap mb-2">
+                                                    <select
+                                                        className="bg-rpg-slate border border-rpg-gold/20 p-2 text-xs rounded text-rpg-parchment outline-none"
+                                                        value={npcRoleFilter}
+                                                        onChange={(e) => setNpcRoleFilter(e.target.value)}
+                                                    >
+                                                        <option value="all">Função: Td</option>
+                                                        <option value="civilian">Civis</option>
+                                                        <option value="soldier">Soldados</option>
+                                                        <option value="specialist">Especialistas</option>
+                                                        <option value="villain">Vilões</option>
+                                                    </select>
+                                                    <select
+                                                        className="bg-rpg-slate border border-rpg-gold/20 p-2 text-xs rounded text-rpg-parchment outline-none"
+                                                        value={npcRaceFilter}
+                                                        onChange={(e) => setNpcRaceFilter(e.target.value)}
+                                                    >
+                                                        <option value="all">Raça: Td</option>
+                                                        {Array.from(new Set(npcTemplates.map(n => n.race).filter(Boolean))).sort().map(r => (
+                                                            <option key={r} value={r}>{r}</option>
+                                                        ))}
+                                                    </select>
+                                                </div>
+                                            )}
+
+                                            <div className="max-h-60 overflow-y-auto custom-scrollbar border border-white/10 rounded">
+                                                {newCombatant.type === 'monster' ? (
+                                                    <div className="grid grid-cols-1 gap-1 p-1">
+                                                        {dndMonsters
+                                                            .filter(m => {
+                                                                const matchName = m.name.toLowerCase().includes(monsterFilter.toLowerCase());
+                                                                const matchCR = crFilter === 'all' || m.challenge === crFilter;
+                                                                const matchType = typeFilter === 'all' || m.type === typeFilter;
+                                                                return matchName && matchCR && matchType;
+                                                            })
+                                                            .map(m => (
+                                                                <button
+                                                                    key={m.name}
+                                                                    type="button"
+                                                                    onClick={() => setNewCombatant({
+                                                                        ...newCombatant,
+                                                                        name: m.name,
+                                                                        hp: m.hp,
+                                                                        ac: m.ac,
+                                                                        cr: m.challenge,
+                                                                        xp: m.xp,
+                                                                        initiative: ''
+                                                                    })}
+                                                                    className={`text-left p-2 text-xs sm:text-sm font-medieval hover:bg-rpg-gold/10 rounded flex justify-between items-center ${newCombatant.name === m.name ? 'bg-rpg-gold/20 text-rpg-gold border border-rpg-gold/30' : 'text-rpg-parchment'}`}
+                                                                >
+                                                                    <span>{m.name}</span>
+                                                                    <span className="text-rpg-grey text-[10px]">CR {m.challenge} • {m.type}</span>
+                                                                </button>
+                                                            ))}
+                                                    </div>
+                                                ) : newCombatant.type === 'npc' ? (
+                                                    <div className="grid grid-cols-1 gap-1 p-1">
+                                                        {npcTemplates
+                                                            .filter(n => {
+                                                                const matchRole = npcRoleFilter === 'all' || n.role === npcRoleFilter;
+                                                                const matchRace = npcRaceFilter === 'all' || n.race === npcRaceFilter;
+                                                                return matchRole && matchRace;
+                                                            })
+                                                            .map(n => (
+                                                                <button
+                                                                    key={n.name}
+                                                                    type="button"
+                                                                    onClick={() => setNewCombatant({
+                                                                        ...newCombatant,
+                                                                        name: n.name,
+                                                                        hp: n.hp,
+                                                                        ac: n.ac,
+                                                                        cr: n.challenge,
+                                                                        xp: n.xp,
+                                                                        initiative: ''
+                                                                    })}
+                                                                    className={`text-left p-2 text-xs sm:text-sm font-medieval hover:bg-rpg-gold/10 rounded flex justify-between items-center ${newCombatant.name === n.name ? 'bg-rpg-gold/20 text-rpg-gold border border-rpg-gold/30' : 'text-rpg-parchment'}`}
+                                                                >
+                                                                    <span>{n.name}</span>
+                                                                    <span className="text-rpg-grey text-[10px]">{n.role ? n.role.toUpperCase() : 'NPC'} • {n.race || 'Humano'}</span>
+                                                                </button>
+                                                            ))}
+                                                    </div>
+                                                ) : null}
+                                            </div>
+                                        </div>
                                     </div>
 
                                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
                                         <div className="col-span-2 sm:col-span-4">
                                             <label className="block text-rpg-gold text-xs uppercase font-cinzel mb-1">Nome Personalizado</label>
-                                            <input
-                                                type="text"
-                                                className="w-full bg-rpg-slate border border-white/10 p-2 text-sm sm:p-3 sm:text-base rounded font-medieval text-rpg-parchment focus:border-rpg-gold outline-none"
-                                                placeholder="Nome..."
-                                                value={newCombatant.name}
-                                                onChange={(e) => setNewCombatant({ ...newCombatant, name: e.target.value })}
-                                                required
-                                            />
+                                            <div className="flex gap-2">
+                                                <input
+                                                    type="text"
+                                                    className="w-full bg-rpg-slate border border-white/10 p-2 text-sm sm:p-3 sm:text-base rounded font-medieval text-rpg-parchment focus:border-rpg-gold outline-none"
+                                                    placeholder="Nome..."
+                                                    value={newCombatant.name}
+                                                    onChange={(e) => setNewCombatant({ ...newCombatant, name: e.target.value })}
+                                                    required
+                                                />
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        const rnd = generateRandomName();
+                                                        setNewCombatant({ ...newCombatant, name: rnd.name });
+                                                    }}
+                                                    className="bg-rpg-slate border border-white/10 p-2 px-3 rounded hover:bg-white/5 active:scale-95"
+                                                    title="Gerar Nome Aleatório"
+                                                >
+                                                    🎲
+                                                </button>
+                                            </div>
                                         </div>
                                         <div className="col-span-1">
                                             <label className="block text-rpg-gold text-xs uppercase font-cinzel mb-1">HP</label>
@@ -1288,15 +1488,29 @@ export default function ConfrontosPage() {
             <Modal isOpen={isEffectModalOpen} onClose={() => setIsEffectModalOpen(false)} title="Adicionar Bênção ou Maldição">
                 <form onSubmit={addEffect} className="space-y-4">
                     <div>
-                        <label className="block text-rpg-gold text-xs uppercase font-cinzel mb-1">Nome do Efeito</label>
+                        <label className="block text-rpg-gold text-xs uppercase font-cinzel mb-1">Nome do Efeito / Magia</label>
                         <input
                             type="text"
+                            list="effects-suggestions"
                             className="w-full bg-rpg-slate border border-white/10 p-3 rounded font-medieval text-rpg-parchment focus:border-rpg-gold outline-none"
-                            placeholder="Fúria, Envenenado, Benção..."
+                            placeholder="Procure ou digite um efeito (Ex: Cego, Fúria...)"
                             value={newEffect.name}
-                            onChange={(e) => setNewEffect({ ...newEffect, name: e.target.value })}
+                            onChange={(e) => {
+                                const newName = e.target.value;
+                                const matchingEffect = globalEffects.find(fx => fx.name === newName);
+                                if (matchingEffect) {
+                                    setNewEffect({ name: newName, duration: matchingEffect.duration });
+                                } else {
+                                    setNewEffect({ ...newEffect, name: newName });
+                                }
+                            }}
                             required
                         />
+                        <datalist id="effects-suggestions">
+                            {globalEffects.map(fx => (
+                                <option key={fx.name} value={fx.name}>{fx.category.toUpperCase()}: {fx.name}</option>
+                            ))}
+                        </datalist>
                     </div>
                     <div>
                         <label className="block text-rpg-gold text-xs uppercase font-cinzel mb-1">Duração (Rodadas)</label>
@@ -1328,6 +1542,27 @@ export default function ConfrontosPage() {
                         </button>
                     </div>
                 </form>
+                {globalEffects.length === 0 && (
+                    <div className="mt-6 pt-4 border-t border-white/10 text-center">
+                        <p className="text-[10px] text-rpg-grey mb-2 uppercase font-cinzel">Banco de Dados Vazio</p>
+                        <div className="flex justify-center gap-2">
+                            <button
+                                onClick={syncEffectsToFirestore}
+                                disabled={isSyncingEffects}
+                                className="bg-rpg-gold/20 hover:bg-rpg-gold/40 text-rpg-gold border border-rpg-gold/30 px-4 py-2 rounded text-xs font-bold transition-all disabled:opacity-50"
+                            >
+                                {isSyncingEffects ? '🔄 Sincronizando...' : '🔄 Popular Efeitos'}
+                            </button>
+                            <button
+                                onClick={syncAllDataToFirestore}
+                                disabled={isSyncingData}
+                                className="bg-sky-900/40 hover:bg-sky-700/60 text-sky-200 border border-sky-500/30 px-4 py-2 rounded text-xs font-bold transition-all disabled:opacity-50"
+                            >
+                                {isSyncingData ? '☁️ Enviando...' : '☁️ Enviar Bestiário p/ Banco'}
+                            </button>
+                        </div>
+                    </div>
+                )}
             </Modal>
 
             {/* MODAL XP SUMMARY */}

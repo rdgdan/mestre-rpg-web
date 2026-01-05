@@ -9,13 +9,14 @@ import { useRouter } from 'next/navigation';
 import { addDoc, collection, query, where, onSnapshot, doc, updateDoc, deleteDoc } from 'firebase/firestore';
 import Modal from '@/components/Modal';
 import { Campaign } from '@/types/campaign';
-import { npcProfessions, npcAppearances, npcPersonalities } from '@/lib/npcData';
+import { fetchNpcTraitsFromFirestore, syncNpcTraitsToFirestore } from '@/lib/npc-traits-sync';
 
 // Tipos
 type NPC = {
   profession: string;
   appearance: string;
   personality: string;
+  race: string;
 };
 
 interface Character {
@@ -27,7 +28,7 @@ interface Character {
   imageUrl?: string;
 }
 
-const getRandomItem = (arr: string[]) => arr[Math.floor(Math.random() * arr.length)];
+const getRandomItem = (arr: string[]) => arr.length > 0 ? arr[Math.floor(Math.random() * arr.length)] : "Indefinido";
 
 export default function HomePage() {
   const { user } = useAuth();
@@ -36,6 +37,7 @@ export default function HomePage() {
   // States para Modais
   const [isCampaignModalOpen, setIsCampaignModalOpen] = useState(false);
   const [isNpcModalOpen, setIsNpcModalOpen] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
 
   // States para Formulário de Campanha (Criação e Edição)
   const [campaignName, setCampaignName] = useState('');
@@ -52,10 +54,25 @@ export default function HomePage() {
   const [npcAmount, setNpcAmount] = useState(1);
   const [selectedProfession, setSelectedProfession] = useState('Aleatória');
   const [generatedNpcs, setGeneratedNpcs] = useState<NPC[]>([]);
+  const [npcTraits, setNpcTraits] = useState({
+    professions: [] as string[],
+    appearances: [] as string[],
+    personalities: [] as string[],
+    races: [] as string[]
+  });
 
   // States para Edição de Nome do Usuário
   const [isEditingName, setIsEditingName] = useState(false);
   const [newName, setNewName] = useState(user?.displayName || '');
+
+  useEffect(() => {
+    // Carregar traits do Firestore
+    const loadTraits = async () => {
+      const traits = await fetchNpcTraitsFromFirestore();
+      setNpcTraits(traits);
+    };
+    loadTraits();
+  }, []);
 
   useEffect(() => {
     if (user) {
@@ -209,14 +226,37 @@ export default function HomePage() {
     e.preventDefault();
     const npcs: NPC[] = [];
     for (let i = 0; i < npcAmount; i++) {
+      const profession = selectedProfession === 'Aleatória'
+        ? getRandomItem(npcTraits.professions)
+        : selectedProfession;
+      const race = getRandomItem(npcTraits.races || []);
+      const appearance = getRandomItem(npcTraits.appearances);
+      const personality = getRandomItem(npcTraits.personalities);
+
       npcs.push({
-        profession: selectedProfession === 'Aleatória' ? getRandomItem(npcProfessions) : selectedProfession,
-        appearance: getRandomItem(npcAppearances),
-        personality: getRandomItem(npcPersonalities),
+        profession: profession,
+        appearance: appearance,
+        personality: personality,
+        race: race || 'Humano'
       });
     }
     setGeneratedNpcs(npcs);
   }
+
+  const handleSyncTraits = async () => {
+    if (!confirm('Deseja sincronizar as listas de traços (Profissões, Aparências, etc.) com o banco de dados? Isso buscará as versões mais recentes sem duplicar.')) return;
+    setIsSyncing(true);
+    try {
+      const traits = await syncNpcTraitsToFirestore();
+      setNpcTraits(traits);
+      alert('Sincronização concluída com sucesso!');
+    } catch (error) {
+      console.error("Erro ao sincronizar:", error);
+      alert('Erro ao sincronizar traços.');
+    } finally {
+      setIsSyncing(false);
+    }
+  };
 
   const handleUpdateName = async () => {
     if (!user || !newName.trim()) return;
@@ -453,16 +493,19 @@ export default function HomePage() {
       {/* Modal Gerador de NPC */}
       <Modal isOpen={isNpcModalOpen} onClose={() => setIsNpcModalOpen(false)} title="Gerador de NPCs">
         <form onSubmit={handleGenerateNpcs} className="space-y-4 mb-6">
-          <div className="flex flex-col sm:flex-row gap-4">
-            <div className="flex-1">
-              <label className="block mb-2 font-cinzel text-rpg-gold font-bold">Profissão / Arquétipo</label>
+          <div className="flex flex-col sm:flex-row gap-4 items-end">
+            <div className="flex-1 w-full relative z-50">
+              <div className="flex justify-between items-center mb-2">
+                <label className="font-cinzel text-rpg-gold font-bold">Profissão / Arquétipo</label>
+              </div>
               <select
                 value={selectedProfession}
                 onChange={(e) => setSelectedProfession(e.target.value)}
-                className="w-full p-3 rounded bg-rpg-slate border border-rpg-gold/20 focus:outline-none focus:ring-2 focus:ring-rpg-gold text-rpg-parchment transition-all font-medieval cursor-pointer"
+                className="w-full p-3 rounded bg-rpg-slate border border-rpg-gold/20 focus:outline-none focus:ring-2 focus:ring-rpg-gold text-rpg-parchment transition-all font-medieval cursor-pointer appearance-none max-h-48 overflow-y-auto"
+                style={{ maxHeight: '150px' }}
               >
                 <option>Aleatória</option>
-                {npcProfessions.map(p => <option key={p}>{p}</option>)}
+                {npcTraits.professions.map(p => <option key={p}>{p}</option>)}
               </select>
             </div>
             <div className="w-full sm:w-1/4">
@@ -485,10 +528,10 @@ export default function HomePage() {
         </form>
 
         {generatedNpcs.length > 0 && (
-          <div className="mt-6 border-t border-rpg-gold/20 pt-4 space-y-4 max-h-80 overflow-y-auto custom-scrollbar pr-2">
+          <div className="mt-6 border-t border-rpg-gold/20 pt-4 space-y-4 max-h-[400px] overflow-y-auto pr-2">
             {generatedNpcs.map((npc, index) => (
               <div key={index} className="bg-rpg-slate/50 rounded-lg p-4 border border-rpg-gold/10 shadow-md animate-fade-in hover:border-rpg-gold/30 transition-colors">
-                <h3 className="font-medieval text-xl text-rpg-gold font-bold mb-1">{npc.profession}</h3>
+                <h3 className="font-medieval text-xl text-rpg-gold font-bold mb-1">{npc.profession} <span className="text-sm text-rpg-grey font-sans">({npc.race})</span></h3>
                 <p className="font-sans text-sm text-rpg-parchment/80 mt-1"><strong>Aparência:</strong> <span className="text-rpg-grey">{npc.appearance}</span></p>
                 <p className="font-sans text-sm text-rpg-parchment/80"><strong>Personalidade:</strong> <span className="text-rpg-grey">{npc.personality}</span></p>
               </div>

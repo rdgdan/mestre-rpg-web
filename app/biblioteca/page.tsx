@@ -8,7 +8,8 @@ import { searchMonsters, getMonsterTypes, MonsterDataExtended } from '@/lib/mons
 import { dndWeapons } from '@/lib/items-data';
 import { db } from '@/lib/firebase';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
-import { srdBook } from '@/lib/srd-book-data';
+import { fetchSRDBookFromFirestore } from '@/lib/srd-sync';
+import { syncAllGameRulesToFirestore } from '@/lib/class-features-sync';
 import {
     DEFAULT_CLASSES,
     DEFAULT_SCHOOLS,
@@ -18,8 +19,9 @@ import {
     DEFAULT_PROPERTIES,
     DEFAULT_DICE
 } from '@/lib/dnd-data';
+import { searchNpcs, npcTemplates, NPCTemplate } from '@/lib/npc-combatants-data';
 
-type TabType = 'grimorio' | 'bestiario' | 'itens' | 'regras' | 'notas';
+type TabType = 'grimorio' | 'bestiario' | 'itens' | 'regras' | 'notas' | 'npcs';
 
 // Utilitário para normalizar nomes
 const normalizeName = (name: string) => {
@@ -42,7 +44,6 @@ function GrimorioTab({ searchQuery }: { searchQuery: string }) {
     const [customSpells, setCustomSpells] = useState<Spell[]>([]);
     const [globalSpells, setGlobalSpells] = useState<Spell[]>([]);
     const [isAddModalOpen, setIsAddModalOpen] = useState(false);
-    const [isSyncing, setIsSyncing] = useState(false);
     const [newSpell, setNewSpell] = useState({
         name: '',
         level: 0,
@@ -148,9 +149,20 @@ function GrimorioTab({ searchQuery }: { searchQuery: string }) {
             );
 
             if (existingIndex !== -1) {
+                if (!confirm(`A magia "${newSpell.name}" já existe no seu grimório. Deseja sobrescrevê-la?`)) {
+                    return;
+                }
                 updatedSpells = [...customSpells];
                 updatedSpells[existingIndex] = { ...updatedSpells[existingIndex], ...spell };
             } else {
+                // Check Global Spells DB before creating new
+                const globalDocRef = doc(db, 'magias', spell.id);
+                const globalDocSnap = await getDoc(globalDocRef);
+
+                if (globalDocSnap.exists()) {
+                    alert(`A magia "${newSpell.name}" já existe no Grimório oficial. Tente usar um nome diferente.`);
+                    return;
+                }
                 updatedSpells = [...customSpells, spell];
             }
 
@@ -189,62 +201,6 @@ function GrimorioTab({ searchQuery }: { searchQuery: string }) {
         spell.name.toLowerCase().includes(searchQuery.toLowerCase())
     )];
 
-    const handleSyncSpells = async () => {
-        if (!user || isSyncing) return;
-        if (!confirm('Deseja sincronizar as magias do arquivo local para o Firestore?')) return;
-
-        setIsSyncing(true);
-        try {
-            const { writeBatch, collection, doc } = await import('firebase/firestore');
-            // Usando dynamic import para o JSON para evitar poluir o bundle inicial se não necessário
-            const magiaData = (await import('@/magia.json')).default;
-
-            const spellsRef = collection(db, 'magias');
-            let batch = writeBatch(db);
-            let count = 0;
-            let total = 0;
-
-            if (magiaData.r && Array.isArray(magiaData.r)) {
-                for (const item of magiaData.r) {
-                    const s = item.b;
-                    if (!s || !s.b) continue;
-
-                    const spellData = {
-                        name: s.b,
-                        level: s.k || 0,
-                        school: s.d || '',
-                        castingTime: s.f || '',
-                        range: s.g || s.h || '',
-                        duration: s.e || '',
-                        description: s.c || '',
-                        components: s.i || '',
-                        concentration: (s.e && s.e.toLowerCase().includes('concentração')) || false,
-                        classes: []
-                    };
-
-                    const spellDoc = doc(spellsRef, s.uuid || s.b.toLowerCase().replace(/\s+/g, '-'));
-                    batch.set(spellDoc, spellData, { merge: true });
-
-                    count++;
-                    total++;
-
-                    if (count >= 400) {
-                        await batch.commit();
-                        batch = writeBatch(db);
-                        count = 0;
-                    }
-                }
-                await batch.commit();
-                alert(`${total} magias sincronizadas com sucesso!`);
-                loadGlobalSpells();
-            }
-        } catch (error) {
-            console.error('Erro na sincronização:', error);
-            alert('Erro ao sincronizar magias. Veja o console.');
-        } finally {
-            setIsSyncing(false);
-        }
-    };
     const schools = [...DEFAULT_SCHOOLS, ...customSchools];
     const classes = DEFAULT_CLASSES;
 
@@ -254,13 +210,6 @@ function GrimorioTab({ searchQuery }: { searchQuery: string }) {
             <div className="flex justify-between items-center mb-4">
                 <h2 className="text-2xl font-bold font-cinzel text-rpg-gold">✨ Grimório de Magias</h2>
                 <div className="flex gap-2">
-                    <button
-                        onClick={handleSyncSpells}
-                        disabled={isSyncing}
-                        className="bg-rpg-slate text-rpg-gold border border-rpg-gold/30 px-4 py-2 rounded font-bold hover:bg-rpg-dark transition-all text-sm disabled:opacity-50"
-                    >
-                        {isSyncing ? '🔄 Sincronizando...' : '🔄 Sincronizar'}
-                    </button>
                     <button
                         onClick={() => setIsAddModalOpen(true)}
                         className="bg-rpg-gold text-rpg-dark px-4 py-2 rounded font-bold hover:scale-105 transition-all text-sm"
@@ -272,7 +221,7 @@ function GrimorioTab({ searchQuery }: { searchQuery: string }) {
 
             {/* Modal de Adicionar Magia */}
             {isAddModalOpen && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70">
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/70">
                     <div className="bg-rpg-panel border-2 border-rpg-gold/30 rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
                         <div className="sticky top-0 bg-rpg-panel border-b border-rpg-gold/20 p-4 flex justify-between items-center">
                             <h3 className="text-xl font-bold font-cinzel text-rpg-gold">
@@ -307,7 +256,7 @@ function GrimorioTab({ searchQuery }: { searchQuery: string }) {
                                     <select
                                         value={newSpell.school}
                                         onChange={(e) => setNewSpell({ ...newSpell, school: e.target.value as Spell['school'] })}
-                                        className="w-full bg-rpg-slate border border-rpg-gold/20 rounded px-3 py-2 text-rpg-parchment mb-2"
+                                        className="w-full bg-rpg-slate border border-rpg-gold/20 rounded px-3 py-2 text-rpg-parchment mb-2 max-h-48 overflow-y-auto appearance-none"
                                     >
                                         {[...DEFAULT_SCHOOLS, ...customSchools].map(s => <option key={s} value={s}>{s}</option>)}
                                     </select>
@@ -339,7 +288,7 @@ function GrimorioTab({ searchQuery }: { searchQuery: string }) {
                                 <select
                                     value={(newSpell as any).subclass || ''}
                                     onChange={(e) => setNewSpell({ ...newSpell, subclass: e.target.value } as any)}
-                                    className="w-full bg-rpg-slate border border-rpg-gold/20 rounded px-3 py-2 text-rpg-parchment mb-2"
+                                    className="w-full bg-rpg-slate border border-rpg-gold/20 rounded px-3 py-2 text-rpg-parchment mb-2 max-h-48 overflow-y-auto appearance-none"
                                 >
                                     <option value="">Nenhuma Tag</option>
                                     {customSubclasses.map(s => <option key={s} value={s}>{s}</option>)}
@@ -427,7 +376,7 @@ function GrimorioTab({ searchQuery }: { searchQuery: string }) {
                     <select
                         value={levelFilter ?? ''}
                         onChange={(e) => setLevelFilter(e.target.value ? parseInt(e.target.value) : undefined)}
-                        className="w-full bg-rpg-slate border border-rpg-gold/20 rounded px-3 py-2 text-rpg-parchment focus:border-rpg-gold focus:outline-none"
+                        className="w-full bg-rpg-slate border border-rpg-gold/20 rounded px-3 py-2 text-rpg-parchment focus:border-rpg-gold focus:outline-none max-h-48 overflow-y-auto appearance-none"
                     >
                         <option value="">Todos</option>
                         {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map(level => (
@@ -442,7 +391,7 @@ function GrimorioTab({ searchQuery }: { searchQuery: string }) {
                     <select
                         value={schoolFilter}
                         onChange={(e) => setSchoolFilter(e.target.value)}
-                        className="w-full bg-rpg-slate border border-rpg-gold/20 rounded px-3 py-2 text-rpg-parchment focus:border-rpg-gold focus:outline-none"
+                        className="w-full bg-rpg-slate border border-rpg-gold/20 rounded px-3 py-2 text-rpg-parchment focus:border-rpg-gold focus:outline-none max-h-48 overflow-y-auto appearance-none"
                     >
                         <option value="">Todas</option>
                         {schools.map(school => (
@@ -455,7 +404,7 @@ function GrimorioTab({ searchQuery }: { searchQuery: string }) {
                     <select
                         value={classFilter}
                         onChange={(e) => setClassFilter(e.target.value)}
-                        className="w-full bg-rpg-slate border border-rpg-gold/20 rounded px-3 py-2 text-rpg-parchment focus:border-rpg-gold focus:outline-none"
+                        className="w-full bg-rpg-slate border border-rpg-gold/20 rounded px-3 py-2 text-rpg-parchment focus:border-rpg-gold focus:outline-none max-h-48 overflow-y-auto appearance-none"
                     >
                         <option value="">Todas</option>
                         {classes.map(cls => (
@@ -626,6 +575,8 @@ function BestiarioTab({ searchQuery }: { searchQuery: string }) {
         }
     };
 
+    const [isSyncing, setIsSyncing] = useState(false);
+
     const loadCustomMonsters = useCallback(async () => {
         if (!user) return;
         try {
@@ -659,9 +610,21 @@ function BestiarioTab({ searchQuery }: { searchQuery: string }) {
             const existingIndex = customMonsters.findIndex(m => normalizeName(m.name) === normalizedName);
 
             if (existingIndex !== -1) {
+                if (!confirm(`A criatura "${newMonster.name}" já existe no seu bestiário. Deseja sobrescrevê-la?`)) {
+                    return;
+                }
                 updatedMonsters = [...customMonsters];
                 updatedMonsters[existingIndex] = { ...updatedMonsters[existingIndex], ...monster };
             } else {
+                // Check Global Monsters DB before creating new
+                const globalDocRef = doc(db, 'monsters', normalizedName);
+                const globalDocSnap = await getDoc(globalDocRef);
+
+                if (globalDocSnap.exists()) {
+                    alert(`A criatura "${newMonster.name}" já existe no Bestiário oficial. Tente usar um nome diferente ou busque pelo nome.`);
+                    return;
+                }
+
                 updatedMonsters = [...customMonsters, monster];
             }
 
@@ -706,17 +669,19 @@ function BestiarioTab({ searchQuery }: { searchQuery: string }) {
         <div>
             <div className="flex justify-between items-center mb-4">
                 <h2 className="text-2xl font-bold font-cinzel text-rpg-gold">🐉 Bestiário</h2>
-                <button
-                    onClick={() => setIsAddModalOpen(true)}
-                    className="bg-rpg-gold text-rpg-dark px-4 py-2 rounded font-bold hover:scale-105 transition-all text-sm"
-                >
-                    + Adicionar Criatura
-                </button>
+                <div className="flex gap-2">
+                    <button
+                        onClick={() => setIsAddModalOpen(true)}
+                        className="bg-rpg-gold text-rpg-dark px-4 py-2 rounded font-bold hover:scale-105 transition-all text-sm"
+                    >
+                        + Adicionar Criatura
+                    </button>
+                </div>
             </div>
 
             {/* Modal de Adicionar Monstro */}
             {isAddModalOpen && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70">
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/70">
                     <div className="bg-rpg-panel border-2 border-rpg-gold/30 rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
                         <div className="sticky top-0 bg-rpg-panel border-b border-rpg-gold/20 p-4 flex justify-between items-center">
                             <h3 className="text-xl font-bold font-cinzel text-rpg-gold">
@@ -741,7 +706,7 @@ function BestiarioTab({ searchQuery }: { searchQuery: string }) {
                                     <select
                                         value={newMonster.type}
                                         onChange={(e) => setNewMonster({ ...newMonster, type: e.target.value })}
-                                        className="w-full bg-rpg-slate border border-rpg-gold/20 rounded px-3 py-2 text-rpg-parchment mb-2"
+                                        className="w-full bg-rpg-slate border border-rpg-gold/20 rounded px-3 py-2 text-rpg-parchment mb-2 max-h-48 overflow-y-auto appearance-none"
                                     >
                                         {[...DEFAULT_MONSTER_TYPES, ...customTypes].map(t => <option key={t} value={t}>{t}</option>)}
                                     </select>
@@ -784,7 +749,7 @@ function BestiarioTab({ searchQuery }: { searchQuery: string }) {
                                     <select
                                         value={newMonster.subclass || ''}
                                         onChange={(e) => setNewMonster({ ...newMonster, subclass: e.target.value })}
-                                        className="w-full bg-rpg-slate border border-rpg-gold/20 rounded px-3 py-2 text-rpg-parchment mb-2"
+                                        className="w-full bg-rpg-slate border border-rpg-gold/20 rounded px-3 py-2 text-rpg-parchment mb-2 max-h-48 overflow-y-auto appearance-none"
                                     >
                                         <option value="">Sem Subtipo</option>
                                         {customSubtypes.map(st => <option key={st} value={st}>{st}</option>)}
@@ -890,7 +855,7 @@ function BestiarioTab({ searchQuery }: { searchQuery: string }) {
                     <select
                         value={typeFilter}
                         onChange={(e) => setTypeFilter(e.target.value)}
-                        className="w-full bg-rpg-slate border border-rpg-gold/20 rounded px-3 py-2 text-rpg-parchment focus:border-rpg-gold focus:outline-none"
+                        className="w-full bg-rpg-slate border border-rpg-gold/20 rounded px-3 py-2 text-rpg-parchment focus:border-rpg-gold focus:outline-none max-h-48 overflow-y-auto appearance-none"
                     >
                         <option value="">Todos</option>
                         {types.map(type => (
@@ -1047,7 +1012,6 @@ function ItensTab({ searchQuery }: { searchQuery: string }) {
     const [customProperties, setCustomProperties] = useState<string[]>([]);
     const [newMetadataName, setNewMetadataName] = useState('');
 
-    const [isSyncing, setIsSyncing] = useState(false);
     const [categoryFilter, setCategoryFilter] = useState('all');
 
     const loadMetadata = useCallback(async () => {
@@ -1095,91 +1059,6 @@ function ItensTab({ searchQuery }: { searchQuery: string }) {
             refreshGlobalItems();
         }
     }, [user, refreshGlobalItems]);
-
-    const handleSyncItems = async () => {
-        if (!user || isSyncing) return;
-        if (!confirm('Deseja sincronizar os itens do arquivo local para o Firestore?')) return;
-
-        setIsSyncing(true);
-        try {
-            const { writeBatch, collection, doc } = await import('firebase/firestore');
-            const itemData = (await import('@/itens.json')).default;
-
-            const itemsRef = collection(db, 'itens');
-            let batch = writeBatch(db);
-            let count = 0;
-            let total = 0;
-
-            if (itemData.i && Array.isArray(itemData.i)) {
-                for (const itemWrapper of itemData.i) {
-                    const b = itemWrapper.b;
-                    if (!b || !b.u) continue;
-
-                    const itemType = b.i || 'NORMAL';
-                    let damage = '';
-                    let ac = 0;
-                    let strengthReq = 0;
-                    let stealthDisadvantage = false;
-                    let maxDex = 0;
-
-                    if (itemType === 'WEAPON') {
-                        const diceParts = itemWrapper.c || [];
-                        if (diceParts.length > 0) {
-                            const qty = diceParts.length;
-                            const type = diceParts[0].a;
-                            damage = `${qty}d${type}`;
-                        } else {
-                            damage = '1';
-                        }
-                    } else if (itemType === 'ARMOR') {
-                        ac = b.j || 0;
-                        strengthReq = b.n || 0;
-                        stealthDisadvantage = b.m || false;
-                        maxDex = b.l || 0;
-                    } else if (itemType === 'SHIELD') {
-                        ac = b.o || 0;
-                    }
-
-                    const normalizedData = {
-                        name: b.u,
-                        itemType: itemType,
-                        description: b.v || '',
-                        weight: b.f || 0,
-                        price: b.c || 0,
-                        currency: b.d || 'GP',
-                        damage: damage,
-                        damageType: b.b || '',
-                        properties: b.x ? b.x.split(',').map((s: string) => s.trim()) : [],
-                        ac: ac,
-                        strengthReq: strengthReq,
-                        stealthDisadvantage: stealthDisadvantage,
-                        maxDex: maxDex,
-                        rarity: 'Common'
-                    };
-
-                    const itemDoc = doc(itemsRef, b.uuid || b.u.toLowerCase().replace(/\s+/g, '-'));
-                    batch.set(itemDoc, normalizedData, { merge: true });
-
-                    count++;
-                    total++;
-
-                    if (count >= 400) {
-                        await batch.commit();
-                        batch = writeBatch(db);
-                        count = 0;
-                    }
-                }
-                await batch.commit();
-                alert(`${total} itens sincronizados com sucesso!`);
-                refreshGlobalItems();
-            }
-        } catch (error) {
-            console.error('Erro na sincronização de itens:', error);
-            alert('Erro ao sincronizar itens. Veja o console.');
-        } finally {
-            setIsSyncing(false);
-        }
-    };
 
     const saveMetadata = async (type: string, value: string) => {
         if (!user) return;
@@ -1251,9 +1130,20 @@ function ItensTab({ searchQuery }: { searchQuery: string }) {
             );
 
             if (existingIndex !== -1) {
+                if (!confirm(`O item "${newItem.name}" já existe na sua enciclopédia. Deseja sobrescrevê-lo?`)) {
+                    return;
+                }
                 updatedItems = [...customItems];
                 updatedItems[existingIndex] = { ...updatedItems[existingIndex], ...item };
             } else {
+                // Check Global Items DB before creating new
+                const globalDocRef = doc(db, 'itens', item.id);
+                const globalDocSnap = await getDoc(globalDocRef);
+
+                if (globalDocSnap.exists()) {
+                    alert(`O item "${newItem.name}" já existe na enciclopédia oficial. Tente usar um nome diferente.`);
+                    return;
+                }
                 updatedItems = [...customItems, item];
             }
 
@@ -1307,13 +1197,6 @@ function ItensTab({ searchQuery }: { searchQuery: string }) {
                 <h2 className="text-2xl font-bold font-cinzel text-rpg-gold">⚗️ Enciclopédia de Itens</h2>
                 <div className="flex gap-2">
                     <button
-                        onClick={handleSyncItems}
-                        disabled={isSyncing}
-                        className="bg-rpg-slate text-rpg-gold border border-rpg-gold/30 px-4 py-2 rounded font-bold hover:bg-rpg-dark transition-all text-sm disabled:opacity-50"
-                    >
-                        {isSyncing ? '🔄 Sincronizando...' : '🔄 Sincronizar'}
-                    </button>
-                    <button
                         onClick={() => setIsAddModalOpen(true)}
                         className="bg-rpg-gold text-rpg-dark px-4 py-2 rounded font-bold hover:scale-105 transition-all text-sm"
                     >
@@ -1347,7 +1230,7 @@ function ItensTab({ searchQuery }: { searchQuery: string }) {
 
             {/* Modal de Adicionar Item */}
             {isAddModalOpen && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70">
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/70">
                     <div className="bg-rpg-panel border-2 border-rpg-gold/30 rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
                         <div className="sticky top-0 bg-rpg-panel border-b border-rpg-gold/20 p-4 flex justify-between items-center">
                             <h3 className="text-xl font-bold font-cinzel text-rpg-gold">
@@ -1471,7 +1354,7 @@ function ItensTab({ searchQuery }: { searchQuery: string }) {
                                     <select
                                         value={(newItem as any).type || ''}
                                         onChange={(e) => setNewItem({ ...newItem, type: e.target.value } as any)}
-                                        className="w-full bg-rpg-slate border border-rpg-gold/20 rounded px-3 py-2 text-rpg-parchment mb-2"
+                                        className="w-full bg-rpg-slate border border-rpg-gold/20 rounded px-3 py-2 text-rpg-parchment mb-2 max-h-48 overflow-y-auto appearance-none"
                                     >
                                         <option value="">Selecione...</option>
                                         {[...DEFAULT_ITEM_CATEGORIES, ...customCategories].map(cat => <option key={cat} value={cat}>{cat}</option>)}
@@ -1502,7 +1385,7 @@ function ItensTab({ searchQuery }: { searchQuery: string }) {
                                     <select
                                         value={(newItem as any).damageType || ''}
                                         onChange={(e) => setNewItem({ ...newItem, damageType: e.target.value } as any)}
-                                        className="w-full bg-rpg-slate border border-rpg-gold/20 rounded px-3 py-2 text-rpg-parchment mb-2"
+                                        className="w-full bg-rpg-slate border border-rpg-gold/20 rounded px-3 py-2 text-rpg-parchment mb-2 max-h-48 overflow-y-auto appearance-none"
                                     >
                                         <option value="">Nenhum</option>
                                         {[...DEFAULT_DAMAGE_TYPES, ...customDamageTypes].map(dt => <option key={dt} value={dt}>{dt}</option>)}
@@ -1725,7 +1608,8 @@ function ItensTab({ searchQuery }: { searchQuery: string }) {
 function RegrasTab({ searchQuery }: { searchQuery: string }) {
     const { user } = useAuth();
     const [customRules, setCustomRules] = useState<any[]>([]);
-    const [selectedChapter, setSelectedChapter] = useState(srdBook.chapters[0]);
+    const [srdChapters, setSrdChapters] = useState<any[]>([]);
+    const [selectedChapter, setSelectedChapter] = useState<any | null>(null);
     const [isAddModalOpen, setIsAddModalOpen] = useState(false);
     const [newRule, setNewRule] = useState({ id: '', title: '', content: '' });
 
@@ -1742,9 +1626,18 @@ function RegrasTab({ searchQuery }: { searchQuery: string }) {
         }
     }, [user]);
 
+    const loadSRD = useCallback(async () => {
+        const book = await fetchSRDBookFromFirestore();
+        setSrdChapters(book.chapters);
+        if (!selectedChapter && book.chapters.length > 0) {
+            setSelectedChapter(book.chapters[0]);
+        }
+    }, [selectedChapter]);
+
     useEffect(() => {
+        loadSRD();
         if (user) loadCustomRules();
-    }, [user, loadCustomRules]);
+    }, [user, loadCustomRules, loadSRD]);
 
     const saveCustomRule = async () => {
         if (!user || !newRule.title) return;
@@ -1764,9 +1657,18 @@ function RegrasTab({ searchQuery }: { searchQuery: string }) {
             );
 
             if (existingIndex !== -1) {
+                if (!confirm(`A regra "${newRule.title}" já existe nas suas regras customizadas. Deseja sobrescrevê-la?`)) {
+                    return;
+                }
                 updatedRules = [...customRules];
                 updatedRules[existingIndex] = { ...updatedRules[existingIndex], ...rule };
             } else {
+                // Check Global SRD Rules
+                const globalRule = srdChapters.find(c => normalizeName(c.title) === normalizedTitle);
+                if (globalRule) {
+                    alert(`A regra "${newRule.title}" já existe no SRD oficial. Tente usar um título diferente.`);
+                    return;
+                }
                 updatedRules = [...customRules, rule];
             }
 
@@ -1788,7 +1690,7 @@ function RegrasTab({ searchQuery }: { searchQuery: string }) {
             const updatedRules = customRules.filter(r => r.id !== ruleId);
             await setDoc(doc(db, 'custom_rules', user.uid), { rules: updatedRules });
             setCustomRules(updatedRules);
-            if (selectedChapter.id === ruleId) setSelectedChapter(srdBook.chapters[0]);
+            if (selectedChapter?.id === ruleId && srdChapters.length > 0) setSelectedChapter(srdChapters[0]);
         } catch (error) {
             console.error('Erro ao excluir regra:', error);
         }
@@ -1799,7 +1701,7 @@ function RegrasTab({ searchQuery }: { searchQuery: string }) {
         setIsAddModalOpen(true);
     };
 
-    const allChapters = [...srdBook.chapters, ...customRules];
+    const allChapters = [...srdChapters, ...customRules];
     const filteredChapters = allChapters.filter(chapter =>
         chapter.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
         chapter.content.toLowerCase().includes(searchQuery.toLowerCase())
@@ -1808,19 +1710,37 @@ function RegrasTab({ searchQuery }: { searchQuery: string }) {
     return (
         <div>
             <div className="flex justify-between items-center mb-4">
-                <h2 className="text-2xl font-bold font-cinzel text-rpg-gold">📕 {srdBook.title}</h2>
-                <button
-                    onClick={() => setIsAddModalOpen(true)}
-                    className="bg-rpg-gold text-rpg-dark px-4 py-2 rounded font-bold hover:scale-105 transition-all text-sm"
-                >
-                    + Adicionar Regra
-                </button>
+                <h2 className="text-2xl font-bold font-cinzel text-rpg-gold">📕 System Reference Document 5.1</h2>
+                <div className="flex gap-2">
+                    <button
+                        onClick={async () => {
+                            if (confirm("Deseja sincronizar todas as Habilidades, Raças e Talentos com o Banco de Dados Global?")) {
+                                try {
+                                    await syncAllGameRulesToFirestore();
+                                    await loadSRD();
+                                    alert("✅ Sincronização concluída com sucesso!");
+                                } catch (e) {
+                                    alert("❌ Erro ao sincronizar. Verifique o console.");
+                                }
+                            }
+                        }}
+                        className="bg-purple-600/20 hover:bg-purple-600/40 text-purple-200 border border-purple-500/30 px-4 py-2 rounded font-bold transition-all text-sm flex items-center gap-2"
+                    >
+                        ✨ Sincronizar Regras Base
+                    </button>
+                    <button
+                        onClick={() => setIsAddModalOpen(true)}
+                        className="bg-rpg-gold text-rpg-dark px-4 py-2 rounded font-bold hover:scale-105 transition-all text-sm"
+                    >
+                        + Adicionar Regra
+                    </button>
+                </div>
             </div>
-            <p className="text-rpg-grey mb-6">{srdBook.description}</p>
+            <p className="text-rpg-grey mb-6">O SRD contém as regras essenciais, classes, magias e monstros do Dungeons & Dragons, disponibilizado sob a Open Gaming License (OGL).</p>
 
             {/* Modal de Adicionar Regra */}
             {isAddModalOpen && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70">
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/70">
                     <div className="bg-rpg-panel border-2 border-rpg-gold/30 rounded-lg max-w-3xl w-full max-h-[90vh] overflow-y-auto">
                         <div className="sticky top-0 bg-rpg-panel border-b border-rpg-gold/20 p-4 flex justify-between items-center">
                             <h3 className="text-xl font-bold font-cinzel text-rpg-gold">
@@ -1875,30 +1795,50 @@ function RegrasTab({ searchQuery }: { searchQuery: string }) {
                     ))}
                 </div>
 
-                <div className="md:col-span-3 bg-rpg-slate border border-rpg-gold/20 rounded p-6 max-h-[600px] overflow-y-auto">
-                    <div className="flex justify-between items-start mb-6">
-                        <h2 className="text-2xl font-bold font-cinzel text-rpg-gold">{selectedChapter.title}</h2>
-                        {selectedChapter.id.toString().startsWith('custom-rule-') && (
-                            <div className="flex gap-2">
-                                <button
-                                    onClick={() => openEditModal(selectedChapter)}
-                                    className="bg-blue-600/20 hover:bg-blue-600/40 text-blue-400 border border-blue-600/30 px-3 py-1.5 rounded text-xs font-bold transition-all"
-                                >
-                                    ✏️ Editar
-                                </button>
-                                <button
-                                    onClick={() => deleteCustomRule(selectedChapter.id.toString())}
-                                    className="bg-red-600/20 hover:bg-red-600/40 text-red-400 border border-red-600/30 px-3 py-1.5 rounded text-xs font-bold transition-all"
-                                >
-                                    🗑️ Excluir
-                                </button>
+                <div className={`${selectedChapter ? 'fixed inset-0 z-[60] bg-black/99 md:bg-black/90 p-4 overflow-y-auto' : 'hidden'} md:block md:col-span-3 md:bg-rpg-slate md:border md:border-rpg-gold/20 md:rounded md:p-6 md:max-h-[600px] md:static md:overflow-y-auto relative`}>
+                    {selectedChapter && (
+                        <button
+                            onClick={() => setSelectedChapter(null)}
+                            className="md:hidden absolute top-4 right-4 text-rpg-gold bg-black/40 hover:bg-black/60 rounded-full w-8 h-8 flex items-center justify-center transition-colors z-10"
+                        >
+                            ✕
+                        </button>
+                    )}
+                    {selectedChapter ? (
+                        <>
+                            <div className="flex justify-between items-start mb-6">
+                                <h2 className="text-2xl font-bold font-cinzel text-rpg-gold">{selectedChapter.title}</h2>
+                                {selectedChapter.id && selectedChapter.id.toString().startsWith('custom-rule-') && (
+                                    <div className="flex gap-2">
+                                        <button
+                                            onClick={() => openEditModal(selectedChapter)}
+                                            className="bg-blue-600/20 hover:bg-blue-600/40 text-blue-400 border border-blue-600/30 px-3 py-1.5 rounded text-xs font-bold transition-all"
+                                        >
+                                            ✏️ Editar
+                                        </button>
+                                        <button
+                                            onClick={() => deleteCustomRule(selectedChapter.id.toString())}
+                                            className="bg-red-600/20 hover:bg-red-600/40 text-red-400 border border-red-600/30 px-3 py-1.5 rounded text-xs font-bold transition-all"
+                                        >
+                                            🗑️ Excluir
+                                        </button>
+                                    </div>
+                                )}
                             </div>
-                        )}
-                    </div>
-                    <div
-                        className="prose prose-invert max-w-none"
-                        dangerouslySetInnerHTML={{ __html: selectedChapter.content }}
-                    />
+                            <div
+                                className="prose prose-invert max-w-none"
+                                dangerouslySetInnerHTML={{ __html: selectedChapter.content }}
+                            />
+                        </>
+                    ) : (
+                        <div className="flex items-center justify-center h-full text-rpg-grey">
+                            <div className="text-center">
+                                <p className="text-4xl mb-2">📜</p>
+                                <p>Selecione uma regra para ler.</p>
+                                {srdChapters.length === 0 && <p className="text-xs mt-2 text-yellow-500/50">Nenhuma regra encontrada. Verifique a internet ou sincronize.</p>}
+                            </div>
+                        </div>
+                    )}
                 </div>
             </div>
         </div>
@@ -2064,6 +2004,291 @@ function NotasTab() {
     );
 }
 
+
+// Componente NPCs
+function NpcTab({ searchQuery }: { searchQuery: string }) {
+    const { user } = useAuth();
+    const [selectedNpc, setSelectedNpc] = useState<NPCTemplate | null>(null);
+    const [customNpcs, setCustomNpcs] = useState<NPCTemplate[]>([]);
+    const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+    const [newNpc, setNewNpc] = useState<Partial<NPCTemplate>>({
+        name: '',
+        hp: 10,
+        ac: 10,
+        challenge: '1/4',
+        xp: 50,
+        description: '',
+        role: 'civilian',
+        race: 'Humano'
+    });
+
+    const loadCustomNpcs = useCallback(async () => {
+        if (!user) return;
+        try {
+            const docRef = doc(db, 'custom_npcs', user.uid);
+            const docSnap = await getDoc(docRef);
+            if (docSnap.exists()) {
+                setCustomNpcs(docSnap.data().npcs || []);
+            }
+        } catch (error) {
+            console.error('Erro ao carregar NPCs:', error);
+        }
+    }, [user]);
+
+    useEffect(() => {
+        if (user) loadCustomNpcs();
+    }, [user, loadCustomNpcs]);
+
+    const saveCustomNpc = async () => {
+        if (!user || !newNpc.name) return;
+        try {
+            const npc: NPCTemplate = {
+                ...(newNpc as NPCTemplate),
+                name: newNpc.name.trim()
+            };
+
+            let updatedNpcs: NPCTemplate[];
+            const existingIndex = customNpcs.findIndex(n => n.name === npc.name);
+
+            if (existingIndex !== -1) {
+                if (!confirm(`O NPC "${npc.name}" já existe na sua galeria. Deseja sobrescrevê-lo?`)) {
+                    return;
+                }
+                updatedNpcs = [...customNpcs];
+                updatedNpcs[existingIndex] = npc;
+            } else {
+                // Check Global NPCs (Templates)
+                const globalParams = searchNpcs(npc.name);
+                const globalMatch = globalParams.find(n => n.name.toLowerCase() === npc.name.toLowerCase());
+                if (globalMatch) {
+                    alert(`O NPC "${npc.name}" já existe como um modelo oficial. Tente usar um nome diferente.`);
+                    return;
+                }
+                updatedNpcs = [...customNpcs, npc];
+            }
+
+            await setDoc(doc(db, 'custom_npcs', user.uid), { npcs: updatedNpcs });
+            setCustomNpcs(updatedNpcs);
+            setIsAddModalOpen(false);
+            setNewNpc({ name: '', hp: 10, ac: 10, challenge: '1/4', xp: 50, description: '', role: 'civilian', race: 'Humano' });
+            if (selectedNpc?.name === npc.name) setSelectedNpc(npc);
+        } catch (error) {
+            console.error('Erro ao salvar NPC:', error);
+        }
+    };
+
+    const deleteCustomNpc = async (npcName: string) => {
+        if (!user || !confirm('Tem certeza que deseja excluir este NPC?')) return;
+        try {
+            const updatedNpcs = customNpcs.filter(n => n.name !== npcName);
+            await setDoc(doc(db, 'custom_npcs', user.uid), { npcs: updatedNpcs });
+            setCustomNpcs(updatedNpcs);
+            if (selectedNpc?.name === npcName) setSelectedNpc(null);
+        } catch (error) {
+            console.error('Erro ao excluir NPC:', error);
+        }
+    };
+
+    const openEditModal = (npc: NPCTemplate) => {
+        setNewNpc({ ...npc });
+        setIsAddModalOpen(true);
+    };
+
+    const allNpcs = [...searchNpcs(searchQuery), ...customNpcs.filter(n =>
+        n.name.toLowerCase().includes(searchQuery.toLowerCase())
+    )];
+
+    return (
+        <div>
+            <div className="flex justify-between items-center mb-4">
+                <h2 className="text-2xl font-bold font-cinzel text-rpg-gold">👥 Galeria de NPCs</h2>
+                <div className="flex gap-2">
+                    <button
+                        onClick={() => setIsAddModalOpen(true)}
+                        className="bg-rpg-gold text-rpg-dark px-4 py-2 rounded font-bold hover:scale-105 transition-all text-sm"
+                    >
+                        + Adicionar NPC
+                    </button>
+                </div>
+            </div>
+
+            {/* Modal de Adicionar NPC */}
+            {isAddModalOpen && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/70">
+                    <div className="bg-rpg-panel border-2 border-rpg-gold/30 rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+                        <div className="sticky top-0 bg-rpg-panel border-b border-rpg-gold/20 p-4 flex justify-between items-center">
+                            <h3 className="text-xl font-bold font-cinzel text-rpg-gold">
+                                {customNpcs.some(n => n.name === newNpc.name) ? 'Editar NPC' : 'Novo NPC Customizado'}
+                            </h3>
+                            <button onClick={() => {
+                                setIsAddModalOpen(false);
+                                setNewNpc({ name: '', hp: 10, ac: 10, challenge: '1/4', xp: 50, description: '', role: 'civilian', race: 'Humano' });
+                            }} className="text-rpg-grey hover:text-rpg-gold text-2xl">×</button>
+                        </div>
+                        <div className="p-6 space-y-4">
+                            <input
+                                type="text"
+                                placeholder="Nome / Profissão"
+                                value={newNpc.name}
+                                onChange={(e) => setNewNpc({ ...newNpc, name: e.target.value })}
+                                className="w-full bg-rpg-slate border border-rpg-gold/20 rounded px-3 py-2 text-rpg-parchment"
+                            />
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="text-xs text-rpg-grey uppercase mb-1 block">Papel</label>
+                                    <select
+                                        value={newNpc.role}
+                                        onChange={(e) => setNewNpc({ ...newNpc, role: e.target.value })}
+                                        className="w-full bg-rpg-slate border border-rpg-gold/20 rounded px-3 py-2 text-rpg-parchment max-h-48 overflow-y-auto appearance-none"
+                                    >
+                                        <option value="civilian">Civil</option>
+                                        <option value="soldier">Soldado</option>
+                                        <option value="specialist">Especialista</option>
+                                        <option value="villain">Vilão</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="text-xs text-rpg-grey uppercase mb-1 block">Raça</label>
+                                    <input
+                                        type="text"
+                                        value={newNpc.race}
+                                        onChange={(e) => setNewNpc({ ...newNpc, race: e.target.value })}
+                                        className="w-full bg-rpg-slate border border-rpg-gold/20 rounded px-3 py-2 text-rpg-parchment"
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-3 gap-4">
+                                <div>
+                                    <label className="text-xs text-rpg-grey uppercase">CA</label>
+                                    <input
+                                        type="number"
+                                        value={newNpc.ac}
+                                        onChange={(e) => setNewNpc({ ...newNpc, ac: parseInt(e.target.value) || 0 })}
+                                        className="w-full bg-rpg-slate border border-rpg-gold/20 rounded px-3 py-2 text-rpg-parchment"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="text-xs text-rpg-grey uppercase">HP</label>
+                                    <input
+                                        type="number"
+                                        value={newNpc.hp}
+                                        onChange={(e) => setNewNpc({ ...newNpc, hp: parseInt(e.target.value) || 0 })}
+                                        className="w-full bg-rpg-slate border border-rpg-gold/20 rounded px-3 py-2 text-rpg-parchment"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="text-xs text-rpg-grey uppercase">CR</label>
+                                    <input
+                                        type="text"
+                                        value={newNpc.challenge}
+                                        onChange={(e) => setNewNpc({ ...newNpc, challenge: e.target.value })}
+                                        className="w-full bg-rpg-slate border border-rpg-gold/20 rounded px-3 py-2 text-rpg-parchment"
+                                    />
+                                </div>
+                            </div>
+                            <textarea
+                                placeholder="Descrição..."
+                                value={newNpc.description}
+                                onChange={(e) => setNewNpc({ ...newNpc, description: e.target.value })}
+                                className="w-full bg-rpg-slate border border-rpg-gold/20 rounded px-3 py-2 text-rpg-parchment min-h-[120px]"
+                            />
+                            <div className="flex gap-2">
+                                <button onClick={saveCustomNpc} className="bg-rpg-gold text-rpg-dark px-6 py-2 rounded font-bold hover:scale-105 transition-all">
+                                    {customNpcs.some(n => n.name === newNpc.name) ? 'Salvar Alterações' : 'Criar NPC'}
+                                </button>
+                                <button onClick={() => setIsAddModalOpen(false)} className="bg-rpg-slate text-rpg-parchment px-6 py-2 rounded hover:bg-rpg-slate/80">Cancelar</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            <div className="grid md:grid-cols-2 gap-4">
+                <div className="space-y-3 max-h-[600px] overflow-y-auto pr-2">
+                    {allNpcs.length === 0 ? (
+                        <p className="text-rpg-grey text-center py-8">Nenhum NPC encontrado.</p>
+                    ) : (
+                        allNpcs.map((npc, idx) => (
+                            <div
+                                key={`${npc.name}-${idx}`}
+                                onClick={() => setSelectedNpc(npc)}
+                                className={`bg-rpg-slate border rounded p-4 cursor-pointer transition-all hover:border-rpg-gold/50 ${selectedNpc?.name === npc.name ? 'border-rpg-gold ring-1 ring-rpg-gold/30' : 'border-rpg-gold/10'}`}
+                            >
+                                <h3 className="font-bold text-rpg-gold flex items-center gap-2">
+                                    👤 {npc.name}
+                                </h3>
+                                <p className="text-sm text-rpg-grey">
+                                    {npc.race} • {npc.role === 'civilian' ? 'Civil' : npc.role === 'soldier' ? 'Soldado' : npc.role === 'villain' ? 'Vilão' : 'Especialista'} • CR {npc.challenge}
+                                </p>
+                            </div>
+                        ))
+                    )}
+                </div>
+
+                <div className={`${selectedNpc ? 'fixed inset-0 z-[60] bg-black/90 p-4 overflow-y-auto' : 'hidden'} md:block md:static md:bg-transparent md:p-0 md:overflow-visible`}>
+                    <div className="bg-rpg-slate border border-rpg-gold/20 rounded p-6 md:sticky md:top-4 relative shadow-2xl md:shadow-none min-h-[50vh]">
+                        {selectedNpc && (
+                            <button
+                                onClick={() => setSelectedNpc(null)}
+                                className="md:hidden absolute top-4 right-4 text-rpg-gold bg-black/40 hover:bg-black/60 rounded-full w-8 h-8 flex items-center justify-center transition-colors z-10"
+                            >
+                                ✕
+                            </button>
+                        )}
+                        {selectedNpc ? (
+                            <div>
+                                <h3 className="text-2xl font-bold text-rpg-gold mb-2">{selectedNpc.name}</h3>
+                                <p className="text-sm text-rpg-grey mb-4">{selectedNpc.race} - {selectedNpc.role}</p>
+                                <div className="space-y-3 text-sm">
+                                    <div className="grid grid-cols-3 gap-4 text-center">
+                                        <div className="bg-black/20 p-2 rounded">
+                                            <span className="block text-xs text-rpg-grey">CA</span>
+                                            <span className="font-bold text-rpg-gold">{selectedNpc.ac}</span>
+                                        </div>
+                                        <div className="bg-black/20 p-2 rounded">
+                                            <span className="block text-xs text-rpg-grey">HP</span>
+                                            <span className="font-bold text-rpg-gold">{selectedNpc.hp}</span>
+                                        </div>
+                                        <div className="bg-black/20 p-2 rounded">
+                                            <span className="block text-xs text-rpg-grey">CR</span>
+                                            <span className="font-bold text-rpg-gold">{selectedNpc.challenge}</span>
+                                        </div>
+                                    </div>
+                                    <div className="pt-3 border-t border-rpg-gold/20">
+                                        <p className="text-rpg-parchment leading-relaxed">{selectedNpc.description}</p>
+                                    </div>
+                                    {customNpcs.some(n => n.name === selectedNpc.name) && (
+                                        <div className="pt-4 flex gap-2">
+                                            <button
+                                                onClick={() => openEditModal(selectedNpc)}
+                                                className="bg-blue-600/20 hover:bg-blue-600/40 text-blue-400 border border-blue-600/30 px-3 py-1.5 rounded text-xs font-bold transition-all"
+                                            >
+                                                ✏️ Editar
+                                            </button>
+                                            <button
+                                                onClick={() => deleteCustomNpc(selectedNpc.name)}
+                                                className="bg-red-600/20 hover:bg-red-600/40 text-red-400 border border-red-600/30 px-3 py-1.5 rounded text-xs font-bold transition-all"
+                                            >
+                                                🗑️ Excluir
+                                            </button>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="text-center text-rpg-grey py-12">
+                                <p className="text-4xl mb-4">👤</p>
+                                <p>Selecione um NPC para ver os detalhes</p>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+}
+
 export default function BibliotecaPage() {
     const { user } = useAuth();
     const [activeTab, setActiveTab] = useState<TabType>('grimorio');
@@ -2111,6 +2336,7 @@ export default function BibliotecaPage() {
                         { id: 'grimorio' as TabType, label: '📖 Grimório', icon: '✨' },
                         { id: 'bestiario' as TabType, label: '🐉 Bestiário', icon: '⚔️' },
                         { id: 'itens' as TabType, label: '⚗️ Itens', icon: '💎' },
+                        { id: 'npcs' as TabType, label: '👥 NPCs', icon: '👤' },
                         { id: 'regras' as TabType, label: '📕 Regras', icon: '⚖️' },
                         { id: 'notas' as TabType, label: '📜 Anotações', icon: '🖋️' }
                     ].map(tab => (
@@ -2131,7 +2357,7 @@ export default function BibliotecaPage() {
                 <div className="mb-6">
                     <input
                         type="text"
-                        placeholder={`Buscar em ${activeTab === 'grimorio' ? 'Magias' : activeTab === 'bestiario' ? 'Criaturas' : activeTab === 'itens' ? 'Itens' : 'Anotações'}...`}
+                        placeholder={`Buscar em ${activeTab === 'grimorio' ? 'Magias' : activeTab === 'bestiario' ? 'Criaturas' : activeTab === 'itens' ? 'Itens' : activeTab === 'npcs' ? 'NPCs' : 'Anotações'}...`}
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
                         className="w-full bg-rpg-panel border border-rpg-gold/20 rounded px-4 py-3 text-rpg-parchment placeholder-rpg-grey focus:border-rpg-gold focus:outline-none transition-all"
@@ -2145,6 +2371,8 @@ export default function BibliotecaPage() {
                     {activeTab === 'bestiario' && <BestiarioTab searchQuery={searchQuery} />}
 
                     {activeTab === 'itens' && <ItensTab searchQuery={searchQuery} />}
+
+                    {activeTab === 'npcs' && <NpcTab searchQuery={searchQuery} />}
 
                     {activeTab === 'regras' && <RegrasTab searchQuery={searchQuery} />}
 

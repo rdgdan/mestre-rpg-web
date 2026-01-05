@@ -64,7 +64,12 @@ export interface Character {
     deathSaves: { successes: number; failures: number };
     treasures?: string;
     inventory: Inventory;
-    features: { name: string; description: string }[];
+    features: {
+        name: string;
+        description: string;
+        level?: number;
+        type?: 'class' | 'race' | 'feat' | 'other'
+    }[];
     spells: Spell[];
     spellcasting: {
         ability: AttributeKey | '';
@@ -220,6 +225,22 @@ export function calculateComputedStats(character: Omit<Character, 'proficiencyBo
         attributeModifiers,
         spellcasting: spellcastingData
     };
+
+    // Validar e auto-ajustar nível baseado em XP
+    const { getLevelFromXP, validateXPForLevel } = require('./xp-progression');
+    const validation = validateXPForLevel(computed.level, computed.experience);
+
+    if (!validation.isValid && validation.suggestedLevel) {
+        // Auto-ajustar nível APENAS se o XP for maior que o nível atual (progressão natural)
+        if (validation.suggestedLevel > computed.level) {
+            console.log(`📈 Auto-ajustando nível de ${computed.level} para ${validation.suggestedLevel} baseado em XP.`);
+            computed.level = validation.suggestedLevel;
+            computed.proficiencyBonus = getProficiencyBonusFromLevel(validation.suggestedLevel);
+        } else {
+            // Se o nível for MAIOR que o sugerido pelo XP, entendemos como uma escolha do Mestre.
+            // Silenciamos o warning para não poluir o console a cada render.
+        }
+    }
 
     return computed;
 }

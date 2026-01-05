@@ -71,15 +71,28 @@ h6 {
   animation: bounce-right 1.5s infinite;
 }
 
-.custom-scrollbar::-webkit-scrollbar {
-  width: 5px;
+/* Global Scrollbar Styling */
+*::-webkit-scrollbar {
+  width: 8px; /* Slightly wider for better usability on desktop */
+  height: 8px; /* For horizontal scrollbars */
 }
 
-.custom-scrollbar::-webkit-scrollbar-track {
-  background: rgba(0, 0, 0, 0.1);
+*::-webkit-scrollbar-track {
+  background: rgba(18, 18, 18, 0.8); /* Matches dark theme */
 }
 
-.custom-scrollbar::-webkit-scrollbar-thumb {
-  background: #daa520;
-  border-radius: 10px;
+*::-webkit-scrollbar-thumb {
+  background: #daa520; /* Mythic Gold */
+  border-radius: 4px;
+  border: 1px solid rgba(0, 0, 0, 0.3);
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: #b8860b; /* Dark Goldenrod */
+}
+
+/* Firefox support */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #daa520 rgba(18, 18, 18, 0.8);
 }

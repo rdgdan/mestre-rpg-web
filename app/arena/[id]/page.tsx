@@ -4,12 +4,13 @@ import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter, usePathname } from 'next/navigation';
 import { db } from '@/lib/firebase';
-import { doc, onSnapshot, updateDoc, collection, query, where, getDocs } from 'firebase/firestore';
+import { doc, onSnapshot, updateDoc, collection, query, where, getDocs, getDoc } from 'firebase/firestore';
 import { useAuth } from '@/context/AuthContext';
 import Modal from '@/components/Modal';
 import JSZip from 'jszip';
 import { mapImportedDataToCharacter } from '@/lib/character-mapper';
 import { dndMonsters, MonsterData } from '@/lib/monsters-data';
+import { GameEffectTemplate } from '@/lib/effects-data';
 // --- Tipos ---
 type CombatantType = 'player' | 'monster' | 'npc';
 
@@ -79,6 +80,24 @@ export default function SharedArenaPage() {
     const [cooldowns, setCooldowns] = useState<{ [key: string]: number }>({});
     const [customEffName, setCustomEffName] = useState('');
     const [customEffDur, setCustomEffDur] = useState(10);
+    const [hpAdjustmentValues, sethpAdjustmentValues] = useState<Record<string, string>>({});
+    const [globalEffects, setGlobalEffects] = useState<GameEffectTemplate[]>([]);
+
+    // Load global effects
+    useEffect(() => {
+        const loadFx = async () => {
+            try {
+                const docRef = doc(db, 'game_rules', 'effects');
+                const docSnap = await getDoc(docRef);
+                if (docSnap.exists()) {
+                    setGlobalEffects(docSnap.data().list || []);
+                }
+            } catch (err) {
+                console.error("Scale error:", err);
+            }
+        };
+        loadFx();
+    }, []);
 
     // Helpers para renderização (definidos cedo para uso nas funções)
     const isHost = session && user && user.uid === session.hostId;
@@ -445,7 +464,15 @@ export default function SharedArenaPage() {
         const sessionRef = doc(db, 'arenas_online', id as string);
         const updatedCombatants = session.combatants.map(c => {
             if (c.id === combatantId) {
-                return { ...c, hp: Math.min(c.maxHp, Math.max(0, c.hp + delta)) };
+                const inputValue = hpAdjustmentValues[combatantId];
+                const adjustAmount = (inputValue && !isNaN(Number(inputValue))) ? Number(inputValue) : 1;
+                const multiplier = delta > 0 ? 1 : -1;
+                const totalAdjust = adjustAmount * multiplier;
+
+                // Limpar o input após o uso
+                sethpAdjustmentValues(prev => ({ ...prev, [combatantId]: '' }));
+
+                return { ...c, hp: Math.min(c.maxHp, Math.max(0, c.hp + totalAdjust)) };
             }
             return c;
         });
@@ -678,9 +705,21 @@ export default function SharedArenaPage() {
                                                 </div>
                                                 {/* Botões de HP só para host */}
                                                 {isHost && (
-                                                    <div className="flex items-center bg-black/40 rounded border border-white/10 overflow-hidden mt-2">
-                                                        <button onClick={() => handleHostUpdateHp(c.id, -1)} className="px-2 py-1 text-red-500 hover:bg-red-500/10 transition-all font-bold">-</button>
-                                                        <button onClick={() => handleHostUpdateHp(c.id, 1)} className="px-2 py-1 text-green-500 hover:bg-green-500/10 transition-all font-bold border-l border-white/10">+</button>
+                                                    <div className="flex items-center gap-1 bg-black/40 rounded border border-white/10 p-1 mt-2">
+                                                        <input
+                                                            type="number"
+                                                            placeholder="0"
+                                                            value={hpAdjustmentValues[c.id] || ''}
+                                                            onChange={(e) => sethpAdjustmentValues(prev => ({ ...prev, [c.id]: e.target.value }))}
+                                                            onKeyDown={(e) => {
+                                                                if (e.key === 'Enter') {
+                                                                    handleHostUpdateHp(c.id, -1);
+                                                                }
+                                                            }}
+                                                            className="w-10 h-6 bg-rpg-slate/50 border border-white/5 rounded px-1 text-[10px] text-center focus:border-rpg-gold outline-none font-medieval [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                                        />
+                                                        <button onClick={() => handleHostUpdateHp(c.id, -1)} className="w-6 h-6 flex items-center justify-center text-red-500 hover:bg-red-500/10 transition-all font-bold text-sm">-</button>
+                                                        <button onClick={() => handleHostUpdateHp(c.id, 1)} className="w-6 h-6 flex items-center justify-center text-green-500 hover:bg-green-500/10 transition-all font-bold text-sm border-l border-white/10">+</button>
                                                     </div>
                                                 )}
                                             </div>
@@ -855,20 +894,11 @@ export default function SharedArenaPage() {
                 <div className="space-y-4">
                     <p className="text-xs text-rpg-grey italic mb-2">Escolha o efeito que você ativou na mesa real:</p>
 
-                    <div className="grid grid-cols-2 gap-2">
-                        {[
-                            { name: 'Bênção (Bless)', d: 10 },
-                            { name: 'Fúria (Rage)', d: 10 },
-                            { name: 'Invisível', d: 10 },
-                            { name: 'Escudo Fé', d: 10 },
-                            { name: 'Abençoado', d: 10 },
-                            { name: 'Concentração', d: 10 },
-                            { name: 'Velocidade', d: 10 },
-                            { name: 'Voar', d: 10 },
-                        ].map(eff => (
+                    <div className="grid grid-cols-2 gap-2 max-h-40 overflow-y-auto pr-1 custom-scrollbar">
+                        {globalEffects.map(eff => (
                             <button
                                 key={eff.name}
-                                onClick={() => handlePlayerAddEffect(eff.name, eff.d)}
+                                onClick={() => handlePlayerAddEffect(eff.name, eff.duration)}
                                 className="bg-rpg-slate border border-white/5 p-2 rounded text-[10px] font-cinzel text-rpg-parchment hover:border-purple-500/50 hover:bg-purple-900/10 transition-all text-left flex items-center gap-2"
                             >
                                 <span className="text-purple-400">✨</span> {eff.name}
@@ -882,11 +912,22 @@ export default function SharedArenaPage() {
                             <div className="flex gap-2">
                                 <input
                                     type="text"
+                                    list="online-effects-list"
                                     value={customEffName}
-                                    onChange={(e) => setCustomEffName(e.target.value)}
+                                    onChange={(e) => {
+                                        const val = e.target.value;
+                                        setCustomEffName(val);
+                                        const matching = globalEffects.find(f => f.name === val);
+                                        if (matching) setCustomEffDur(matching.duration);
+                                    }}
                                     className="flex-grow bg-rpg-slate border border-white/10 p-2 rounded text-xs text-rpg-parchment outline-none focus:border-purple-500"
-                                    placeholder="Ex: Pele de Árvore"
+                                    placeholder="Procure ou digite..."
                                 />
+                                <datalist id="online-effects-list">
+                                    {globalEffects.map(f => (
+                                        <option key={f.name} value={f.name}>{f.name}</option>
+                                    ))}
+                                </datalist>
                                 <div className="w-20">
                                     <input
                                         type="number"

@@ -284,13 +284,73 @@ export const CLASS_PROGRESSION: Record<string, Record<number, LevelProgression>>
 };
 
 export const RACE_FEATURES: Record<string, ClassFeature[]> = {
-    // ... mantido as raças anteriores ...
-    "Anão": [{ name: "Visão no Escuro", description: "18m" }, { name: "Resiliência Anã", description: "Resistência a veneno." }],
-    "Elfo": [{ name: "Visão no Escuro", description: "18m" }, { name: "Ancestralidade Feérica", description: "Vantagem contra encanto." }],
-    "Halfling": [{ name: "Sortudo", description: "Rola novamente um 1 no d20." }, { name: "Bravura", description: "Vantagem contra medo." }],
-    "Humano": [{ name: "Versatilidade", description: "+1 em todos os atributos." }],
-    "Draconato": [{ name: "Arma de Sopro", description: "Ataque de energia." }, { name: "Resistência", description: "Resistência ao tipo do dragão." }],
-    "Meio-Elfo": [{ name: "Visão no Escuro", description: "18m" }, { name: "Versatilidade em Perícias", description: "2 perícias extras." }],
-    "Meio-Orc": [{ name: "Ameaçador", description: "Proficiência em Intimidação." }, { name: "Resistência Implacável", description: "Não cai com 0 PV (1/descanso)." }],
-    "Tiefling": [{ name: "Visão no Escuro", description: "18m" }, { name: "Resistência Infernal", description: "Resistência a Fogo." }]
+    "Anão da Colina": [
+        { name: "Visão no Escuro", description: "Enxerga na penumbra a até 18 metros como se fosse luz plena, e na escuridão como se fosse penumbra." },
+        { name: "Resiliência Anã", description: "Vantagem em salvaguardas contra veneno e resistência a dano de veneno." },
+        { name: "Treinamento Anão em Combate", description: "Proficiência com machados de batalha, machadinhas, martelos leves e martelos de guerra." },
+        { name: "Tenacidade Anã", description: "Seu máximo de pontos de vida aumenta em 1, e aumenta em 1 a cada nível." }
+    ],
+    "Anão da Montanha": [
+        { name: "Visão no Escuro", description: "Enxerga na penumbra a até 18 metros." },
+        { name: "Resiliência Anã", description: "Vantagem contra veneno e resistência a veneno." },
+        { name: "Treinamento Anão em Armaduras", description: "Proficiência com armaduras leves e médias." }
+    ],
+    "Elfo Alto": [
+        { name: "Visão no Escuro", description: "Enxerga na penumbra a até 18 metros." },
+        { name: "Ancestralidade Feérica", description: "Vantagem em salvaguardas contra ser enfeitiçado e magia não pode colocar você para dormir." },
+        { name: "Transe", description: "Elfos não precisam dormir. Meditam por 4 horas para obter os benefícios de um descanso longo." },
+        { name: "Truque", description: "Você conhece um truque da lista de magias de mago. Inteligência é seu atributo de conjuração." }
+    ],
+    "Elfo da Floresta": [
+        { name: "Visão no Escuro", description: "Enxerga na penumbra a até 18 metros." },
+        { name: "Ancestralidade Feérica", description: "Vantagem contra encanto e imune a sono mágico." },
+        { name: "Pés Ligeiros", description: "Seu deslocamento base aumenta para 10,5 metros." },
+        { name: "Máscara da Natureza", description: "Pode tentar se esconder mesmo quando estiver apenas levemente obscurecido por folhagem, chuva forte, neve, etc." }
+    ],
+    "Halfling Pés Leves": [
+        { name: "Sortudo", description: "Quando rolar um 1 natural em um ataque, teste ou salvaguarda, você pode rolar novamente e deve usar o novo resultado." },
+        { name: "Bravura", description: "Vantagem em salvaguardas contra medo." },
+        { name: "Agilidade Halfling", description: "Pode se mover através do espaço de qualquer criatura que seja um tamanho maior que o seu." },
+        { name: "Furtividade Natural", description: "Pode tentar se esconder mesmo quando estiver sendo obscurecido por uma criatura que seja pelo menos um tamanho maior que o seu." }
+    ],
+    "Halfling Robusto": [
+        { name: "Sortudo", description: "Rola novamente 1s naturais." },
+        { name: "Resiliência dos Robustos", description: "Vantagem em salvaguardas contra veneno e resistência a dano de veneno." }
+    ],
+    "Humano": [
+        { name: "Linhagem Versátil", description: "Todas as suas pontuações de habilidade aumentam em 1." }
+    ],
+    "Draconato": [
+        { name: "Ancestral Dracônico", description: "Escolha um tipo de dragão. Isso determina o tipo de dano da sua arma de sopro e sua resistência.", isChoice: true },
+        { name: "Arma de Sopro", description: "Pode usar sua ação para exalar energia destrutiva (dano tipo do ancestral)." },
+        { name: "Resistência a Dano", description: "Você tem resistência ao tipo de dano associado ao seu ancestral dracônico." }
+    ],
+    "Meio-Elfo": [
+        { name: "Visão no Escuro", description: "18m" },
+        { name: "Ancestralidade Feérica", description: "Vantagem contra encanto e imune a sono mágico." },
+        { name: "Versatilidade em Perícias", description: "Você ganha proficiência em duas perícias à sua escolha." }
+    ],
+    "Meio-Orc": [
+        { name: "Visão no Escuro", description: "18m" },
+        { name: "Ameaçador", description: "Proficiência em Intimidação." },
+        { name: "Resistência Implacável", description: "Quando cair a 0 PV mas não morrer, pode ficar com 1 PV (1/descanso longo)." },
+        { name: "Ataques Selvagens", description: "Quando atingir um crítico com arma corpo-a-corpo, role um dos dados de dano da arma mais uma vez." }
+    ],
+    "Tiefling": [
+        { name: "Visão no Escuro", description: "18m" },
+        { name: "Resistência Infernal", description: "Resistência a dano de fogo." },
+        { name: "Legado Infernal", description: "Conhece o truque Taumaturgia. No nível 3 lança Repreensão Infernal e no nível 5 lança Escuridão." }
+    ]
 };
+
+export const DND_FEATS: ClassFeature[] = [
+    { name: "Alerta", description: "+5 em Iniciativa, não pode ser surpreendido e outras criaturas não ganham vantagem por estarem escondidas de você." },
+    { name: "Atirador de Elite", description: "Sem desvantagem por longa distância, ignora cobertura meia e três-quartos, pode sofrer -5 no ataque para causar +10 de dano." },
+    { name: "Conjurador de Guerra", description: "Vantagem em Conciliação, realizar componentes somáticos com armas nas mãos e usar reação para lançar magia em vez de ataque de oportunidade." },
+    { name: "Liderança Inspiradora", description: "Gasta 10 minutos para dar PV temporários a até 6 aliados (Nível + Modificador de Carisma)." },
+    { name: "Mestre de Armas Grandes", description: "Ao crítico ou matar, ataque bônus. Pode sofrer -5 no ataque para causar +10 de dano." },
+    { name: "Mestre de Escudos", description: "Adiciona bônus de CA do escudo em salvaguardas de Destreza, usa bônus para empurrar com ação bônus." },
+    { name: "Mobilidade", description: "+3m de deslocamento, corre sem sofrer ataque de oportunidade de alvos que você tentou atacar." },
+    { name: "Robusto", description: "Máximo de PV aumenta em 2x seu nível." },
+    { name: "Sentinela", description: "Ataque de oportunidade reduz deslocamento a 0, pode atacar mesmo se criatura desengajar." }
+];

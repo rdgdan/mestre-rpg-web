@@ -24,13 +24,18 @@ import EquipmentModal from '@/components/ui/EquipmentModal';
 import SpellModal from '@/components/ui/SpellModal';
 import SpellSelectModal from '@/components/ui/SpellSelectModal';
 import LevelUpModal from '@/components/ui/LevelUpModal';
-import { CLASS_PROGRESSION } from '@/lib/class-features';
+import {
+    fetchClassFeaturesFromFirestore,
+    fetchRaceFeaturesFromFirestore,
+    fetchAllFeatsFromFirestore
+} from '@/lib/class-features-sync';
 
 // --- Componentes Auxiliares ---
 const StatBlock = ({ label, value }: { label: string; value: string | number }) => (
-    <div className="flex flex-col items-center justify-center p-4 rounded-lg bg-rpg-panel border border-rpg-gold/20 shadow-md h-full backdrop-blur-sm">
-        <span className="text-sm font-semibold text-rpg-gold text-center font-medieval tracking-wide">{label}</span>
-        <span className="text-3xl font-bold text-rpg-parchment font-cinzel mt-1">{value}</span>
+    <div className="flex flex-col items-center justify-center p-4 rounded-lg bg-rpg-panel border border-rpg-gold/20 shadow-lg h-full backdrop-blur-md group hover:border-rpg-gold/40 transition-all relative overflow-hidden">
+        <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-rpg-gold/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+        <span className="text-[10px] font-black text-rpg-gold/60 text-center uppercase tracking-[0.2em] font-cinzel mb-1">{label}</span>
+        <span className="text-3xl font-bold text-rpg-parchment font-cinzel group-hover:text-white transition-colors drop-shadow-glow-gold/10">{value}</span>
     </div>
 );
 
@@ -61,19 +66,41 @@ interface SkillCheckboxProps {
 }
 
 const SkillCheckbox = ({ skillKey, displayName, attribute, isProficient, proficiencyBonus, attributeMod, onChange, disabled }: SkillCheckboxProps) => (
-    <div className={`flex items-center justify-between p-2 rounded-md transition-colors border-b border-rpg-gold/5 ${disabled ? 'opacity-60 cursor-not-allowed' : 'hover:bg-rpg-dark/40'}`}>
-        <label htmlFor={skillKey} className={`flex items-center ${disabled ? 'cursor-not-allowed' : 'cursor-pointer'}`}>
-            <input
-                id={skillKey}
-                type="checkbox"
-                checked={isProficient}
-                onChange={(e) => onChange(skillKey, e.target.checked)}
-                disabled={disabled}
-                className={`w-4 h-4 rounded-sm bg-rpg-dark border-rpg-gold/30 ${disabled ? 'text-rpg-grey' : 'text-rpg-gold focus:ring-rpg-gold'}`}
-            />
-            <span className={`ml-3 text-sm ${isProficient ? (disabled ? 'text-rpg-gold/70' : 'text-rpg-gold font-bold') : 'text-rpg-grey'}`}>{displayName} <span className="text-xs text-rpg-grey/50">({attribute.slice(0, 3).toUpperCase()})</span></span>
+    <div className={`flex items-center justify-between p-2.5 rounded-lg transition-all border border-transparent ${disabled ? 'opacity-60 cursor-not-allowed' : 'hover:bg-rpg-slate/40 hover:border-rpg-gold/10 hover:shadow-inner group/skill'}`}>
+        <label htmlFor={skillKey} className={`flex items-center flex-grow ${disabled ? 'cursor-not-allowed' : 'cursor-pointer'}`}>
+            <div className="relative flex items-center justify-center">
+                <input
+                    id={skillKey}
+                    type="checkbox"
+                    checked={isProficient}
+                    onChange={(e) => onChange(skillKey, e.target.checked)}
+                    disabled={disabled}
+                    className="absolute opacity-0 w-5 h-5 cursor-pointer z-10"
+                />
+                <div className={`w-5 h-5 rounded border flex items-center justify-center transition-all ${isProficient
+                    ? 'bg-rpg-gold border-rpg-gold shadow-glow-gold/30'
+                    : 'bg-black/40 border-rpg-gold/20 group-hover/skill:border-rpg-gold/40'}`}>
+                    {isProficient && (
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 text-rpg-dark" viewBox="0 0 20 20" fill="currentColor">
+                            <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                        </svg>
+                    )}
+                </div>
+            </div>
+            <div className="ml-4 flex flex-col">
+                <span className={`text-sm tracking-tight transition-colors ${isProficient ? 'text-rpg-gold font-bold' : 'text-rpg-parchment/80 group-hover/skill:text-rpg-parchment'}`}>
+                    {displayName}
+                </span>
+                <span className="text-[9px] text-rpg-grey/50 uppercase font-bold tracking-tighter">
+                    {ATTRIBUTE_DISPLAY_NAMES[attribute as keyof typeof ATTRIBUTE_DISPLAY_NAMES] || attribute}
+                </span>
+            </div>
         </label>
-        <span className={`font-medieval text-lg font-bold ${disabled ? 'text-rpg-grey' : 'text-rpg-parchment'}`}>{isProficient ? attributeMod + proficiencyBonus : attributeMod}</span>
+        <div className={`flex items-center justify-center w-10 h-10 rounded bg-black/20 border transition-all ${isProficient ? 'border-rpg-gold/30 bg-rpg-gold/5' : 'border-white/5 group-hover/skill:border-white/10'}`}>
+            <span className={`font-medieval text-xl font-bold ${isProficient ? 'text-rpg-gold' : 'text-rpg-parchment/60'}`}>
+                {attributeMod + (isProficient ? proficiencyBonus : 0) >= 0 ? '+' : ''}{attributeMod + (isProficient ? proficiencyBonus : 0)}
+            </span>
+        </div>
     </div>
 );
 
@@ -105,7 +132,11 @@ export default function CharacterSheetPage() {
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [isReadOnly, setIsReadOnly] = useState(false); // True quando o mestre está visualizando
-    const [activeTab, setActiveTab] = useState('Principal');
+    const [activeTab, setActiveTab] = useState('Status');
+    const [activeSkillSubTab, setActiveSkillSubTab] = useState<'skills' | 'features' | 'feats'>('skills');
+    const [skillSearchQuery, setSkillSearchQuery] = useState('');
+    const [availableFeats, setAvailableFeats] = useState<any[]>([]);
+    const [isFeatModalOpen, setIsFeatModalOpen] = useState(false);
 
     // Modais e Estados de Dados
     const [isSelectionModalOpen, setSelectionModalOpen] = useState(false);
@@ -130,9 +161,28 @@ export default function CharacterSheetPage() {
     const [expandedSpellLevels, setExpandedSpellLevels] = useState<Record<number, boolean>>({ 0: true });
 
     const [isLevelUpModalOpen, setLevelUpModalOpen] = useState(false);
+    const [classProgression, setClassProgression] = useState<any>(null);
     const lastLevelRef = useRef<number | null>(null);
+    const [isCleaningDuplicates, setIsCleaningDuplicates] = useState(false);
 
     const dataFetchInitiated = useRef(false);
+
+    // Função para limpar duplicatas do Firestore
+    const handleCleanDuplicates = async () => {
+        if (!confirm('Isso vai remover itens duplicados do banco de dados. Continuar?')) return;
+
+        setIsCleaningDuplicates(true);
+        try {
+            const { cleanAllGameData } = await import('@/lib/xp-progression');
+            await cleanAllGameData();
+            alert('✅ Duplicatas removidas com sucesso! Verifique o console para detalhes.');
+        } catch (error) {
+            console.error('Erro ao limpar duplicatas:', error);
+            alert('❌ Erro ao limpar duplicatas. Verifique o console.');
+        } finally {
+            setIsCleaningDuplicates(false);
+        }
+    };
     const characterLoaded = useRef(false);
     const params = useParams();
     const router = useRouter();
@@ -169,15 +219,61 @@ export default function CharacterSheetPage() {
             try {
                 const populateCollection = async (collectionName: string, defaultData: any[], sortField = 'name') => {
                     const collectionRef = collection(db, collectionName);
-                    let snapshot = await getDocs(collectionRef);
-                    if (snapshot.empty && defaultData.length > 0) {
+                    const snapshot = await getDocs(collectionRef);
+
+                    // Criar mapa com dados existentes do banco (normalizado)
+                    const existingMap = new Map<string, any>();
+                    snapshot.docs.forEach(docSnap => {
+                        const data = docSnap.data();
+                        const normalizedName = data.name?.toLowerCase().trim();
+                        if (normalizedName) {
+                            existingMap.set(normalizedName, { ...data, _docId: docSnap.id });
+                        }
+                    });
+
+                    // Mesclar com dados do código (código tem prioridade para regras oficiais)
+                    const mergedMap = new Map<string, any>();
+                    defaultData.forEach(item => {
+                        const normalizedName = item.name?.toLowerCase().trim();
+                        if (normalizedName) {
+                            const existing = existingMap.get(normalizedName);
+                            mergedMap.set(normalizedName, {
+                                ...item,
+                                _docId: existing?._docId // Preserva ID se já existir
+                            });
+                        }
+                    });
+
+                    // Adicionar itens do banco que não estão no código (customizados)
+                    existingMap.forEach((item, key) => {
+                        if (!mergedMap.has(key)) {
+                            mergedMap.set(key, item);
+                        }
+                    });
+
+                    // Atualizar banco com versão consolidada (apenas se houver mudanças)
+                    if (mergedMap.size > 0) {
                         const batch = writeBatch(db);
-                        const uniqueData = Array.from(new Map(defaultData.map(item => [item.name, item])).values());
-                        uniqueData.forEach(item => batch.set(doc(collectionRef), item));
-                        await batch.commit();
-                        snapshot = await getDocs(collectionRef);
+                        let batchCount = 0;
+
+                        mergedMap.forEach((item) => {
+                            const { _docId, ...dataToSave } = item;
+                            const docRef = _docId ? doc(collectionRef, _docId) : doc(collectionRef);
+                            batch.set(docRef, dataToSave, { merge: true });
+                            batchCount++;
+                        });
+
+                        if (batchCount > 0) {
+                            await batch.commit();
+                            console.log(`✅ ${collectionName}: ${batchCount} itens consolidados (${defaultData.length} do código + ${existingMap.size - defaultData.length} customizados)`);
+                        }
                     }
-                    return snapshot.docs.map(doc => ({ ...doc.data() as any, id: doc.id })).sort((a, b) => a[sortField]?.localeCompare(b[sortField]));
+
+                    // Retornar dados consolidados
+                    const finalSnapshot = await getDocs(collectionRef);
+                    return finalSnapshot.docs
+                        .map(doc => ({ ...doc.data() as any, id: doc.id }))
+                        .sort((a, b) => a[sortField]?.localeCompare(b[sortField]));
                 };
 
                 const [classData, raceData, allItemsData] = await Promise.all([
@@ -191,8 +287,30 @@ export default function CharacterSheetPage() {
 
                 setClasses(classData.map(c => c.name));
                 setRaces(raceData.map(r => r.name));
-                setWeapons(allItemsData.filter(i => i.itemType === 'WEAPON' || i.damage || i.diceType));
-                setAllEquipment(allItemsData.filter(i => i.itemType !== 'WEAPON' && !i.damage && !i.diceType));
+
+                // Remover duplicatas por nome (caso o merge tenha falhado)
+                const weaponsMap = new Map();
+                allItemsData
+                    .filter(i => i.itemType === 'WEAPON' || i.damage || i.diceType)
+                    .forEach(item => {
+                        const key = item.name?.toLowerCase().trim();
+                        if (key && !weaponsMap.has(key)) {
+                            weaponsMap.set(key, item);
+                        }
+                    });
+
+                const equipmentMap = new Map();
+                allItemsData
+                    .filter(i => i.itemType !== 'WEAPON' && !i.damage && !i.diceType)
+                    .forEach(item => {
+                        const key = item.name?.toLowerCase().trim();
+                        if (key && !equipmentMap.has(key)) {
+                            equipmentMap.set(key, item);
+                        }
+                    });
+
+                setWeapons(Array.from(weaponsMap.values()));
+                setAllEquipment(Array.from(equipmentMap.values()));
             } catch (err) {
                 console.error("Falha ao carregar dados do jogo:", err);
                 setError("Falha ao carregar dados essenciais do jogo.");
@@ -257,20 +375,13 @@ export default function CharacterSheetPage() {
                             hydratedChar.spells = enrichedSpells;
 
                             // Enriquecer itens se necessário
-                            const { fetchGlobalItems, dndWeapons, dndEquipments, parseDamageString: parseDmg } = await import('@/lib/items-data');
+                            const { fetchGlobalItems, parseDamageString: parseDmg } = await import('@/lib/items-data');
 
-                            // Busca na coleção centralizada 'itens'
+                            // Busca na coleção centralizada 'itens' (fonte única de verdade)
                             const firestoreItens = await fetchGlobalItems();
 
-                            const allWeapons = [
-                                ...dndWeapons.map(w => ({ ...w, itemType: 'WEAPON', origin: 'code' })), // Prioridade para regras oficiais
-                                ...firestoreItens.filter(i => i.itemType === 'WEAPON' || i.damage || i.diceType).map(w => ({ ...w, origin: 'database' }))
-                            ];
-
-                            const allEquipment = [
-                                ...dndEquipments.map(e => ({ ...e, itemType: 'other', origin: 'code' })),
-                                ...firestoreItens.filter(i => i.itemType !== 'WEAPON' && !i.damage).map(e => ({ ...e, origin: 'database' }))
-                            ];
+                            const allWeapons = firestoreItens.filter(i => i.itemType === 'WEAPON' || i.damage || i.diceType);
+                            const allEquipment = firestoreItens.filter(i => i.itemType !== 'WEAPON' && !i.damage && !i.diceType);
 
                             const normalizeStr = (str: string) => str ? str.normalize('NFC').trim().toLowerCase() : '';
 
@@ -374,6 +485,38 @@ export default function CharacterSheetPage() {
             setLevelUpModalOpen(true);
         }
         lastLevelRef.current = character.level;
+
+        if (character.class) {
+            fetchClassFeaturesFromFirestore(character.class).then(progression => {
+                setClassProgression(progression);
+            });
+        }
+
+        // Carregar Talentos Disponíveis
+        fetchAllFeatsFromFirestore().then(feats => {
+            setAvailableFeats(feats);
+        });
+
+        // Injetar Características Raciais se estiverem faltando
+        if (character.race && (!character.features || character.features.filter(f => f.type === 'race').length === 0)) {
+            fetchRaceFeaturesFromFirestore(character.race).then(raceFeatures => {
+                if (raceFeatures.length > 0) {
+                    updateCharacter(prev => {
+                        const existingNames = new Set((prev.features || []).map(f => f.name));
+                        const newRacialFeatures = raceFeatures
+                            .filter(rf => !existingNames.has(rf.name))
+                            .map(rf => ({ ...rf, type: 'race' as const }));
+
+                        if (newRacialFeatures.length === 0) return prev;
+
+                        return {
+                            ...prev,
+                            features: [...(prev.features || []), ...newRacialFeatures]
+                        };
+                    });
+                }
+            });
+        }
     }, [character, isLoading]);
 
     const handleApplyLevelUp = (choices: { attributes: Record<string, number>; hpIncrease: number }) => {
@@ -381,19 +524,40 @@ export default function CharacterSheetPage() {
 
         updateCharacter(prev => {
             const newAttributes = { ...prev.attributes };
-            // Mapear nomes do modal para os nomes reais do objeto de atributos se necessário
-            // No modal usei nomes em inglês minúsculos, que devem bater com o objeto
             Object.entries(choices.attributes).forEach(([attr, bonus]) => {
                 if (bonus > 0) {
                     newAttributes[attr as keyof typeof newAttributes] = (newAttributes[attr as keyof typeof newAttributes] || 10) + bonus;
                 }
             });
 
+            const newLevel = prev.level; // O nível já foi atualizado pelo gatilho (XP ou Manual)
+            const newFeatures = [...(prev.features || [])];
+
+            // Buscar características para o NOVO nível
+            if (classProgression && classProgression[newLevel]) {
+                const levelProgression = classProgression[newLevel];
+                levelProgression.features.forEach(feat => {
+                    // Evitar duplicatas exatas e ASI (que é escolha manual)
+                    const isDuplicate = newFeatures.some(f => f.name === feat.name);
+                    const isASI = feat.name.includes("Melhoria no Valor de Atributo");
+
+                    if (!isDuplicate && !isASI) {
+                        newFeatures.push({
+                            ...feat,
+                            level: newLevel,
+                            type: 'class'
+                        });
+                    }
+                });
+            }
+
             return {
                 ...prev,
+                level: newLevel,
                 attributes: newAttributes,
                 maxHp: (prev.maxHp || 0) + choices.hpIncrease,
-                currentHp: (prev.currentHp || 0) + choices.hpIncrease // Também cura o HP ganho
+                currentHp: (prev.currentHp || 0) + choices.hpIncrease,
+                features: newFeatures
             };
         });
     };
@@ -524,6 +688,16 @@ export default function CharacterSheetPage() {
                             <span>👁️</span> Modo Espectador (Mestre)
                         </div>
                     )}
+                    {!isReadOnly && (
+                        <button
+                            onClick={handleCleanDuplicates}
+                            disabled={isCleaningDuplicates}
+                            className="bg-purple-900/20 border border-purple-500/30 text-purple-400 px-3 py-1.5 rounded hover:bg-purple-900/40 transition-all text-xs font-bold disabled:opacity-50 disabled:cursor-not-allowed"
+                            title="Remover itens duplicados do banco de dados"
+                        >
+                            {isCleaningDuplicates ? '🧹 Limpando...' : '🧹 Limpar Duplicatas'}
+                        </button>
+                    )}
                     {id === 'novo' && (<button onClick={() => { }} className="px-6 py-2 font-bold rounded-md bg-gradient-to-r from-rpg-gold to-yellow-600 text-rpg-dark hover:from-yellow-400 hover:to-rpg-gold shadow-lg transform hover:scale-105 transition-all">Salvar Novo Personagem</button>)}
                 </div>
 
@@ -561,7 +735,49 @@ export default function CharacterSheetPage() {
                                 >+</button>
                             </div>
                         </div>
-                        <div className="w-32"><label className="block text-[10px] font-bold text-rpg-gold uppercase tracking-wider mb-1 font-cinzel text-center">Experiência</label><input type="number" disabled={isReadOnly} value={character.experience === 0 ? '0' : (character.experience || '')} onChange={(e) => handleFieldChange('experience', e.target.value === '' ? '' : parseInt(e.target.value))} className={`bg-rpg-dark/50 border border-rpg-gold/20 rounded-md px-2 py-2 text-center font-bold w-full font-medieval text-sm text-rpg-gold ${isReadOnly ? 'opacity-70' : ''}`} /></div>
+                        <div className="w-full md:w-64">
+                            <label className="block text-[10px] font-bold text-rpg-gold uppercase tracking-wider mb-1 font-cinzel">Experiência</label>
+                            <div className="bg-rpg-slate border border-rpg-gold/20 rounded-md p-2">
+                                {/* XP Info */}
+                                <div className="flex justify-between items-center mb-1">
+                                    <span className="text-xs text-rpg-grey font-cinzel">
+                                        {(() => {
+                                            const { getXPForNextLevel, getXPForCurrentLevel } = require('@/lib/xp-progression');
+                                            const nextXP = getXPForNextLevel(character.level);
+                                            const currentXP = getXPForCurrentLevel(character.level);
+                                            return character.level >= 20 ? 'Nível Máximo' : `${character.experience} / ${nextXP} XP`;
+                                        })()}
+                                    </span>
+                                    {!isReadOnly && (
+                                        <button
+                                            onClick={() => {
+                                                const amount = prompt('Quanto XP adicionar?', '100');
+                                                if (amount && !isNaN(Number(amount))) {
+                                                    handleFieldChange('experience', (character.experience || 0) + Number(amount));
+                                                }
+                                            }}
+                                            className="text-[10px] bg-rpg-gold/20 hover:bg-rpg-gold/30 text-rpg-gold px-2 py-0.5 rounded font-bold transition-all"
+                                        >
+                                            + XP
+                                        </button>
+                                    )}
+                                </div>
+                                {/* Progress Bar */}
+                                {character.level < 20 && (
+                                    <div className="h-2 bg-black/40 rounded-full border border-white/5 overflow-hidden">
+                                        <div
+                                            className="h-full bg-gradient-to-r from-rpg-gold/60 to-rpg-gold transition-all duration-500"
+                                            style={{
+                                                width: `${(() => {
+                                                    const { getXPProgress } = require('@/lib/xp-progression');
+                                                    return getXPProgress(character.level, character.experience);
+                                                })()}%`
+                                            }}
+                                        />
+                                    </div>
+                                )}
+                            </div>
+                        </div>
                         <div className="w-full sm:w-40"><label className="block text-[10px] font-bold text-rpg-gold uppercase tracking-wider mb-1 font-cinzel text-center sm:text-left">Raça</label><button disabled={isReadOnly} onClick={() => openSelectionModal('race')} className={`w-full bg-rpg-slate border border-rpg-gold/20 rounded-md px-3 py-2 text-left hover:border-rpg-gold/50 font-medieval text-sm ${isReadOnly ? 'opacity-70 cursor-not-allowed' : ''}`}>{character.race || 'Selecione...'}</button></div>
                     </div>
                 </header>
@@ -773,40 +989,331 @@ export default function CharacterSheetPage() {
                         );
                     })()}
 
-                    {/* ABA HABILIDADES */}
+                    {/* ABA HABILIDADES (REDESENHADA) */}
                     {activeTab === 'Habilidades' && (
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 animate-fade-in">
-                            <div className="bg-rpg-panel border border-rpg-gold/10 p-5 rounded-lg shadow-md backdrop-blur-sm">
-                                <h3 className="text-xl font-bold text-rpg-gold mb-4 border-b border-rpg-gold/20 pb-2 font-cinzel uppercase tracking-widest">Perícias</h3>
-                                <div className="space-y-1 h-96 overflow-y-auto pr-2 custom-scrollbar">
-                                    {SKILLS.map((skill) => (
-                                        <SkillCheckbox
-                                            key={skill.key}
-                                            skillKey={skill.key}
-                                            displayName={skill.displayName}
-                                            attribute={skill.attribute}
-                                            isProficient={character.skills[skill.key]}
-                                            proficiencyBonus={character.proficiencyBonus}
-                                            attributeMod={character.attributeModifiers[skill.attribute]}
-                                            onChange={(k: any, v: any) => handleNestedChange(`skills.${k}`, v)}
-                                            disabled={isReadOnly}
-                                        />
-                                    ))}
+                        <div className="flex flex-col h-full animate-fade-in space-y-4">
+                            {/* Cabeçalho de Navegação Interna e Busca */}
+                            <div className="flex flex-col md:flex-row justify-between items-center gap-4 bg-rpg-panel border border-rpg-gold/10 p-3 rounded-lg shadow-md backdrop-blur-sm">
+                                <div className="flex p-1 bg-rpg-slate/50 rounded-md border border-rpg-gold/10">
+                                    <button
+                                        onClick={() => setActiveSkillSubTab('skills')}
+                                        className={`px-4 py-1.5 rounded transition-all text-xs font-bold uppercase tracking-wider ${activeSkillSubTab === 'skills' ? 'bg-rpg-gold text-rpg-dark shadow-glow-gold/20' : 'text-rpg-grey hover:text-rpg-parchment'}`}
+                                    >
+                                        Perícias
+                                    </button>
+                                    <button
+                                        onClick={() => setActiveSkillSubTab('features')}
+                                        className={`px-4 py-1.5 rounded transition-all text-xs font-bold uppercase tracking-wider ${activeSkillSubTab === 'features' ? 'bg-rpg-gold text-rpg-dark shadow-glow-gold/20' : 'text-rpg-grey hover:text-rpg-parchment'}`}
+                                    >
+                                        Características
+                                    </button>
+                                    <button
+                                        onClick={() => setActiveSkillSubTab('feats')}
+                                        className={`px-4 py-1.5 rounded transition-all text-xs font-bold uppercase tracking-wider ${activeSkillSubTab === 'feats' ? 'bg-rpg-gold text-rpg-dark shadow-glow-gold/20' : 'text-rpg-grey hover:text-rpg-parchment'}`}
+                                    >
+                                        Talentos
+                                    </button>
+                                </div>
+                                <div className="relative w-full md:w-64">
+                                    <input
+                                        type="text"
+                                        placeholder="Buscar habilidade..."
+                                        value={skillSearchQuery}
+                                        onChange={(e) => setSkillSearchQuery(e.target.value)}
+                                        className="w-full bg-rpg-dark/50 border border-rpg-gold/20 rounded-md py-2 pl-10 pr-4 text-sm text-rpg-parchment focus:border-rpg-gold/50 outline-none placeholder:text-rpg-grey/50"
+                                    />
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="absolute left-3 top-2.5 h-4 w-4 text-rpg-gold/50" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                                    </svg>
                                 </div>
                             </div>
-                            <div className="bg-rpg-panel border border-rpg-gold/10 p-5 rounded-lg shadow-md backdrop-blur-sm">
-                                <h3 className="text-xl font-bold text-rpg-gold mb-4 border-b border-rpg-gold/20 pb-2 font-cinzel uppercase tracking-widest">Características e Talentos</h3>
-                                <div className="space-y-4 max-h-[500px] overflow-y-auto custom-scrollbar pr-2">
-                                    {character.features && character.features.length > 0 ? (
-                                        character.features.map((feature, idx) => (
-                                            <div key={idx} className="bg-rpg-slate/60 p-3 rounded-md border-l-2 border-rpg-gold/30 hover:bg-rpg-slate/80 transition-colors">
-                                                <h4 className="font-bold text-rpg-parchment mb-1 font-medieval text-lg">{feature.name}</h4>
-                                                <p className="text-sm text-rpg-grey leading-relaxed">{feature.description}</p>
+
+                            {/* Conteúdo Dinâmico das Sub-Abas */}
+                            <div className="flex-grow overflow-hidden bg-rpg-panel border border-rpg-gold/10 rounded-lg shadow-md backdrop-blur-sm p-4 sm:p-6 min-h-[500px]">
+                                {activeSkillSubTab === 'skills' && (
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-2 h-full overflow-y-auto pr-2 custom-scrollbar">
+                                        {SKILLS.filter(s => s.displayName.toLowerCase().includes(skillSearchQuery.toLowerCase())).map((skill) => (
+                                            <SkillCheckbox
+                                                key={skill.key}
+                                                skillKey={skill.key}
+                                                displayName={skill.displayName}
+                                                attribute={skill.attribute}
+                                                isProficient={character.skills[skill.key]}
+                                                proficiencyBonus={character.proficiencyBonus}
+                                                attributeMod={character.attributeModifiers[skill.attribute]}
+                                                onChange={(k: any, v: any) => handleNestedChange(`skills.${k}`, v)}
+                                                disabled={isReadOnly}
+                                            />
+                                        ))}
+                                    </div>
+                                )}
+
+                                {activeSkillSubTab === 'features' && (
+                                    <div className="space-y-6 h-full overflow-y-auto pr-2 custom-scrollbar pb-8">
+                                        {(() => {
+                                            const feats = (character.features || []).filter(f =>
+                                                (f.type === 'class' || f.type === 'race' || !f.type) &&
+                                                (f.name.toLowerCase().includes(skillSearchQuery.toLowerCase()) ||
+                                                    f.description.toLowerCase().includes(skillSearchQuery.toLowerCase()))
+                                            );
+
+                                            if (feats.length === 0) return (
+                                                <div className="flex flex-col items-center justify-center py-20 text-center opacity-30">
+                                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-16 w-16 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+                                                    </svg>
+                                                    <p className="italic">Nenhuma característica encontrada.</p>
+                                                </div>
+                                            );
+
+                                            // Agrupar por nível ou categoria
+                                            const groups: Record<string, typeof feats> = {};
+                                            feats.forEach(f => {
+                                                const key = f.level ? `Nível ${f.level}` : (f.type === 'race' ? 'Habilidades de Raça' : 'Especiais');
+                                                if (!groups[key]) groups[key] = [];
+                                                groups[key].push(f);
+                                            });
+
+                                            return Object.entries(groups)
+                                                .sort((a, b) => {
+                                                    if (a[0] === 'Habilidades de Raça') return -1;
+                                                    if (b[0] === 'Habilidades de Raça') return 1;
+                                                    if (a[0] === 'Especiais') return 1;
+                                                    if (b[0] === 'Especiais') return -1;
+                                                    return parseInt(a[0].replace(/\D/g, '')) - parseInt(b[0].replace(/\D/g, ''));
+                                                })
+                                                .map(([group, groupFeats]) => (
+                                                    <div key={group} className="space-y-3">
+                                                        <div className="flex items-center gap-3 border-b border-rpg-gold/10 pb-2 mb-4">
+                                                            <div className="w-8 h-8 rounded bg-rpg-gold/10 flex items-center justify-center border border-rpg-gold/20 shadow-glow-gold/10">
+                                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-rpg-gold" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                                                                </svg>
+                                                            </div>
+                                                            <h4 className="text-sm font-bold uppercase tracking-widest text-rpg-gold font-cinzel">{group}</h4>
+                                                        </div>
+                                                        <div className="grid grid-cols-1 gap-3">
+                                                            {groupFeats.map((feat, idx) => (
+                                                                <details key={idx} className="group/feat bg-rpg-slate/30 rounded-lg border border-rpg-gold/5 overflow-hidden transition-all hover:bg-rpg-slate/50 hover:border-rpg-gold/30 shadow-sm">
+                                                                    <summary className="flex justify-between items-center p-4 cursor-pointer list-none select-none">
+                                                                        <div className="flex items-center gap-4">
+                                                                            <div className={`p-2 rounded ${feat.type === 'race' ? 'bg-emerald-500/10' : 'bg-rpg-gold/10'} transition-transform group-hover/feat:scale-110`}>
+                                                                                {feat.type === 'race' ? (
+                                                                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                                                                    </svg>
+                                                                                ) : (
+                                                                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-rpg-gold" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" />
+                                                                                    </svg>
+                                                                                )}
+                                                                            </div>
+                                                                            <div>
+                                                                                <h5 className={`font-bold font-medieval text-lg ${feat.type === 'race' ? 'text-emerald-300' : 'text-rpg-parchment'} group-hover/feat:text-rpg-gold transition-colors`}>{feat.name}</h5>
+                                                                                <div className="flex gap-2 mt-0.5">
+                                                                                    <span className={`text-[8px] px-1.5 py-0.2 rounded font-black uppercase tracking-tighter ${feat.type === 'race' ? 'bg-emerald-600/20 text-emerald-400' : 'bg-rpg-gold/20 text-rpg-gold'}`}>
+                                                                                        {feat.type === 'race' ? 'Raça' : 'Classe'}
+                                                                                    </span>
+                                                                                    {feat.level && <span className="text-[8px] bg-white/5 text-rpg-grey px-1.5 py-0.2 rounded font-black uppercase tracking-tighter border border-white/5">Nível {feat.level}</span>}
+                                                                                </div>
+                                                                            </div>
+                                                                        </div>
+                                                                        <div className="w-8 h-8 rounded-full border border-white/5 flex items-center justify-center transition-all group-open/feat:bg-rpg-gold group-open/feat:border-rpg-gold group-hover/feat:border-rpg-gold/30">
+                                                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-rpg-grey group-open/feat:text-rpg-dark transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                                                            </svg>
+                                                                        </div>
+                                                                    </summary>
+                                                                    <div className="px-14 pb-6 text-sm text-rpg-grey leading-relaxed pt-2 animate-in slide-in-from-top-2 duration-300">
+                                                                        <p className="border-l-2 border-rpg-gold/20 pl-4 py-1 italic bg-black/5 rounded-r">
+                                                                            {feat.description}
+                                                                        </p>
+                                                                    </div>
+                                                                </details>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                ));
+                                        })()}
+                                    </div>
+                                )}
+
+                                {activeSkillSubTab === 'feats' && (
+                                    <div className="space-y-6 h-full overflow-y-auto pr-2 custom-scrollbar pb-8">
+                                        {(() => {
+                                            const feats = (character.features || []).filter(f =>
+                                                f.type === 'feat' &&
+                                                (f.name.toLowerCase().includes(skillSearchQuery.toLowerCase()) ||
+                                                    f.description.toLowerCase().includes(skillSearchQuery.toLowerCase()))
+                                            );
+
+                                            if (feats.length === 0) return (
+                                                <div className="flex flex-col items-center justify-center py-24 text-center space-y-4">
+                                                    <div className="w-16 h-16 rounded-full bg-purple-500/10 flex items-center justify-center border border-purple-500/20 animate-pulse">
+                                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-7.714 2.143L11 21l-2.286-6.857L1 12l7.714-2.143L11 3z" />
+                                                        </svg>
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-rpg-parchment font-bold text-lg font-cinzel">Sua Lenda está em branco...</p>
+                                                        <p className="text-xs text-rpg-grey max-w-xs mx-auto">Talentos são perícias heróicas que definem seu estilo de luta único.</p>
+                                                    </div>
+                                                </div>
+                                            );
+
+                                            // Agrupar Talentos por Nível
+                                            const groups: Record<string, typeof feats> = {};
+                                            feats.forEach(f => {
+                                                const key = f.level ? `Nível ${f.level}` : 'Inatos / Outros';
+                                                if (!groups[key]) groups[key] = [];
+                                                groups[key].push(f);
+                                            });
+
+                                            return Object.entries(groups)
+                                                .sort((a, b) => {
+                                                    if (a[0] === 'Inatos / Outros') return 1;
+                                                    if (b[0] === 'Inatos / Outros') return -1;
+                                                    return parseInt(a[0].replace(/\D/g, '')) - parseInt(b[0].replace(/\D/g, ''));
+                                                })
+                                                .map(([group, groupFeats]) => (
+                                                    <div key={group} className="space-y-3">
+                                                        <div className="flex items-center gap-3 border-b border-purple-500/10 pb-2 mb-4">
+                                                            <div className="w-8 h-8 rounded bg-purple-500/10 flex items-center justify-center border border-purple-500/20 shadow-glow-purple/10">
+                                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-7.714 2.143L11 21l-2.286-6.857L1 12l7.714-2.143L11 3z" />
+                                                                </svg>
+                                                            </div>
+                                                            <h4 className="text-sm font-bold uppercase tracking-widest text-purple-400 font-cinzel">{group}</h4>
+                                                        </div>
+                                                        <div className="grid grid-cols-1 gap-3">
+                                                            {groupFeats.map((feat, idx) => (
+                                                                <div key={idx} className="bg-rpg-slate/40 p-4 rounded-lg border-l-4 border-purple-500/50 hover:bg-rpg-slate/60 transition-all shadow-md group/feat relative overflow-hidden">
+                                                                    <div className="absolute top-0 right-0 w-24 h-24 bg-gradient-to-br from-purple-500/5 to-transparent pointer-events-none" />
+                                                                    <div className="flex justify-between items-start mb-3 relative z-10">
+                                                                        <div className="flex items-center gap-3">
+                                                                            <div className="w-10 h-10 rounded-full bg-purple-600/20 flex items-center justify-center border border-purple-500/30">
+                                                                                <span className="text-lg">⭐</span>
+                                                                            </div>
+                                                                            <div>
+                                                                                <h4 className="font-bold text-purple-200 font-medieval text-xl group-hover/feat:text-purple-100 transition-colors">{feat.name}</h4>
+                                                                                <span className="text-[10px] text-purple-400/80 uppercase font-black tracking-widest">Talento Lendário</span>
+                                                                            </div>
+                                                                        </div>
+                                                                        {!isReadOnly && (
+                                                                            <button
+                                                                                onClick={() => {
+                                                                                    if (confirm(`Remover talento "${feat.name}"?`)) {
+                                                                                        updateCharacter(prev => ({
+                                                                                            ...prev,
+                                                                                            features: prev.features.filter(f => f.name !== feat.name)
+                                                                                        }));
+                                                                                    }
+                                                                                }}
+                                                                                className="text-white/20 hover:text-red-400 transition-colors p-1"
+                                                                            >
+                                                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-4v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                                                                </svg>
+                                                                            </button>
+                                                                        )}
+                                                                    </div>
+                                                                    <p className="text-sm text-rpg-grey leading-relaxed relative z-10 bg-black/20 p-3 rounded border border-white/5">{feat.description}</p>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                ));
+                                        })()}
+                                        {!isReadOnly && (
+                                            <div className="flex gap-4 mt-6">
+                                                <button
+                                                    onClick={() => setIsFeatModalOpen(true)}
+                                                    className="flex-grow py-6 bg-purple-600/10 border-2 border-purple-500/30 rounded-lg text-purple-200 hover:bg-purple-600/20 hover:border-purple-500/50 transition-all font-bold uppercase tracking-widest text-xs flex flex-col items-center gap-2 group shadow-lg"
+                                                >
+                                                    <span className="text-2xl transition-transform group-hover:scale-125">✨</span>
+                                                    Escolher Talento da Biblioteca
+                                                </button>
+                                                <button
+                                                    onClick={() => {
+                                                        const name = prompt("Nome do Talento Customizado:");
+                                                        const desc = prompt("Descrição:");
+                                                        const level = parseInt(prompt("Nível em que foi adquirido (ou deixe vazio):") || "0");
+                                                        if (name && desc) {
+                                                            updateCharacter(prev => ({
+                                                                ...prev,
+                                                                features: [...(prev.features || []), {
+                                                                    name,
+                                                                    description: desc,
+                                                                    type: 'feat',
+                                                                    level: level > 0 ? level : undefined
+                                                                }]
+                                                            }));
+                                                        }
+                                                    }}
+                                                    className="w-1/3 py-6 bg-rpg-panel border border-dashed border-rpg-gold/20 rounded-lg text-rpg-grey hover:text-rpg-gold hover:border-rpg-gold/40 transition-all font-bold uppercase tracking-widest text-[10px] flex flex-col items-center gap-2 group"
+                                                >
+                                                    <span className="text-xl transition-transform group-hover:rotate-12">📝</span>
+                                                    Criar Customizado
+                                                </button>
                                             </div>
-                                        ))
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* MODAL DE SELEÇÃO DE TALENTOS */}
+                    {isFeatModalOpen && (
+                        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
+                            <div className="bg-rpg-panel border-2 border-purple-500/30 rounded-lg max-w-2xl w-full max-h-[80vh] flex flex-col overflow-hidden shadow-[0_0_50px_-10px_rgba(168,85,247,0.4)]">
+                                <div className="p-6 border-b border-purple-500/20 bg-purple-900/10 flex justify-between items-center">
+                                    <div>
+                                        <h3 className="text-xl font-bold font-cinzel text-purple-200 uppercase tracking-widest">Biblioteca de Talentos</h3>
+                                        <p className="text-[10px] text-purple-400 uppercase font-black">Escolha uma nova perícia heróica</p>
+                                    </div>
+                                    <button onClick={() => setIsFeatModalOpen(false)} className="text-purple-400 hover:text-white transition-colors text-2xl">×</button>
+                                </div>
+                                <div className="p-6 overflow-y-auto space-y-4 custom-scrollbar bg-rpg-dark/50">
+                                    {availableFeats.length === 0 ? (
+                                        <div className="text-center py-10 text-rpg-grey italic">Nenhum talento sincronizado. Vá até a Biblioteca para sincronizar.</div>
                                     ) : (
-                                        <p className="text-rpg-grey italic p-4 text-center">Nenhuma característica registrada.</p>
+                                        availableFeats.map((feat, idx) => {
+                                            const isSelected = character.features?.some(f => f.name === feat.name);
+                                            return (
+                                                <button
+                                                    key={idx}
+                                                    disabled={isSelected}
+                                                    onClick={() => {
+                                                        const level = parseInt(prompt(`Em qual nível você adquiriu "${feat.name}"?`) || "0");
+                                                        updateCharacter(prev => ({
+                                                            ...prev,
+                                                            features: [...(prev.features || []), {
+                                                                ...feat,
+                                                                type: 'feat',
+                                                                level: level > 0 ? level : undefined
+                                                            }]
+                                                        }));
+                                                        setIsFeatModalOpen(false);
+                                                    }}
+                                                    className={`w-full text-left p-4 rounded-lg border transition-all flex justify-between items-center group/feat-row ${isSelected
+                                                        ? 'bg-purple-900/10 border-purple-500/10 opacity-50 cursor-not-allowed'
+                                                        : 'bg-rpg-panel border-rpg-gold/5 hover:border-purple-500/40 hover:bg-purple-900/5'}`}
+                                                >
+                                                    <div className="flex-grow">
+                                                        <h4 className="font-bold text-rpg-parchment group-hover/feat-row:text-purple-200 transition-colors uppercase text-sm tracking-wider">{feat.name}</h4>
+                                                        <p className="text-xs text-rpg-grey mt-1 line-clamp-2">{feat.description}</p>
+                                                    </div>
+                                                    <div className={`w-8 h-8 rounded-full border flex items-center justify-center transition-all ${isSelected ? 'border-purple-500 bg-purple-500/20 text-purple-200' : 'border-rpg-gold/20 text-rpg-gold'}`}>
+                                                        {isSelected ? '✓' : '+'}
+                                                    </div>
+                                                </button>
+                                            );
+                                        })
                                     )}
+                                </div>
+                                <div className="p-4 bg-black/40 border-t border-purple-500/10 text-center">
+                                    <p className="text-[10px] text-rpg-grey italic">Talentos são escolhas poderosas que definem seu herói.</p>
                                 </div>
                             </div>
                         </div>
@@ -1030,7 +1537,7 @@ export default function CharacterSheetPage() {
                     onApply={handleApplyLevelUp}
                     level={character.level}
                     charClassName={character.class}
-                    progression={CLASS_PROGRESSION[character.class]?.[character.level]}
+                    progression={classProgression?.[character.level]}
                 />
             </div>
         </div>

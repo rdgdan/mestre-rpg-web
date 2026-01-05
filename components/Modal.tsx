@@ -13,7 +13,7 @@ export default function Modal({ isOpen, onClose, children, title }: ModalProps) 
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex justify-center items-center z-50 p-4">
+    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex justify-center items-center z-[100] p-4">
       <div className="bg-rpg-panel rounded-lg shadow-2xl w-full max-w-2xl border-2 border-rpg-gold/30 shadow-black/50 animate-fade-in-up">
         <div className="flex justify-between items-center p-4 border-b border-rpg-gold/20">
           <h2 className="text-2xl font-bold font-cinzel text-rpg-gold">{title}</h2>

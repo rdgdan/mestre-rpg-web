@@ -460,6 +460,71 @@ export const spellsDatabase: Spell[] = [
         description: 'Orbes flamejantes caem no chão em quatro pontos diferentes que você possa ver dentro do alcance. Cada criatura em uma esfera de 12 metros de raio centrada em cada ponto que você escolher deve fazer um teste de resistência de Destreza. A esfera se espalha ao redor de cantos. Uma criatura sofre 20d6 de dano de fogo e 20d6 de dano de concussão em um fracasso, ou metade do dano em um sucesso.',
         classes: ['Mago', 'Feiticeiro'],
         concentration: false
+    },
+    {
+        id: 'corrente-de-relampagos',
+        name: 'Corrente de Relâmpagos',
+        level: 6,
+        school: 'Evocação',
+        castingTime: '1 ação',
+        range: '45 metros',
+        components: 'V, S, M (um pouco de pelo; uma vareta de âmbar, cristal ou vidro; e três contas de prata)',
+        duration: 'Instantânea',
+        description: 'Você cria um relâmpago que atinge um alvo de sua escolha que você possa ver dentro do alcance. Três raios então saltam do alvo para outros três alvos, cada um dos quais deve estar a até 9 metros do alvo primário. Um alvo sofre 10d8 de dano elétrico em um fracasso, ou metade em um sucesso.',
+        classes: ['Mago', 'Feiticeiro'],
+        concentration: false
+    },
+    {
+        id: 'cura-completa',
+        name: 'Cura Completa (Heal)',
+        level: 6,
+        school: 'Evocação',
+        castingTime: '1 ação',
+        range: '18 metros',
+        components: 'V, S',
+        duration: 'Instantânea',
+        description: 'Uma onda de energia curativa flui através de uma criatura que você possa ver dentro do alcance. O alvo recupera 70 pontos de vida. Esta magia também encerra cegueira, surdez e qualquer doença que afete o alvo.',
+        classes: ['Clérigo', 'Druida'],
+        concentration: false
+    },
+    {
+        id: 'inverter-a-gravidade',
+        name: 'Inverter a Gravidade',
+        level: 7,
+        school: 'Transmutação',
+        castingTime: '1 ação',
+        range: '30 metros',
+        components: 'V, S, M (uma caneca de ferro e um pouco de limalha de ferro)',
+        duration: 'Concentração, até 1 minuto',
+        description: 'Esta magia inverte a gravidade em um cilindro de 15 metros de raio e 30 metros de altura centrado em um ponto dentro do alcance. Todas as criaturas e objetos que não estejam fixados ao chão na área caem para cima e param no topo da área pela duração.',
+        classes: ['Mago', 'Feiticeiro', 'Druida'],
+        concentration: true
+    },
+    {
+        id: 'explosao-solar',
+        name: 'Explosão Solar (Sunburst)',
+        level: 8,
+        school: 'Evocação',
+        castingTime: '1 ação',
+        range: '45 metros',
+        components: 'V, S, M (uma lupa e um pedaço de calcita)',
+        duration: 'Instantânea',
+        description: 'Luz solar brilhante brilha em um raio de 18 metros centrado em um ponto que você escolher dentro do alcance. Cada criatura na luz deve fazer um teste de resistência de Constituição. Em um fracasso, uma criatura sofre 12d6 de dano radiante e fica cega por 1 minuto.',
+        classes: ['Mago', 'Feiticeiro', 'Clérigo', 'Druida'],
+        concentration: false
+    },
+    {
+        id: 'parar-o-tempo',
+        name: 'Parar o Tempo',
+        level: 9,
+        school: 'Transmutação',
+        castingTime: '1 ação',
+        range: 'Pessoal',
+        components: 'V',
+        duration: 'Instantânea',
+        description: 'Você para brevemente o fluxo do tempo para todos, exceto para você. O tempo não passa para outras criaturas, enquanto você realiza 1d4 + 1 turnos em sequência, durante os quais você pode usar ações e mover-se normalmente.',
+        classes: ['Mago', 'Feiticeiro'],
+        concentration: false
     }
 ];
 
