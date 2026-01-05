@@ -354,3 +354,110 @@ export const DND_FEATS: ClassFeature[] = [
     { name: "Robusto", description: "Máximo de PV aumenta em 2x seu nível." },
     { name: "Sentinela", description: "Ataque de oportunidade reduz deslocamento a 0, pode atacar mesmo se criatura desengajar." }
 ];
+
+export const SUBCLASS_CHOICE_LEVELS: Record<string, number> = {
+    "Bárbaro": 3, "Bardo": 3, "Clérigo": 1, "Druida": 2, "Guerreiro": 3,
+    "Monge": 3, "Paladino": 3, "Patrulheiro": 3, "Ladino": 3,
+    "Feiticeiro": 1, "Bruxo": 1, "Mago": 2
+};
+
+export const SUBCLASSES: Record<string, Record<string, Record<number, LevelProgression>>> = {
+    "Bárbaro": {
+        "Caminho do Berserker": {
+            3: { features: [{ name: "Frenesi", description: "Pode fazer um ataque extra como ação bônus enquanto em Fúria (sofre Exaustão depois)." }] },
+            6: { features: [{ name: "Fúria Inabalável", description: "Não pode ser amedrontado ou enfeitiçado enquanto em Fúria." }] },
+            10: { features: [{ name: "Presença Intimidante", description: "Use sua ação para amedrontar uma criatura." }] },
+            14: { features: [{ name: "Retaliação", description: "Quando sofrer dano de uma criatura adjacente, use reação para atacar." }] }
+        }
+    },
+    "Bardo": {
+        "Colégio do Conhecimento": {
+            3: { features: [{ name: "Perícias Adicionais", description: "Ganha proficiência em 3 perícias à sua escolha." }, { name: "Palavras de Corte", description: "Use reação e Inspiração para reduzir jogada de ataque, teste ou dano de um oponente." }] },
+            6: { features: [{ name: "Segredos Mágicos Adicionais", description: "Aprenda 2 magias de qualquer classe (não contam no limite)." }] },
+            14: { features: [{ name: "Habilidade Inigualável", description: "Use Inspiração Bárdica em seus próprios testes de habilidade." }] }
+        }
+    },
+    "Clérigo": {
+        "Domínio da Vida": {
+            1: { features: [{ name: "Discípulo da Vida", description: "Suas magias de cura curam 2 + nível da magia extras." }, { name: "Proficiência Bônus", description: "Ganha proficiência com armaduras pesadas." }] },
+            2: { features: [{ name: "Preservar a Vida", description: "Canalizar Divindade para curar aliados feridos." }] },
+            6: { features: [{ name: "Curandeiro Abençoado", description: "Quando curar alguém, você também recupera PV." }] },
+            8: { features: [{ name: "Golpe Divino", description: "+1d8 de dano radiante em ataques com arma (1/turno)." }] },
+            17: { features: [{ name: "Cura Suprema", description: "Sempre usa o valor máximo dos dados ao curar." }] }
+        }
+    },
+    "Druida": {
+        "Círculo da Terra": {
+            2: { features: [{ name: "Truque Adicional", description: "Ganha um truque de druida extra." }, { name: "Recuperação Natural", description: "Recupere espaços de magia em um descanso curto." }] },
+            3: { features: [{ name: "Magias de Círculo", description: "Ganha magias baseadas no seu terreno escolhido.", isChoice: true }] },
+            6: { features: [{ name: "Passo da Terra", description: "Terreno difícil não-mágico não custa movimento extra." }] },
+            10: { features: [{ name: "Salvaguarda da Natureza", description: "Imunidade a veneno e doença, vantagem contra feérico/elemental." }] },
+            14: { features: [{ name: "Santuário da Natureza", description: "Criaturas da natureza hesitam em te atacar." }] }
+        }
+    },
+    "Guerreiro": {
+        "Campeão": {
+            3: { features: [{ name: "Crítico Aprimorado", description: "Seus ataques com armas marcam crítico com 19 ou 20." }] },
+            7: { features: [{ name: "Atleta Extraordinário", description: "Bônus em testes físicos que não tenha proficiência e salto mais longo." }] },
+            10: { features: [{ name: "Segundo Estilo de Luta", description: "Escolha um novo Estilo de Luta.", isChoice: true }] },
+            15: { features: [{ name: "Crítico Superior", description: "Seus ataques marcam crítico com 18, 19 ou 20." }] },
+            18: { features: [{ name: "Sobrevivente", description: "Recupera PV no início de cada turno se estiver abaixo da metade." }] }
+        }
+    },
+    "Monge": {
+        "Caminho da Mão Aberta": {
+            3: { features: [{ name: "Técnica da Mão Aberta", description: "Adicione efeitos ao atingir com Rajada de Golpes (derrubar, empurrar ou impedir reações)." }] },
+            6: { features: [{ name: "Integridade Corporal", description: "Cure-se em 3x seu nível como uma ação (1/descanso longo)." }] },
+            11: { features: [{ name: "Tranquilidade", description: "Ganha os benefícios da magia Santuário após descanso longo." }] },
+            17: { features: [{ name: "Palma Vibrante", description: "Crie vibrações letais no corpo de um oponente." }] }
+        }
+    },
+    "Paladino": {
+        "Juramento de Devoção": {
+            3: { features: [{ name: "Arma Sagrada", description: "Carisma no acerto e arma emite luz.", isChoice: false }, { name: "Expulsar o Profano", description: "Amedronta mortos-vivos e ínferos." }] },
+            7: { features: [{ name: "Aura de Devoção", description: "Você e aliados a 3m não podem ser enfeitiçados." }] },
+            15: { features: [{ name: "Pureza de Espírito", description: "Sempre sob efeito de Proteção contra o Bem e Mal." }] },
+            20: { features: [{ name: "Halo Sagrado", description: "Emite luz solar, causa dano radiante a inimigos e vantagem contra magias de mortos-vivos/ínferos." }] }
+        }
+    },
+    "Patrulheiro": {
+        "Caçador": {
+            3: { features: [{ name: "Presa do Caçador", description: "Escolha entre Matador de Gigantes, Quebrador de Hordas ou Matador de Colossos.", isChoice: true }] },
+            7: { features: [{ name: "Táticas Defensivas", description: "Escolha entre Escapar da Horda, Defesa Multiataque ou Vontade de Ferro.", isChoice: true }] },
+            11: { features: [{ name: "Ataque de Multiataque", description: "Escolha entre Saraivada ou Ataque Giratório.", isChoice: true }] },
+            15: { features: [{ name: "Defesa Superior do Caçador", description: "Escolha entre Evasão, Esquiva Sobrenatural ou Contra-atacar.", isChoice: true }] }
+        }
+    },
+    "Ladino": {
+        "Ladrão": {
+            3: { features: [{ name: "Mãos Rápidas", description: "Ação bônus para Usar Objeto, Prestidigitação ou abrir fechaduras." }, { name: "Clandestino", description: "Escalar não custa movimento extra e saltos são maiores." }] },
+            9: { features: [{ name: "Furtividade Suprema", description: "Vantagem em Furtividade se mover apenas metade do deslocamento." }] },
+            13: { features: [{ name: "Usar Objeto Mágico", description: "Ignora requisitos de classe, raça ou nível para itens mágicos." }] },
+            17: { features: [{ name: "Reflexos de Ladrão", description: "Age duas vezes no primeiro turno do combate." }] }
+        }
+    },
+    "Feiticeiro": {
+        "Linhagem Dracônica": {
+            1: { features: [{ name: "Ancestral Dracônico", description: "Escolha um tipo de dragão (determina dano e resistência).", isChoice: true }, { name: "Resiliência Dracônica", description: "+1 PV por nível e CA base 13 sem armadura." }] },
+            6: { features: [{ name: "Afinidade Elemental", description: "Soma Carisma no dano do seu elemento e pode ganhar resistência a ele." }] },
+            14: { features: [{ name: "Asas Dracônicas", description: "Pode manifestar asas e voar com seu deslocamento normal." }] },
+            18: { features: [{ name: "Presença Dracônica", description: "Aura de medo ou encanto de 18 metros." }] }
+        }
+    },
+    "Bruxo": {
+        "O Ínfero": {
+            1: { features: [{ name: "Bavura do Matador", description: "Ganha PV temporários ao reduzir criatura a 0 PV." }] },
+            6: { features: [{ name: "Sorte do Próprio Obscuro", description: "Adicione 1d10 a um teste ou salvaguarda (1/descanso curto)." }] },
+            10: { features: [{ name: "Resiliência Diabólica", description: "Escolha um tipo de dano para ter resistência (muda a cada descanso).", isChoice: true }] },
+            14: { features: [{ name: "Atirar pelo Inferno", description: "Ao atingir uma criatura, envie-a através de planos inferiores para causar 10d10 de dano psíquico." }] }
+        }
+    },
+    "Mago": {
+        "Escola de Evocação": {
+            2: { features: [{ name: "Erudição de Evocação", description: "Tempo e custo para copiar magias de evocação caem pela metade." }, { name: "Esculpir Feitiços", description: "Crie áreas seguras para aliados em suas magias de área." }] },
+            6: { features: [{ name: "Truque Potente", description: "Causa metade do dano mesmo se o alvo passar na salvaguarda." }] },
+            10: { features: [{ name: "Evocação Fortalecida", description: "Adicione Modificador de Inteligência ao dano de magias de evocação." }] },
+            14: { features: [{ name: "Sobrecarga Máxima", description: "Causa dano máximo em magias de 1º a 5º nível (sofre dano se repetir)." }] }
+        }
+    }
+};

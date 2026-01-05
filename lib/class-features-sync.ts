@@ -1,5 +1,5 @@
 import { db } from './firebase';
-import { collection, doc, getDocs, writeBatch, query, where, getDoc } from 'firebase/firestore';
+import { collection, doc, getDocs, writeBatch, query, where, getDoc, setDoc } from 'firebase/firestore';
 import {
     CLASS_PROGRESSION,
     RACE_FEATURES,
@@ -154,5 +154,43 @@ export async function fetchAllFeatsFromFirestore(): Promise<ClassFeature[]> {
     } catch (error) {
         console.error('❌ Erro ao buscar talentos:', error);
         return DND_FEATS;
+    }
+}
+
+/**
+ * Salva uma subclasse gerada por I.A. no repositório global
+ */
+export async function saveGeneratedSubclassToFirestore(className: string, subclassName: string, data: Record<number, LevelProgression>): Promise<void> {
+    try {
+        const docRef = doc(db, 'game_rules', 'subclasses', className, subclassName);
+        await setDoc(docRef, {
+            name: subclassName,
+            className,
+            features: data,
+            isAIGenerated: true,
+            createdAt: new Date().toISOString()
+        }, { merge: true });
+        console.log(`✅ Subclasse ${subclassName} salva no repositório global.`);
+    } catch (error) {
+        console.error(`❌ Erro ao salvar subclasse ${subclassName}:`, error);
+    }
+}
+
+/**
+ * Busca subclasses da comunidade/geradas por I.A. para uma classe
+ */
+export async function fetchCommunitySubclasses(className: string): Promise<Record<string, any>> {
+    try {
+        const subRef = collection(db, 'game_rules', 'subclasses', className);
+        const snapshot = await getDocs(subRef);
+        const subclasses: Record<string, any> = {};
+        snapshot.docs.forEach(doc => {
+            const data = doc.data();
+            subclasses[doc.id] = data.features;
+        });
+        return subclasses;
+    } catch (error) {
+        console.error(`❌ Erro ao buscar subclasses da comunidade para ${className}:`, error);
+        return {};
     }
 }

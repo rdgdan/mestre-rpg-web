@@ -44,6 +44,7 @@ export interface Character {
     name: string;
     race: string;
     class: string;
+    subclass?: string;
     level: number;
     experience: number;
     proficiencyBonus: number;
@@ -288,6 +289,7 @@ export function createBlankCharacter(ownerId: string): Character {
         name: 'Novo Personagem',
         race: '',
         class: '',
+        subclass: '',
         level: 1,
         experience: 0,
         speed: 9,
@@ -320,8 +322,9 @@ export function hydrateCharacter(partialData: Partial<Character> & { equipment?:
     const blank = createBlankCharacter(partialData.ownerId || '--');
     const hydrated = { ...blank, ...partialData, id };
 
-    // Garante que o campo treasures seja inicializado
+    // Garante que o campo treasures e subclass sejam inicializados
     hydrated.treasures = partialData.treasures || '';
+    hydrated.subclass = partialData.subclass || '';
 
     // Garante que campos aninhados sejam mesclados, não sobrescritos
     hydrated.attributes = { ...blank.attributes, ...partialData.attributes };

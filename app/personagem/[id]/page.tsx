@@ -27,8 +27,10 @@ import LevelUpModal from '@/components/ui/LevelUpModal';
 import {
     fetchClassFeaturesFromFirestore,
     fetchRaceFeaturesFromFirestore,
-    fetchAllFeatsFromFirestore
+    fetchAllFeatsFromFirestore,
+    saveGeneratedSubclassToFirestore
 } from '@/lib/class-features-sync';
+import { SUBCLASSES, SUBCLASS_CHOICE_LEVELS } from '@/lib/class-features';
 
 // --- Constantes de Ficha 2.0 ---
 const COMMON_CONDITIONS = [
@@ -126,9 +128,9 @@ const SkillCheckbox = ({ skillKey, displayName, attribute, isProficient, profici
 );
 
 interface TabButtonProps {
-    activeTab: string;
-    tabName: string;
-    onClick: (base: string) => void;
+    activeTab: 'Principal' | 'Equipamento' | 'Habilidades' | 'Magias' | 'Personalidade';
+    tabName: 'Principal' | 'Equipamento' | 'Habilidades' | 'Magias' | 'Personalidade';
+    onClick: (tab: 'Principal' | 'Equipamento' | 'Habilidades' | 'Magias' | 'Personalidade') => void;
 }
 
 const TabButton = ({ activeTab, tabName, onClick }: TabButtonProps) => (
@@ -257,11 +259,15 @@ export default function CharacterSheetPage() {
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [isReadOnly, setIsReadOnly] = useState(false); // True quando o mestre está visualizando
-    const [activeTab, setActiveTab] = useState('Status');
+    const [activeTab, setActiveTab] = useState<'Principal' | 'Equipamento' | 'Habilidades' | 'Magias' | 'Personalidade'>('Principal');
     const [activeSkillSubTab, setActiveSkillSubTab] = useState<'skills' | 'features' | 'feats'>('skills');
     const [skillSearchQuery, setSkillSearchQuery] = useState('');
     const [availableFeats, setAvailableFeats] = useState<any[]>([]);
     const [isFeatModalOpen, setIsFeatModalOpen] = useState(false);
+    const [isSubclassModalOpen, setIsSubclassModalOpen] = useState(false);
+    const [isAIGenerating, setIsAIGenerating] = useState(false);
+    const [isScannerModalOpen, setIsScannerModalOpen] = useState(false);
+    const [isScanning, setIsScanning] = useState(false);
 
     // Modais e Estados de Dados
     const [isSelectionModalOpen, setSelectionModalOpen] = useState(false);
@@ -308,6 +314,129 @@ export default function CharacterSheetPage() {
             setIsCleaningDuplicates(false);
         }
     };
+
+    const handleSelectSubclass = (subclassName: string) => {
+        updateCharacter(char => {
+            const className = char.class;
+            const level = char.level;
+            const subclassData = SUBCLASSES[className]?.[subclassName];
+
+            let newFeatures = [...(char.features || [])];
+
+            if (subclassData) {
+                // Injetar habilidades da subclasse até o nível atual
+                Object.entries(subclassData as Record<number, any>).forEach(([lvl, data]) => {
+                    if (parseInt(lvl) <= level) {
+                        (data.features as any[]).forEach(feat => {
+                            if (!newFeatures.some(f => f.name === feat.name)) {
+                                newFeatures.push({ ...feat, type: 'class' });
+                            }
+                        });
+                    }
+                });
+            }
+
+            return {
+                ...char,
+                subclass: subclassName,
+                features: newFeatures
+            };
+        });
+        setIsSubclassModalOpen(false);
+    };
+
+    const handleAISubclassGenerate = async () => {
+        if (!character) return;
+        const subName = prompt("Qual o nome da Subclasse que deseja que a I.A. gere?");
+        if (!subName) return;
+
+        const apiKey = localStorage.getItem('gemini_api_key');
+        if (!apiKey) {
+            const key = prompt("API Key do Gemini não encontrada. Cole sua chave para continuar:");
+            if (key) {
+                localStorage.setItem('gemini_api_key', key);
+            } else {
+                return;
+            }
+        }
+
+        setIsAIGenerating(true);
+        try {
+            const { AIWeaver } = await import('@/lib/ai-weaver');
+            const data = await AIWeaver.generateSubclass(character.class, subName);
+
+            // Salvar no banco global para a comunidade
+            await saveGeneratedSubclassToFirestore(character.class, subName, data);
+
+            updateCharacter(prev => {
+                const newFeatures = [...(prev.features || [])];
+                const level = prev.level || 1;
+
+                // Injetar habilidades geradas até o nível atual
+                Object.entries(data).forEach(([lvl, prog]) => {
+                    if (parseInt(lvl) <= level) {
+                        prog.features.forEach(feat => {
+                            if (!newFeatures.some(f => f.name === feat.name)) {
+                                newFeatures.push({ ...feat, type: 'class' });
+                            }
+                        });
+                    }
+                });
+
+                return {
+                    ...prev,
+                    subclass: subName,
+                    features: newFeatures
+                };
+            });
+
+            setIsSubclassModalOpen(false);
+            alert(`Sucesso! A I.A. teceu as regras para "${subName}" e as salvou no repositório global.`);
+        } catch (err: any) {
+            console.error("AI Generation Error:", err);
+            alert(`Erro ao tecer conteúdo: ${err.message}`);
+        } finally {
+            setIsAIGenerating(false);
+        }
+    };
+
+    const handleScanText = async (text: string) => {
+        if (!text.trim()) return;
+
+        const apiKey = localStorage.getItem('gemini_api_key');
+        if (!apiKey) {
+            const key = prompt("API Key do Gemini não encontrada. Cole sua chave para continuar:");
+            if (key) localStorage.setItem('gemini_api_key', key);
+            else return;
+        }
+
+        setIsScanning(true);
+        try {
+            const { AIWeaver } = await import('@/lib/ai-weaver');
+            const extracted = await AIWeaver.scanText(text);
+
+            if (extracted.length === 0) {
+                alert("A I.A. não encontrou habilidades ou itens claros no texto.");
+                return;
+            }
+
+            // Confirmar inserção
+            const names = extracted.map(e => e.name).join(", ");
+            if (confirm(`A I.A. detectou: ${names}. Deseja adicionar à ficha?`)) {
+                updateCharacter(prev => ({
+                    ...prev,
+                    features: [...(prev.features || []), ...extracted.map(f => ({ ...f, type: 'feat' as const }))]
+                }));
+                setIsScannerModalOpen(false);
+            }
+        } catch (err: any) {
+            console.error("Scan Error:", err);
+            alert(`Erro ao escanear: ${err.message}`);
+        } finally {
+            setIsScanning(false);
+        }
+    };
+
     const characterLoaded = useRef(false);
     const params = useParams();
     const router = useRouter();
@@ -767,6 +896,7 @@ export default function CharacterSheetPage() {
         }));
     };
 
+
     const handleOpenEquipmentModal = (item: OtherEquipmentItem | null) => { setEquipmentToEdit(item); setEquipmentModalOpen(true); };
     const handleSaveEquipment = (item: OtherEquipmentItem) => {
         updateCharacter(char => {
@@ -893,15 +1023,25 @@ export default function CharacterSheetPage() {
                             className="w-full text-5xl font-extrabold bg-transparent border-b-2 border-rpg-gold/30 font-cinzel text-rpg-gold focus:outline-none focus:border-rpg-gold transition-all placeholder-rpg-grey/30"
                             placeholder="Nome do Personagem"
                         />
+                        <div className="flex items-center gap-3 mt-2">
+                            <p className="text-rpg-grey uppercase font-bold tracking-[0.3em] text-[10px]">
+                                {character.race} • {character.class}{character.subclass ? ` (${character.subclass})` : ''}
+                            </p>
+                            {!character.subclass && character.level >= (SUBCLASS_CHOICE_LEVELS[character.class] || 3) && (
+                                <button
+                                    onClick={() => setIsSubclassModalOpen(true)}
+                                    className="text-[9px] bg-purple-900/40 text-purple-300 border border-purple-500/30 px-2 py-0.5 rounded-full hover:bg-purple-500 hover:text-white transition-all animate-pulse flex items-center gap-1 shadow-glow-purple/20"
+                                >
+                                    <span className="text-xs">✨</span> Escolher Subclasse
+                                </button>
+                            )}
+                        </div>
                     </div>
                     <div className="flex flex-wrap items-end gap-3 w-full md:w-auto">
                         <div className="w-full sm:w-40"><label className="block text-[10px] font-bold text-rpg-gold uppercase tracking-wider mb-1 font-cinzel text-center sm:text-left">Classe</label><button disabled={isReadOnly} onClick={() => openSelectionModal('class')} className={`w-full bg-rpg-slate border border-rpg-gold/20 rounded-md px-3 py-2 text-left hover:border-rpg-gold/50 font-medieval text-sm ${isReadOnly ? 'opacity-70 cursor-not-allowed' : ''}`}>{character.class || 'Selecione...'}</button></div>
-                        <div className="w-32 text-center group">
+                        <div className="w-24 text-center group">
                             <label className="block text-[10px] font-bold text-rpg-gold uppercase tracking-wider mb-1 font-cinzel transition-colors group-hover:text-yellow-400">Nível</label>
-                            <div className="relative flex items-center justify-between bg-rpg-slate border-2 border-rpg-gold/30 rounded-lg p-1 shadow-lg shadow-black/40 group-hover:border-rpg-gold transition-all">
-                                <div className="absolute -top-1 -left-1 w-3 h-3 border-t-2 border-l-2 border-rpg-gold rounded-tl"></div>
-                                <div className="absolute -bottom-1 -right-1 w-3 h-3 border-b-2 border-r-2 border-rpg-gold rounded-br"></div>
-
+                            <div className="relative flex items-center justify-between bg-rpg-slate border-2 border-rpg-gold/30 rounded-lg p-1 shadow-lg shadow-black/40 group-hover:border-rpg-gold transition-all h-[38px]">
                                 <button
                                     onClick={() => handleFieldChange('level', Math.max(1, (character.level || 1) - 1))}
                                     disabled={isReadOnly}
@@ -977,7 +1117,7 @@ export default function CharacterSheetPage() {
                 {/* Tabs Navigation */}
                 <div className="mb-6 border-b border-rpg-gold/20">
                     <div className="flex flex-wrap gap-1">
-                        {['Principal', 'Equipamento', 'Habilidades', 'Magias', 'Personalidade'].map(tab => (
+                        {(['Principal', 'Equipamento', 'Habilidades', 'Magias', 'Personalidade'] as const).map(tab => (
                             <TabButton key={tab} activeTab={activeTab} tabName={tab} onClick={setActiveTab} />
                         ))}
                     </div>
@@ -1012,26 +1152,26 @@ export default function CharacterSheetPage() {
                                 </div>
                                 <StatBlock label="Classe de Armadura" value={character.armorClass} />
                                 <StatBlock label="Iniciativa" value={character.initiative >= 0 ? `+${character.initiative}` : character.initiative} />
-                            </div>
 
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                <div className="p-4 bg-rpg-panel border border-rpg-gold/20 rounded-lg shadow-md text-center backdrop-blur-sm group hover:border-rpg-gold/40 transition-colors">
-                                    <h4 className="text-sm font-semibold text-rpg-gold text-center font-medieval tracking-wide">Deslocamento</h4>
-                                    <div className="flex items-center justify-center gap-1">
-                                        <input type="number" disabled={isReadOnly} value={character.speed === 0 ? '0' : (character.speed || '')} onChange={(e) => handleFieldChange('speed', e.target.value === '' ? '' : parseInt(e.target.value))} className={`w-16 text-3xl font-bold text-center bg-transparent border-b-2 border-rpg-gold/30 text-rpg-parchment font-medieval ${isReadOnly ? 'opacity-70' : ''}`} />
-                                        <span className="text-rpg-grey font-medieval">m</span>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                    <div className="p-4 bg-rpg-panel border border-rpg-gold/20 rounded-lg shadow-md text-center backdrop-blur-sm group hover:border-rpg-gold/40 transition-colors">
+                                        <h4 className="text-sm font-semibold text-rpg-gold text-center font-medieval tracking-wide">Deslocamento</h4>
+                                        <div className="flex items-center justify-center gap-1">
+                                            <input type="number" disabled={isReadOnly} value={character.speed === 0 ? '0' : (character.speed || '')} onChange={(e) => handleFieldChange('speed', e.target.value === '' ? '' : parseInt(e.target.value))} className={`w-16 text-3xl font-bold text-center bg-transparent border-b-2 border-rpg-gold/30 text-rpg-parchment font-medieval ${isReadOnly ? 'opacity-70' : ''}`} />
+                                            <span className="text-rpg-grey font-medieval">m</span>
+                                        </div>
+                                    </div>
+                                    <div className="p-5 bg-rpg-panel border border-rpg-gold/10 rounded-lg text-center flex flex-col justify-center shadow-lg backdrop-blur-sm">
+                                        <span className="text-sm text-rpg-gold font-bold uppercase mb-2 tracking-widest">Bônus de Proficiência</span>
+                                        <span className="text-5xl font-bold text-rpg-parchment font-medieval">+{character.proficiencyBonus}</span>
                                     </div>
                                 </div>
-                                <div className="p-5 bg-rpg-panel border border-rpg-gold/10 rounded-lg text-center flex flex-col justify-center shadow-lg backdrop-blur-sm">
-                                    <span className="text-sm text-rpg-gold font-bold uppercase mb-2 tracking-widest">Bônus de Proficiência</span>
-                                    <span className="text-5xl font-bold text-rpg-parchment font-medieval">+{character.proficiencyBonus}</span>
-                                </div>
-                            </div>
 
-                            <div className="p-5 bg-rpg-panel border border-rpg-gold/10 rounded-lg shadow-md">
-                                <h4 className="font-bold text-rpg-gold mb-3 font-cinzel tracking-wide text-lg border-b border-rpg-gold/10 pb-2 text-center sm:text-left">Resistências à Morte</h4>
-                                <div className="flex justify-between items-center mb-2"><span className="text-sm text-rpg-grey font-bold uppercase tracking-widest">Sucessos</span> <div className="flex gap-2">{[1, 2, 3].map(i => <input key={i} type="checkbox" disabled={isReadOnly} checked={character.deathSaves?.successes >= i} onChange={(e) => handleNestedChange('deathSaves.successes', e.target.checked ? i : i - 1)} className={`w-5 h-5 rounded-full accent-green-600 ${isReadOnly ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`} />)}</div></div>
-                                <div className="flex justify-between items-center"><span className="text-sm text-rpg-grey font-bold uppercase tracking-widest">Falhas</span> <div className="flex gap-2">{[1, 2, 3].map(i => <input key={i} type="checkbox" disabled={isReadOnly} checked={character.deathSaves?.failures >= i} onChange={(e) => handleNestedChange('deathSaves.failures', e.target.checked ? i : i - 1)} className={`w-5 h-5 rounded-full accent-rpg-red ${isReadOnly ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`} />)}</div></div>
+                                <div className="p-5 bg-rpg-panel border border-rpg-gold/10 rounded-lg shadow-md">
+                                    <h4 className="font-bold text-rpg-gold mb-3 font-cinzel tracking-wide text-lg border-b border-rpg-gold/10 pb-2 text-center sm:text-left">Resistências à Morte</h4>
+                                    <div className="flex justify-between items-center mb-2"><span className="text-sm text-rpg-grey font-bold uppercase tracking-widest">Sucessos</span> <div className="flex gap-2">{[1, 2, 3].map(i => <input key={i} type="checkbox" disabled={isReadOnly} checked={character.deathSaves?.successes >= i} onChange={(e) => handleNestedChange('deathSaves.successes', e.target.checked ? i : i - 1)} className={`w-5 h-5 rounded-full accent-green-600 ${isReadOnly ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`} />)}</div></div>
+                                    <div className="flex justify-between items-center"><span className="text-sm text-rpg-grey font-bold uppercase tracking-widest">Falhas</span> <div className="flex gap-2">{[1, 2, 3].map(i => <input key={i} type="checkbox" disabled={isReadOnly} checked={character.deathSaves?.failures >= i} onChange={(e) => handleNestedChange('deathSaves.failures', e.target.checked ? i : i - 1)} className={`w-5 h-5 rounded-full accent-rpg-red ${isReadOnly ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`} />)}</div></div>
+                                </div>
                             </div>
                         </div>
                     )}
@@ -1432,6 +1572,13 @@ export default function CharacterSheetPage() {
                                                     Escolher Talento da Biblioteca
                                                 </button>
                                                 <button
+                                                    onClick={() => setIsScannerModalOpen(true)}
+                                                    className="w-1/4 py-6 bg-purple-900/40 border border-purple-500/30 rounded-lg text-purple-300 hover:bg-purple-900/60 transition-all font-bold uppercase tracking-widest text-[10px] flex flex-col items-center gap-2 group"
+                                                >
+                                                    <span className="text-xl transition-transform group-hover:rotate-12">🧠</span>
+                                                    Scanner I.A.
+                                                </button>
+                                                <button
                                                     onClick={() => {
                                                         const name = prompt("Nome do Talento Customizado:");
                                                         const desc = prompt("Descrição:");
@@ -1448,71 +1595,15 @@ export default function CharacterSheetPage() {
                                                             }));
                                                         }
                                                     }}
-                                                    className="w-1/3 py-6 bg-rpg-panel border border-dashed border-rpg-gold/20 rounded-lg text-rpg-grey hover:text-rpg-gold hover:border-rpg-gold/40 transition-all font-bold uppercase tracking-widest text-[10px] flex flex-col items-center gap-2 group"
+                                                    className="w-1/4 py-6 bg-rpg-panel border border-dashed border-rpg-gold/20 rounded-lg text-rpg-grey hover:text-rpg-gold hover:border-rpg-gold/40 transition-all font-bold uppercase tracking-widest text-[10px] flex flex-col items-center gap-2 group"
                                                 >
                                                     <span className="text-xl transition-transform group-hover:rotate-12">📝</span>
-                                                    Criar Customizado
+                                                    Criar Manual
                                                 </button>
                                             </div>
                                         )}
                                     </div>
                                 )}
-                            </div>
-                        </div>
-                    )}
-
-                    {/* MODAL DE SELEÇÃO DE TALENTOS */}
-                    {isFeatModalOpen && (
-                        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
-                            <div className="bg-rpg-panel border-2 border-purple-500/30 rounded-lg max-w-2xl w-full max-h-[80vh] flex flex-col overflow-hidden shadow-[0_0_50px_-10px_rgba(168,85,247,0.4)]">
-                                <div className="p-6 border-b border-purple-500/20 bg-purple-900/10 flex justify-between items-center">
-                                    <div>
-                                        <h3 className="text-xl font-bold font-cinzel text-purple-200 uppercase tracking-widest">Biblioteca de Talentos</h3>
-                                        <p className="text-[10px] text-purple-400 uppercase font-black">Escolha uma nova perícia heróica</p>
-                                    </div>
-                                    <button onClick={() => setIsFeatModalOpen(false)} className="text-purple-400 hover:text-white transition-colors text-2xl">×</button>
-                                </div>
-                                <div className="p-6 overflow-y-auto space-y-4 custom-scrollbar bg-rpg-dark/50">
-                                    {availableFeats.length === 0 ? (
-                                        <div className="text-center py-10 text-rpg-grey italic">Nenhum talento sincronizado. Vá até a Biblioteca para sincronizar.</div>
-                                    ) : (
-                                        availableFeats.map((feat, idx) => {
-                                            const isSelected = character.features?.some(f => f.name === feat.name);
-                                            return (
-                                                <button
-                                                    key={idx}
-                                                    disabled={isSelected}
-                                                    onClick={() => {
-                                                        const level = parseInt(prompt(`Em qual nível você adquiriu "${feat.name}"?`) || "0");
-                                                        updateCharacter(prev => ({
-                                                            ...prev,
-                                                            features: [...(prev.features || []), {
-                                                                ...feat,
-                                                                type: 'feat',
-                                                                level: level > 0 ? level : undefined
-                                                            }]
-                                                        }));
-                                                        setIsFeatModalOpen(false);
-                                                    }}
-                                                    className={`w-full text-left p-4 rounded-lg border transition-all flex justify-between items-center group/feat-row ${isSelected
-                                                        ? 'bg-purple-900/10 border-purple-500/10 opacity-50 cursor-not-allowed'
-                                                        : 'bg-rpg-panel border-rpg-gold/5 hover:border-purple-500/40 hover:bg-purple-900/5'}`}
-                                                >
-                                                    <div className="flex-grow">
-                                                        <h4 className="font-bold text-rpg-parchment group-hover/feat-row:text-purple-200 transition-colors uppercase text-sm tracking-wider">{feat.name}</h4>
-                                                        <p className="text-xs text-rpg-grey mt-1 line-clamp-2">{feat.description}</p>
-                                                    </div>
-                                                    <div className={`w-8 h-8 rounded-full border flex items-center justify-center transition-all ${isSelected ? 'border-purple-500 bg-purple-500/20 text-purple-200' : 'border-rpg-gold/20 text-rpg-gold'}`}>
-                                                        {isSelected ? '✓' : '+'}
-                                                    </div>
-                                                </button>
-                                            );
-                                        })
-                                    )}
-                                </div>
-                                <div className="p-4 bg-black/40 border-t border-purple-500/10 text-center">
-                                    <p className="text-[10px] text-rpg-grey italic">Talentos são escolhas poderosas que definem seu herói.</p>
-                                </div>
                             </div>
                         </div>
                     )}
@@ -1729,11 +1820,75 @@ export default function CharacterSheetPage() {
                 </main>
 
                 {/* Modais */}
+                {
+                    isFeatModalOpen && (
+                        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
+                            <div className="bg-rpg-panel border-2 border-purple-500/30 rounded-lg max-w-2xl w-full max-h-[80vh] flex flex-col overflow-hidden shadow-[0_0_50px_-10px_rgba(168,85,247,0.4)]">
+                                <div className="p-6 border-b border-purple-500/20 bg-purple-900/10 flex justify-between items-center">
+                                    <div>
+                                        <h3 className="text-xl font-bold font-cinzel text-purple-200 uppercase tracking-widest">Biblioteca de Talentos</h3>
+                                        <p className="text-[10px] text-purple-400 uppercase font-black">Escolha uma nova perícia heróica</p>
+                                    </div>
+                                    <button onClick={() => setIsFeatModalOpen(false)} className="text-purple-400 hover:text-white transition-colors text-2xl">×</button>
+                                </div>
+                                <div className="p-6 overflow-y-auto space-y-4 custom-scrollbar bg-rpg-dark/50">
+                                    {availableFeats.length === 0 ? (
+                                        <div className="text-center py-10 text-rpg-grey italic">Nenhum talento sincronizado. Vá até a Biblioteca para sincronizar.</div>
+                                    ) : (
+                                        availableFeats.map((feat, idx) => {
+                                            const isSelected = character.features?.some(f => f.name === feat.name);
+                                            return (
+                                                <button
+                                                    key={idx}
+                                                    disabled={isSelected}
+                                                    onClick={() => {
+                                                        const level = parseInt(prompt(`Em qual nível você adquiriu "${feat.name}"?`) || "0");
+                                                        updateCharacter(prev => ({
+                                                            ...prev,
+                                                            features: [...(prev.features || []), {
+                                                                ...feat,
+                                                                type: 'feat',
+                                                                level: level > 0 ? level : undefined
+                                                            }]
+                                                        }));
+                                                        setIsFeatModalOpen(false);
+                                                    }}
+                                                    className={`w-full text-left p-4 rounded-lg border transition-all flex justify-between items-center group/feat-row ${isSelected
+                                                        ? 'bg-purple-900/10 border-purple-500/10 opacity-50 cursor-not-allowed'
+                                                        : 'bg-rpg-panel border-rpg-gold/5 hover:border-purple-500/40 hover:bg-purple-900/5'}`}
+                                                >
+                                                    <div className="flex-grow">
+                                                        <h4 className="font-bold text-rpg-parchment group-hover/feat-row:text-purple-200 transition-colors uppercase text-sm tracking-wider">{feat.name}</h4>
+                                                        <p className="text-xs text-rpg-grey mt-1 line-clamp-2">{feat.description}</p>
+                                                    </div>
+                                                    <div className={`w-8 h-8 rounded-full border flex items-center justify-center transition-all ${isSelected ? 'border-purple-500 bg-purple-500/20 text-purple-200' : 'border-rpg-gold/20 text-rpg-gold'}`}>
+                                                        {isSelected ? '✓' : '+'}
+                                                    </div>
+                                                </button>
+                                            );
+                                        })
+                                    )}
+                                </div>
+                                <div className="p-4 bg-black/40 border-t border-purple-500/10 text-center">
+                                    <p className="text-[10px] text-rpg-grey italic">Talentos são escolhas poderosas que definem seu herói.</p>
+                                </div>
+                            </div>
+                        </div>
+                    )
+                }
                 <SelectionModal isOpen={isSelectionModalOpen} onClose={() => setSelectionModalOpen(false)} title={modalConfig?.title || ''} items={modalConfig?.type === 'class' ? classes : (modalConfig?.type === 'race' ? races : weapons.map(w => w.name))} onSelectItem={handleSelectItem} isLoading={isDbDataLoading} />
                 <WeaponModal isOpen={isWeaponModalOpen} onClose={() => setWeaponModalOpen(false)} onSave={handleSaveWeapon} weaponToEdit={weaponToEdit} />
                 <EquipmentModal isOpen={isEquipmentModalOpen} onClose={() => setEquipmentModalOpen(false)} onSave={handleSaveEquipment} allEquipment={allEquipment} onAddNewGlobalItem={handleAddNewGlobalItem} itemToEdit={equipmentToEdit} />
                 <SpellSelectModal isOpen={isSpellSelectOpen} onClose={() => setSpellSelectOpen(false)} onSelect={handleSaveSpell} onCreate={() => { setSpellSelectOpen(false); setSpellToEdit(null); setSpellModalOpen(true); }} />
                 <SpellModal isOpen={isSpellModalOpen} onClose={() => { setSpellModalOpen(false); setSpellToEdit(null); }} onSave={handleSaveSpell} spellToEdit={spellToEdit} />
+                <SubclassModal
+                    isOpen={isSubclassModalOpen}
+                    onClose={() => setIsSubclassModalOpen(false)}
+                    character={character}
+                    onSelect={handleSelectSubclass}
+                    onGenerateAI={handleAISubclassGenerate}
+                    isGenerating={isAIGenerating}
+                />
                 <LevelUpModal
                     isOpen={isLevelUpModalOpen}
                     onClose={() => setLevelUpModalOpen(false)}
@@ -1742,6 +1897,150 @@ export default function CharacterSheetPage() {
                     charClassName={character.class}
                     progression={classProgression?.[character.level]}
                 />
+                <TextScannerModal
+                    isOpen={isScannerModalOpen}
+                    onClose={() => setIsScannerModalOpen(false)}
+                    onScan={handleScanText}
+                    isScanning={isScanning}
+                />
+            </div>
+        </div>
+    );
+}
+
+// --- Sub-componentes do Modal ---
+
+interface SubclassModalProps {
+    isOpen: boolean;
+    onClose: () => void;
+    character: Character;
+    onSelect: (subclassName: string | null) => void;
+    onGenerateAI: () => void;
+    isGenerating: boolean;
+}
+
+function SubclassModal({ isOpen, onClose, character, onSelect, onGenerateAI, isGenerating }: SubclassModalProps) {
+    if (!isOpen) return null;
+
+    return (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
+            <div className="bg-rpg-panel border-2 border-purple-500/30 rounded-lg max-w-2xl w-full max-h-[80vh] flex flex-col overflow-hidden shadow-[0_0_50px_-10px_rgba(168,85,247,0.4)]">
+                <div className="p-6 border-b border-purple-500/20 bg-purple-900/10 flex justify-between items-center">
+                    <div>
+                        <h3 className="text-xl font-bold font-cinzel text-purple-200 uppercase tracking-widest">Especialização: {character.class}</h3>
+                        <p className="text-[10px] text-purple-400 uppercase font-black">Escolha seu caminho heróico</p>
+                    </div>
+                    <button onClick={onClose} className="text-purple-400 hover:text-white transition-colors text-2xl">×</button>
+                </div>
+                <div className="p-6 overflow-y-auto space-y-4 custom-scrollbar bg-rpg-dark/50">
+                    {Object.keys(SUBCLASSES[character.class] || {}).length === 0 ? (
+                        <div className="text-center py-6 text-rpg-grey italic">Sem arquétipos pré-definidos para esta classe.</div>
+                    ) : (
+                        Object.entries(SUBCLASSES[character.class] as Record<string, any>).map(([name, data]) => (
+                            <button
+                                key={name}
+                                onClick={() => onSelect(name)}
+                                className="w-full text-left p-4 rounded-lg border border-rpg-gold/5 bg-rpg-panel hover:border-purple-500/40 hover:bg-purple-900/5 transition-all group/sub-row"
+                            >
+                                <h4 className="font-bold text-rpg-parchment group-hover/sub-row:text-purple-200 transition-colors uppercase text-sm tracking-wider">{name}</h4>
+                                <div className="mt-2 space-y-1">
+                                    {(Object.entries(data as Record<number, any>)).map(([lvl, prog]) => (
+                                        <div key={lvl} className="text-[10px] text-rpg-grey">
+                                            <span className="text-purple-400 font-bold">Nível {lvl}:</span> {(prog.features as any[]).map(f => f.name).join(', ')}
+                                        </div>
+                                    ))}
+                                </div>
+                            </button>
+                        ))
+                    )}
+
+                    <div className="border-t border-purple-500/10 pt-4 mt-2 flex gap-2">
+                        <button
+                            onClick={() => {
+                                const sub = prompt("Digite o nome da sua Subclasse personalizada:");
+                                if (sub) onSelect(sub);
+                            }}
+                            className="flex-grow py-3 border border-dashed border-rpg-gold/20 rounded-lg text-rpg-grey hover:text-rpg-gold hover:border-rpg-gold/40 transition-all font-bold uppercase tracking-widest text-[9px]"
+                        >
+                            + Manual
+                        </button>
+                        <button
+                            disabled={isGenerating}
+                            onClick={onGenerateAI}
+                            className={`flex-grow py-3 border border-purple-500/30 rounded-lg text-purple-300 transition-all font-bold uppercase tracking-widest text-[9px] flex items-center justify-center gap-2 ${isGenerating ? 'opacity-50 cursor-wait bg-purple-900/20' : 'hover:bg-purple-900/40 hover:border-purple-500 shadow-glow-purple/10'}`}
+                        >
+                            {isGenerating ? (
+                                <>
+                                    <span className="w-3 h-3 border-2 border-purple-300 border-t-transparent rounded-full animate-spin"></span>
+                                    Tecendo Regras...
+                                </>
+                            ) : (
+                                <>
+                                    <span className="text-xs">🧠</span> Gerar via I.A.
+                                </>
+                            )}
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+}
+// --- Text Scanner Modal ---
+interface TextScannerModalProps {
+    isOpen: boolean;
+    onClose: () => void;
+    onScan: (text: string) => void;
+    isScanning: boolean;
+}
+
+function TextScannerModal({ isOpen, onClose, onScan, isScanning }: TextScannerModalProps) {
+    const [text, setText] = useState('');
+
+    if (!isOpen) return null;
+
+    return (
+        <div className="fixed inset-0 z-[250] flex items-center justify-center p-4 bg-black/90 backdrop-blur-md animate-fade-in">
+            <div className="bg-rpg-panel border-2 border-purple-500/30 rounded-lg max-w-2xl w-full overflow-hidden shadow-[0_0_100px_-20px_rgba(168,85,247,0.3)] flex flex-col max-h-[80vh]">
+                <div className="p-6 border-b border-purple-500/20 bg-purple-900/10 flex justify-between items-center">
+                    <div>
+                        <h3 className="text-xl font-bold font-cinzel text-purple-200 uppercase tracking-widest flex items-center gap-3">
+                            <span className="text-2xl animate-pulse">🧠</span>
+                            Tear de Extração
+                        </h3>
+                        <p className="text-[10px] text-purple-400 uppercase font-black">Cole textos de livros ou PDFs para extrair regras</p>
+                    </div>
+                    <button onClick={onClose} className="text-purple-400 hover:text-white transition-colors text-2xl">×</button>
+                </div>
+
+                <div className="p-6 flex-grow flex flex-col gap-4">
+                    <textarea
+                        value={text}
+                        onChange={(e) => setText(e.target.value)}
+                        placeholder="Cole aqui a descrição de um item mágico, uma habilidade de classe ou um talento..."
+                        className="flex-grow bg-rpg-dark/60 border border-purple-500/20 rounded-lg p-5 text-rpg-parchment focus:outline-none focus:ring-2 focus:ring-purple-500/40 font-serif leading-relaxed resize-none custom-scrollbar h-64"
+                    />
+
+                    <div className="flex justify-end gap-3">
+                        <button
+                            onClick={onClose}
+                            className="px-6 py-2 text-rpg-grey hover:text-white transition-colors uppercase text-xs font-bold tracking-widest"
+                        >
+                            Cancelar
+                        </button>
+                        <button
+                            disabled={isScanning || !text.trim()}
+                            onClick={() => onScan(text)}
+                            className={`px-8 py-2 rounded bg-purple-600 text-white font-bold uppercase text-xs tracking-[0.2em] shadow-glow-purple/20 transition-all ${isScanning || !text.trim() ? 'opacity-50 cursor-not-allowed' : 'hover:bg-purple-500 hover:scale-105 active:scale-95'}`}
+                        >
+                            {isScanning ? 'Extraindo...' : 'Sincronizar com Ficha'}
+                        </button>
+                    </div>
+                </div>
+
+                <div className="p-4 bg-purple-900/5 text-center border-t border-purple-500/10">
+                    <p className="text-[9px] text-purple-400/60 italic">A I.A. identificará automaticamente nomes e descrições úteis.</p>
+                </div>
             </div>
         </div>
     );
