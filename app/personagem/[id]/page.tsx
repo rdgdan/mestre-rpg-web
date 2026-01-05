@@ -30,6 +30,27 @@ import {
     fetchAllFeatsFromFirestore
 } from '@/lib/class-features-sync';
 
+// --- Constantes de Ficha 2.0 ---
+const COMMON_CONDITIONS = [
+    { id: 'caido', name: 'Caído', icon: '🦵' },
+    { id: 'envenenado', name: 'Envenenado', icon: '🧪' },
+    { id: 'atordoado', name: 'Atordoado', icon: '💫' },
+    { id: 'causado', name: 'Amedrontado', icon: '😨' },
+    { id: 'agarrado', name: 'Agarrado', icon: '🤝' },
+    { id: 'incapacitado', name: 'Incapacitado', icon: '🚫' },
+    { id: 'invisivel', name: 'Invisível', icon: '👻' },
+    { id: 'paralisado', name: 'Paralisado', icon: '⛓️' },
+    { id: 'petrificado', name: 'Petrificado', icon: '🗿' },
+    { id: 'preso', name: 'Preso', icon: '🕸️' },
+    { id: 'inconsciente', name: 'Inconsciente', icon: '😴' },
+];
+
+const ACTIVE_EFFECTS = [
+    { id: 'rage', name: 'Fúria', icon: '🔥', classReq: 'Bárbaro' },
+    { id: 'bless', name: 'Aperfeiçoar', icon: '✨' },
+    { id: 'concentrating', name: 'Concentrando', icon: '🧠' },
+];
+
 // --- Componentes Auxiliares ---
 const StatBlock = ({ label, value }: { label: string; value: string | number }) => (
     <div className="flex flex-col items-center justify-center p-4 rounded-lg bg-rpg-panel border border-rpg-gold/20 shadow-lg h-full backdrop-blur-md group hover:border-rpg-gold/40 transition-all relative overflow-hidden">
@@ -124,6 +145,110 @@ function debounce<F extends (...args: any[]) => any>(func: F, waitFor: number) {
         timeout = setTimeout(() => func(...args), waitFor);
     };
 }
+
+// --- Componentes Ficha 2.0 ---
+const QuickActions = ({ character }: { character: Character }) => {
+    const isBarbarian = character.class?.toLowerCase().includes('bárbaro') || character.class?.toLowerCase().includes('barbarian');
+    const isSpellcaster = character.spellcasting?.ability !== '';
+    const hasWeapons = character.inventory?.weapons?.length > 0;
+
+    const actions = [
+        hasWeapons && 'Ataque',
+        isSpellcaster && 'Lançar Magia',
+        'Desvencilhar',
+        'Disparar',
+        'Ajudar',
+    ].filter(Boolean);
+
+    const bonusActions = [
+        isBarbarian && 'Entrar em Fúria',
+        isSpellcaster && 'Magia (Bônus)',
+        'Usar Poção',
+    ].filter(Boolean);
+
+    const reactions = [
+        'Ataque de Oportunidade',
+        isSpellcaster && 'Contrafeitiço/Escudo',
+    ].filter(Boolean);
+
+    return (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-6">
+            <div className="bg-rpg-panel border border-rpg-gold/20 p-3 rounded-lg flex flex-col items-center">
+                <span className="text-[10px] text-rpg-gold font-bold uppercase mb-1">Ações Principais</span>
+                <div className="flex flex-wrap justify-center gap-1">
+                    {actions.map(a => <span key={a} className="text-[10px] bg-black/30 px-2 py-0.5 rounded text-rpg-grey">{a}</span>)}
+                </div>
+            </div>
+            <div className="bg-rpg-panel border border-rpg-gold/20 p-3 rounded-lg flex flex-col items-center text-blue-400">
+                <span className="text-[10px] font-bold uppercase mb-1">Ações Bônus</span>
+                <div className="flex flex-wrap justify-center gap-1">
+                    {bonusActions.map(a => <span key={a} className="text-[10px] bg-blue-900/20 px-2 py-0.5 rounded border border-blue-500/20">{a}</span>)}
+                </div>
+            </div>
+            <div className="bg-rpg-panel border border-rpg-gold/20 p-3 rounded-lg flex flex-col items-center text-red-400">
+                <span className="text-[10px] font-bold uppercase mb-1">Reações</span>
+                <div className="flex flex-wrap justify-center gap-1">
+                    {reactions.map(a => <span key={a} className="text-[10px] bg-red-900/20 px-2 py-0.5 rounded border border-red-500/20">{a}</span>)}
+                </div>
+            </div>
+        </div>
+    );
+};
+
+const ConditionManager = ({ character, onToggleCondition, onToggleEffect }: {
+    character: Character;
+    onToggleCondition: (id: string) => void;
+    onToggleEffect: (id: string) => void;
+}) => {
+    const isBarbarian = character.class?.toLowerCase().includes('bárbaro') || character.class?.toLowerCase().includes('barbarian');
+    const activeConditions = character.conditions || [];
+    const activeEffects = character.activeEffects || [];
+
+    return (
+        <div className="space-y-4 mb-6">
+            {/* Efeitos Ativos (Rage, etc) */}
+            <div className="flex flex-wrap gap-2">
+                {ACTIVE_EFFECTS.map(effect => {
+                    if (effect.classReq && !isBarbarian) return null;
+                    const isActive = activeEffects.includes(effect.id);
+                    return (
+                        <button
+                            key={effect.id}
+                            onClick={() => onToggleEffect(effect.id)}
+                            className={`px-3 py-1.5 rounded-full flex items-center gap-2 text-xs font-bold border transition-all ${isActive
+                                ? 'bg-red-600/20 border-red-500 text-red-400 shadow-glow-red/20 scale-105'
+                                : 'bg-rpg-panel border-rpg-gold/10 text-rpg-grey hover:border-rpg-gold/30'
+                                }`}
+                        >
+                            <span>{effect.icon}</span>
+                            <span>{effect.name}</span>
+                        </button>
+                    );
+                })}
+            </div>
+
+            {/* Condições */}
+            <div className="flex flex-wrap gap-2">
+                {COMMON_CONDITIONS.map(cond => {
+                    const isActive = activeConditions.includes(cond.id);
+                    return (
+                        <button
+                            key={cond.id}
+                            onClick={() => onToggleCondition(cond.id)}
+                            className={`px-3 py-1.5 rounded-full flex items-center gap-2 text-[10px] font-bold border transition-all ${isActive
+                                ? 'bg-rpg-gold/20 border-rpg-gold text-rpg-gold shadow-glow-gold/10'
+                                : 'bg-rpg-panel border-white/5 text-rpg-grey/60 hover:text-rpg-grey hover:border-rpg-gold/20'
+                                }`}
+                        >
+                            <span>{cond.icon}</span>
+                            <span>{cond.name}</span>
+                        </button>
+                    );
+                })}
+            </div>
+        </div>
+    );
+};
 
 // --- Componente Principal --- 
 export default function CharacterSheetPage() {
@@ -338,6 +463,10 @@ export default function CharacterSheetPage() {
                     if (docSnap.exists()) {
                         const charData = docSnap.data();
                         const isOwner = charData.ownerId === user.uid;
+
+                        // Salva o ID do personagem ativo para integração com a Biblioteca
+                        localStorage.setItem('activeCharacterId', id as string);
+                        localStorage.setItem('activeCharacterName', charData.name);
 
                         // Verificar se o usuário é o mestre da campanha vinculada
                         let isCampaignMaster = false;
@@ -594,6 +723,50 @@ export default function CharacterSheetPage() {
         }));
     };
 
+    const toggleCondition = (id: string) => {
+        updateCharacter(char => {
+            const conditions = char.conditions || [];
+            const newConditions = conditions.includes(id)
+                ? conditions.filter(c => c !== id)
+                : [...conditions, id];
+            return { ...char, conditions: newConditions };
+        });
+    };
+
+    const toggleActiveEffect = (id: string) => {
+        updateCharacter(char => {
+            const effects = char.activeEffects || [];
+            const newEffects = effects.includes(id)
+                ? effects.filter(e => e !== id)
+                : [...effects, id];
+            return { ...char, activeEffects: newEffects };
+        });
+    };
+
+    const handleLongRest = () => {
+        updateCharacter(char => ({
+            ...char,
+            currentHp: char.maxHp,
+            temporaryHp: 0,
+            spellcasting: {
+                ...char.spellcasting,
+                slots: Object.fromEntries(
+                    Object.entries(char.spellcasting.slots).map(([lvl, data]) => [
+                        lvl, { ...data, current: data.max }
+                    ])
+                )
+            }
+        }));
+        alert('✨ Descanso Longo concluído! PV e Slots de Magia restaurados.');
+    };
+
+    const togglePreparedSpell = (spellName: string) => {
+        updateCharacter(char => ({
+            ...char,
+            spells: char.spells.map(s => s.name === spellName ? { ...s, prepared: !s.prepared } : s)
+        }));
+    };
+
     const handleOpenEquipmentModal = (item: OtherEquipmentItem | null) => { setEquipmentToEdit(item); setEquipmentModalOpen(true); };
     const handleSaveEquipment = (item: OtherEquipmentItem) => {
         updateCharacter(char => {
@@ -698,6 +871,15 @@ export default function CharacterSheetPage() {
                             {isCleaningDuplicates ? '🧹 Limpando...' : '🧹 Limpar Duplicatas'}
                         </button>
                     )}
+                    {!isReadOnly && (
+                        <button
+                            onClick={handleLongRest}
+                            className="bg-indigo-900/20 border border-indigo-500/30 text-indigo-400 px-3 py-1.5 rounded hover:bg-indigo-900/40 transition-all text-xs font-bold flex items-center gap-2"
+                            title="Restaurar PV e Slots de Magia"
+                        >
+                            <span>⛺</span> Descanso Longo
+                        </button>
+                    )}
                     {id === 'novo' && (<button onClick={() => { }} className="px-6 py-2 font-bold rounded-md bg-gradient-to-r from-rpg-gold to-yellow-600 text-rpg-dark hover:from-yellow-400 hover:to-rpg-gold shadow-lg transform hover:scale-105 transition-all">Salvar Novo Personagem</button>)}
                 </div>
 
@@ -781,6 +963,16 @@ export default function CharacterSheetPage() {
                         <div className="w-full sm:w-40"><label className="block text-[10px] font-bold text-rpg-gold uppercase tracking-wider mb-1 font-cinzel text-center sm:text-left">Raça</label><button disabled={isReadOnly} onClick={() => openSelectionModal('race')} className={`w-full bg-rpg-slate border border-rpg-gold/20 rounded-md px-3 py-2 text-left hover:border-rpg-gold/50 font-medieval text-sm ${isReadOnly ? 'opacity-70 cursor-not-allowed' : ''}`}>{character.race || 'Selecione...'}</button></div>
                     </div>
                 </header>
+
+                {/* Dashboards Ficha 2.0 */}
+                <div className="px-6 space-y-4">
+                    <ConditionManager
+                        character={character}
+                        onToggleCondition={toggleCondition}
+                        onToggleEffect={toggleActiveEffect}
+                    />
+                    <QuickActions character={character} />
+                </div>
 
                 {/* Tabs Navigation */}
                 <div className="mb-6 border-b border-rpg-gold/20">
@@ -899,9 +1091,12 @@ export default function CharacterSheetPage() {
                                     </div>
                                     <div className="bg-rpg-panel border border-rpg-gold/10 rounded-lg p-4 space-y-3 shadow-inner">
                                         {filteredWeapons.length > 0 ? filteredWeapons.map((weapon) => {
-                                            const abilityMod = (weapon.properties?.includes('Acuidade') && character.attributeModifiers.dexterity > character.attributeModifiers.strength) || weapon.properties?.includes('Munição') ? character.attributeModifiers.dexterity : character.attributeModifiers.strength;
+                                            const isStrengthBased = !(weapon.properties?.includes('Acuidade') && character.attributeModifiers.dexterity > character.attributeModifiers.strength) && !weapon.properties?.includes('Munição');
+                                            const abilityMod = isStrengthBased ? character.attributeModifiers.strength : character.attributeModifiers.dexterity;
+                                            const rageBonusToDmg = (isStrengthBased && character.activeEffects?.includes('rage')) ? (character.rageBonus || 0) : 0;
+
                                             const atkBonus = (weapon.isProficient !== false ? character.proficiencyBonus : 0) + abilityMod + (weapon.magicalBonus || 0);
-                                            const dmgBonus = abilityMod + (weapon.magicalBonus || 0);
+                                            const dmgBonus = abilityMod + (weapon.magicalBonus || 0) + rageBonusToDmg;
 
                                             return (
                                                 <div key={weapon.id} className={`p-4 bg-rpg-slate/80 border ${weapon.isMagical ? 'border-purple-500/50 shadow-[0_0_15px_-3px_rgba(168,85,247,0.4)]' : 'border-rpg-gold/10'} rounded-lg flex flex-col md:flex-row justify-between gap-4 hover:border-rpg-gold/30 transition-all group shadow-md relative overflow-hidden`}>
@@ -911,7 +1106,10 @@ export default function CharacterSheetPage() {
                                                             <h4 className={`font-bold text-lg font-medieval ${weapon.isMagical ? 'text-purple-200' : 'text-rpg-parchment'}`}>{weapon.name}</h4>
                                                             {weapon.isMagical && <span className="bg-purple-600 text-[8px] text-white px-1.5 py-0.5 rounded font-black uppercase tracking-widest shadow-lg">Mágico ✨</span>}
                                                             <span className="bg-rpg-gold text-rpg-dark px-2 py-0.5 rounded text-[10px] font-black uppercase shadow-black/30 shadow-sm">ATK: {atkBonus >= 0 ? `+${atkBonus}` : atkBonus}</span>
-                                                            <span className="bg-rpg-red text-white px-2 py-0.5 rounded text-[10px] font-black uppercase shadow-black/30 shadow-sm">DANO: {weapon.damage}{dmgBonus !== 0 ? ` + ${dmgBonus}` : ''}</span>
+                                                            <span className="bg-rpg-red text-white px-2 py-0.5 rounded text-[10px] font-black uppercase shadow-black/30 shadow-sm">
+                                                                DANO: {weapon.damage}{dmgBonus !== 0 ? ` + ${dmgBonus}` : ''}
+                                                                {rageBonusToDmg > 0 && <span className="ml-1 text-[8px] text-yellow-300 animate-pulse"> (+{rageBonusToDmg} FÚRIA)</span>}
+                                                            </span>
                                                         </div>
                                                         <p className="text-[10px] font-bold text-rpg-grey uppercase tracking-wider bg-black/20 px-2 py-1 rounded inline-block">{weapon.damageType} | {weapon.properties?.join(', ')}</p>
                                                         {weapon.magicalEffect && <p className="text-[10px] text-purple-300 italic mt-1 font-sans">{weapon.magicalEffect}</p>}
@@ -1451,7 +1649,12 @@ export default function CharacterSheetPage() {
                                                             <div key={spell.id || idx} className="bg-rpg-slate/40 p-3 rounded-lg border border-rpg-gold/5 hover:border-purple-500/30 transition-all group relative">
                                                                 <div className="flex justify-between items-center mb-1">
                                                                     <div className="flex items-center gap-2">
-                                                                        {spell.prepared && <span className="w-1.5 h-1.5 bg-green-500 rounded-full shadow-[0_0_5px_rgba(34,197,94,0.5)]" title="Preparada"></span>}
+                                                                        <button
+                                                                            disabled={isReadOnly}
+                                                                            onClick={() => togglePreparedSpell(spell.name)}
+                                                                            className={`w-3 h-3 rounded-full border transition-all ${spell.prepared ? 'bg-green-500 border-green-400 shadow-[0_0_5px_rgba(34,197,94,0.5)]' : 'border-white/20 hover:border-green-500/50'}`}
+                                                                            title={spell.prepared ? "Despreparar" : "Preparar"}
+                                                                        ></button>
                                                                         <span className="font-bold text-rpg-parchment font-medieval text-lg group-hover:text-rpg-gold transition-colors">{spell.name}</span>
                                                                     </div>
                                                                     <div className="flex gap-1">

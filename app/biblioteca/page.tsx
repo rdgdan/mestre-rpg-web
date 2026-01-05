@@ -7,7 +7,7 @@ import { searchSpells, Spell, fetchGlobalSpells } from '@/lib/spells-data';
 import { searchMonsters, getMonsterTypes, MonsterDataExtended } from '@/lib/monsters-search';
 import { dndWeapons } from '@/lib/items-data';
 import { db } from '@/lib/firebase';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, updateDoc, collection, getDocs, orderBy, query } from 'firebase/firestore';
 import { fetchSRDBookFromFirestore } from '@/lib/srd-sync';
 import { syncAllGameRulesToFirestore } from '@/lib/class-features-sync';
 import {
@@ -35,7 +35,7 @@ const normalizeName = (name: string) => {
 };
 
 // Componente Grimório
-function GrimorioTab({ searchQuery }: { searchQuery: string }) {
+function GrimorioTab({ searchQuery, onAddSpell }: { searchQuery: string; onAddSpell?: (spell: any) => void }) {
     const { user } = useAuth();
     const [levelFilter, setLevelFilter] = useState<number | undefined>(undefined);
     const [schoolFilter, setSchoolFilter] = useState<string>('');
@@ -494,6 +494,16 @@ function GrimorioTab({ searchQuery }: { searchQuery: string }) {
                                                 className="bg-red-600/20 hover:bg-red-600/40 text-red-400 border border-red-600/30 px-3 py-1.5 rounded text-xs font-bold transition-all"
                                             >
                                                 🗑️ Excluir
+                                            </button>
+                                        </div>
+                                    )}
+                                    {onAddSpell && (
+                                        <div className="pt-4 mt-4 border-t border-rpg-gold/20">
+                                            <button
+                                                onClick={() => onAddSpell(selectedSpell)}
+                                                className="w-full bg-rpg-gold text-rpg-dark font-bold py-2 rounded shadow-glow-gold/20 hover:scale-[1.02] transition-all flex items-center justify-center gap-2"
+                                            >
+                                                ✨ Aprender Magia
                                             </button>
                                         </div>
                                     )}
@@ -988,7 +998,7 @@ function BestiarioTab({ searchQuery }: { searchQuery: string }) {
 }
 
 // Componente Itens
-function ItensTab({ searchQuery }: { searchQuery: string }) {
+function ItensTab({ searchQuery, onAddItem }: { searchQuery: string; onAddItem?: (item: any) => void }) {
     const { user } = useAuth();
     const [selectedItem, setSelectedItem] = useState<any | null>(null);
     const [customItems, setCustomItems] = useState<any[]>([]);
@@ -1586,6 +1596,16 @@ function ItensTab({ searchQuery }: { searchQuery: string }) {
                                                 className="bg-red-600/20 hover:bg-red-600/40 text-red-400 border border-red-600/30 px-3 py-1.5 rounded text-xs font-bold transition-all"
                                             >
                                                 🗑️ Excluir
+                                            </button>
+                                        </div>
+                                    )}
+                                    {onAddItem && (
+                                        <div className="pt-4 mt-4 border-t border-rpg-gold/20">
+                                            <button
+                                                onClick={() => onAddItem(selectedItem)}
+                                                className="w-full bg-rpg-gold text-rpg-dark font-bold py-2 rounded shadow-glow-gold/20 hover:scale-[1.02] transition-all flex items-center justify-center gap-2"
+                                            >
+                                                🎒 Adicionar à Ficha
                                             </button>
                                         </div>
                                     )}
@@ -2293,6 +2313,54 @@ export default function BibliotecaPage() {
     const { user } = useAuth();
     const [activeTab, setActiveTab] = useState<TabType>('grimorio');
     const [searchQuery, setSearchQuery] = useState('');
+    const [activeCharacterId, setActiveCharacterId] = useState<string | null>(null);
+    const [activeCharacterName, setActiveCharacterName] = useState<string | null>(null);
+
+    useEffect(() => {
+        setActiveCharacterId(localStorage.getItem('activeCharacterId'));
+        setActiveCharacterName(localStorage.getItem('activeCharacterName'));
+    }, []);
+
+    const addToCharacter = async (item: any, type: 'item' | 'spell') => {
+        if (!activeCharacterId) return;
+
+        try {
+            const charRef = doc(db, 'personagens', activeCharacterId);
+            const charSnap = await getDoc(charRef);
+
+            if (!charSnap.exists()) {
+                alert("Personagem não encontrado!");
+                return;
+            }
+
+            const charData = charSnap.data();
+
+            if (type === 'item') {
+                const inventory = charData.inventory || { weapons: [], otherEquipment: [], currency: { gp: 0, sp: 0, cp: 0, ep: 0, pp: 0 } };
+
+                if (item.itemType === 'WEAPON') {
+                    inventory.weapons = [...(inventory.weapons || []), { ...item, id: `item-${Date.now()}`, quantity: 1 }];
+                } else {
+                    inventory.otherEquipment = [...(inventory.otherEquipment || []), { ...item, id: `item-${Date.now()}`, quantity: 1, type: item.itemType?.toLowerCase() || 'other' }];
+                }
+
+                await updateDoc(charRef, { inventory });
+                alert(`✅ ${item.name} adicionado ao inventário de ${activeCharacterName}!`);
+            } else if (type === 'spell') {
+                const spells = charData.spells || [];
+                if (spells.some((s: any) => s.name === item.name)) {
+                    alert("Este personagem já conhece esta magia!");
+                    return;
+                }
+
+                await updateDoc(charRef, { spells: [...spells, item] });
+                alert(`✨ ${item.name} adicionado ao grimório de ${activeCharacterName}!`);
+            }
+        } catch (error) {
+            console.error("Erro ao adicionar item:", error);
+            alert("Erro ao sincronizar com a ficha. Tente abrir a ficha primeiro.");
+        }
+    };
 
     if (!user) {
         return (
@@ -2366,11 +2434,26 @@ export default function BibliotecaPage() {
 
                 {/* CONTENT */}
                 <div className="bg-rpg-panel border border-rpg-gold/20 rounded-lg p-6 min-h-[500px]">
-                    {activeTab === 'grimorio' && <GrimorioTab searchQuery={searchQuery} />}
+                    {activeCharacterId && (
+                        <div className="mb-4 p-3 bg-rpg-gold/10 border border-rpg-gold/30 rounded flex justify-between items-center animate-pulse-slow">
+                            <span className="text-sm">Vinculado a: <strong className="text-rpg-gold">{activeCharacterName}</strong></span>
+                            <button
+                                onClick={() => {
+                                    localStorage.removeItem('activeCharacterId');
+                                    localStorage.removeItem('activeCharacterName');
+                                    setActiveCharacterId(null);
+                                    setActiveCharacterName(null);
+                                }}
+                                className="text-[10px] text-rpg-grey hover:text-red-400"
+                            > Desvincular</button>
+                        </div>
+                    )}
+
+                    {activeTab === 'grimorio' && <GrimorioTab searchQuery={searchQuery} onAddSpell={activeCharacterId ? (spell) => addToCharacter(spell, 'spell') : undefined} />}
 
                     {activeTab === 'bestiario' && <BestiarioTab searchQuery={searchQuery} />}
 
-                    {activeTab === 'itens' && <ItensTab searchQuery={searchQuery} />}
+                    {activeTab === 'itens' && <ItensTab searchQuery={searchQuery} onAddItem={activeCharacterId ? (item) => addToCharacter(item, 'item') : undefined} />}
 
                     {activeTab === 'npcs' && <NpcTab searchQuery={searchQuery} />}
 

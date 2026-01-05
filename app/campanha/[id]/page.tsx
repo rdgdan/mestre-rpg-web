@@ -10,8 +10,9 @@ import { Campaign } from '@/types/campaign';
 import { Character } from '@/lib/character-data';
 import CampaignOracle from '@/components/CampaignOracle';
 import MapGenerator from '@/components/MapGenerator';
+import DMIntelligence from '@/components/DMIntelligence';
 
-type Tab = 'overview' | 'characters' | 'oracle' | 'maps';
+type Tab = 'overview' | 'characters' | 'oracle' | 'maps' | 'mestre';
 
 export default function CampaignDetailsPage() {
     const { id } = useParams();
@@ -171,6 +172,15 @@ export default function CampaignDetailsPage() {
                             }`}
                     >
                         <span>🗺️</span> Mapas
+                    </button>
+                    <button
+                        onClick={() => setActiveTab('mestre')}
+                        className={`px-4 py-2 sm:px-6 sm:py-3 font-cinzel font-bold transition-all text-sm flex items-center gap-2 whitespace-nowrap ${activeTab === 'mestre'
+                            ? 'text-rpg-gold border-b-2 border-rpg-gold bg-rpg-gold/5'
+                            : 'text-rpg-grey hover:text-rpg-parchment hover:bg-white/5'
+                            }`}
+                    >
+                        <span>🛡️</span> Mestre
                     </button>
                     <button
                         onClick={() => setActiveTab('characters')}
@@ -342,6 +352,12 @@ export default function CampaignDetailsPage() {
                                     ))}
                                 </div>
                             )}
+                        </div>
+                    )}
+
+                    {activeTab === 'mestre' && (
+                        <div className="h-full">
+                            <DMIntelligence campaign={campaign} characters={linkedCharacters} />
                         </div>
                     )}
 

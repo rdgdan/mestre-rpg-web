@@ -70,13 +70,16 @@ export interface Character {
         level?: number;
         type?: 'class' | 'race' | 'feat' | 'other'
     }[];
+    conditions?: string[]; // Ex: 'Envenenado', 'Caído'
+    activeEffects?: string[]; // IDs de efeitos ativos como 'rage', 'bless'
     spells: Spell[];
     spellcasting: {
         ability: AttributeKey | '';
         saveDc: number;
         attackBonus: number;
         slots: Record<string, { current: number; max: number }>;
-    }
+    };
+    rageBonus?: number;
 }
 
 // --- REGRAS DO JOGO --- 
@@ -110,8 +113,17 @@ export function calculateComputedStats(character: Omit<Character, 'proficiencyBo
 
     const proficiencyBonus = getProficiencyBonusFromLevel(level);
 
+    // Bônus de Fúria (D&D 5e: +2 até nível 8, +3 até 15, +4 até 20)
+    let rageBonus = 0;
+    if (character.activeEffects?.includes('rage')) {
+        if (level >= 16) rageBonus = 4;
+        else if (level >= 9) rageBonus = 3;
+        else rageBonus = 2;
+    }
+
     const attributeModifiers = ATTRIBUTE_KEYS.reduce((acc, key) => {
-        acc[key] = getModifier(attributes[key]);
+        let score = attributes[key] || 10;
+        acc[key] = getModifier(score);
         return acc;
     }, {} as Record<AttributeKey, number>);
 
@@ -155,6 +167,22 @@ export function calculateComputedStats(character: Omit<Character, 'proficiencyBo
         if (equippedShield) {
             ac += (equippedShield.armorClass || 2);
         }
+    }
+
+    // -- CÁLCULO DE PESO E SOBRECARGA --
+    let totalWeight = 0;
+    if (character.inventory) {
+        character.inventory.weapons.forEach(w => totalWeight += (w.weight || 0) * (w.quantity || 1));
+        character.inventory.otherEquipment.forEach(e => totalWeight += (e.weight || 0) * (e.quantity || 1));
+    }
+
+    const strengthScore = attributes.strength || 10;
+    const carryCapacity = strengthScore * 7.5; // Simplificado (Regra padrão é 15 lbs / ~7.5 kg por ponto de força)
+
+    let currentSpeed = character.speed || 9;
+    if (totalWeight > carryCapacity) {
+        // Sobrecarga pesada: Deslocamento cai em 3 metros (ou 6 dependendo da severidade)
+        currentSpeed = Math.max(1.5, currentSpeed - 3);
     }
 
     // -- CÁLCULO DE MAGIA --
@@ -222,8 +250,13 @@ export function calculateComputedStats(character: Omit<Character, 'proficiencyBo
         proficiencyBonus,
         armorClass: ac,
         initiative: dexMod,
+        speed: currentSpeed, // Aplica velocidade calculada (com sobrecarga)
         attributeModifiers,
-        spellcasting: spellcastingData
+        spellcasting: spellcastingData,
+        // Garante que campos novos existam
+        conditions: character.conditions || [],
+        activeEffects: character.activeEffects || [],
+        rageBonus
     };
 
     // Validar e auto-ajustar nível baseado em XP
