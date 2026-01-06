@@ -1,52 +1,91 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-const API_BASE = 'https://www.dnd5eapi.co/api';
+const FIVETOOLS_BASE = 'https://raw.githubusercontent.com/rpgnext/5etools-mirror-rpgnext/master/data';
+
+// Lista de arquivos de magias para uma cobertura mais ampla
+const SPELL_FILES = [
+    'spells-phb.json', // Player's Handbook
+    'spells-dmg.json', // Dungeon Master's Guide
+    'spells-xge.json', // Xanathar's Guide to Everything
+    'spells-tce.json', // Tasha's Cauldron of Everything
+];
+
+// Função para buscar e processar um único arquivo JSON
+async function fetchJson(url: string) {
+    const response = await fetch(url);
+    if (!response.ok) {
+        console.warn(`Aviso: Não foi possível buscar de ${url}. Status: ${response.status}`);
+        return null; // Retorna nulo para ser filtrado depois
+    }
+    return response.json();
+}
 
 export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
-    const type = searchParams.get('type'); // spells, monsters, equipment, classes
+    const type = searchParams.get('type'); // spells, classes, races, backgrounds, items, monsters
 
     if (!type) {
         return NextResponse.json({ error: 'Tipo é obrigatório' }, { status: 400 });
     }
 
     try {
-        console.log(`Buscando ${type} da API D&D 5e...`);
+        console.log(`Buscando TODOS os ${type} em português do 5etools (RPGNext)...`);
 
-        // Buscar lista de itens
-        const listResponse = await fetch(`${API_BASE}/${type}`);
-        const listData = await listResponse.json();
+        let items: any[] = [];
 
-        const items = [];
-        const results = listData.results || [];
+        switch (type) {
+            case 'spells':
+                const spellPromises = SPELL_FILES.map(file => fetchJson(`${FIVETOOLS_BASE}/spells/${file}`));
+                const spellResults = await Promise.all(spellPromises);
+                items = spellResults
+                    .filter(result => result && result.spell) // Filtra falhas e arquivos sem a propriedade 'spell'
+                    .flatMap(result => result.spell);
+                break;
 
-        // Limitar a 50 itens para não sobrecarregar
-        const itemsToFetch = results.slice(0, 50);
+            case 'classes':
+            case 'monsters':
+                const indexUrl = `${FIVETOOLS_BASE}/${type === 'classes' ? 'class' : 'bestiary'}/index.json`;
+                const indexData = await fetchJson(indexUrl);
+                if (indexData) {
+                    const fileKeys = Object.values(indexData) as string[];
+                    const filePromises = fileKeys.map(file => fetchJson(`${FIVETOOLS_BASE}/${type === 'classes' ? 'class' : 'bestiary'}/${file}`));
+                    const fileResults = await Promise.all(filePromises);
+                    const propName = type === 'classes' ? 'class' : 'monster';
+                    items = fileResults
+                        .filter(result => result && result[propName])
+                        .flatMap(result => result[propName]);
+                }
+                break;
 
-        console.log(`Encontrados ${results.length} itens, buscando detalhes de ${itemsToFetch.length}...`);
+            case 'races':
+            case 'items':
+                const singleFileUrl = `${FIVETOOLS_BASE}/${type}.json`;
+                const singleFileData = await fetchJson(singleFileUrl);
+                if (singleFileData) {
+                    if (type === 'races') items = singleFileData.race || [];
+                    if (type === 'items') items = singleFileData.item || singleFileData.baseitem || [];
+                }
+                break;
 
-        // Buscar detalhes de cada item
-        for (const item of itemsToFetch) {
-            try {
-                const detailResponse = await fetch(`${API_BASE}${item.url}`);
-                const detail = await detailResponse.json();
-                items.push(detail);
-            } catch (error) {
-                console.error(`Erro ao buscar ${item.name}:`, error);
-            }
+            default:
+                return NextResponse.json({ error: 'Tipo inválido' }, { status: 400 });
         }
+        
+        // Remove duplicadas pelo nome, caso existam entre diferentes arquivos
+        const uniqueItems = Array.from(new Map(items.map(item => [item.name, item])).values());
 
-        console.log(`${items.length} itens carregados com sucesso`);
+        console.log(`${uniqueItems.length} itens únicos do tipo "${type}" carregados em português.`);
 
         return NextResponse.json({
-            count: items.length,
-            total: results.length,
-            items: items
+            count: uniqueItems.length,
+            items: uniqueItems,
+            source: '5etools-rpgnext'
         });
+
     } catch (error: any) {
-        console.error('Erro ao buscar da API:', error);
+        console.error(`Erro ao processar a requisição para ${type}:`, error);
         return NextResponse.json({
-            error: `Erro ao buscar dados: ${error.message}`
+            error: `Erro interno no servidor: ${error.message}`
         }, { status: 500 });
     }
 }

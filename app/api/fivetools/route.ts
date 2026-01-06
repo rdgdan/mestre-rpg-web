@@ -35,6 +35,10 @@ export async function GET(req: NextRequest) {
         }
 
         const response = await fetch(url);
+        if (!response.ok) {
+            console.error(`Erro ao buscar do 5etools: Status ${response.status}`);
+            return NextResponse.json({ error: `Erro ao buscar dados do 5etools` }, { status: response.status });
+        }
         const data = await response.json();
 
         // Extrair itens do formato 5etools
