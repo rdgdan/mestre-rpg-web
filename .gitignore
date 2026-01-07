@@ -33,5 +33,10 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
+#books
+/books
+/books/
+
+
 # brain files (Antigravity artifacts) - Optional, keep if you want to exclude or include
 # C:\Users\Danilo_Borges\.gemini\antigravity\brain\

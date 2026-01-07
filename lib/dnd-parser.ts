@@ -4,8 +4,9 @@
  */
 
 export interface ParsedMechanic {
-    type: 'spell' | 'item' | 'monster' | 'rule';
+    type: 'spell' | 'item' | 'monster' | 'rule' | 'class' | 'race';
     name: string;
+    originalName?: string; // Nome original (geralmente em inglês) para evitar duplicatas na tradução
     content: string;
     raw: string;
     metadata?: any;

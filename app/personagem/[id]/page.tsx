@@ -896,6 +896,54 @@ export default function CharacterSheetPage() {
         }));
     };
 
+    // Helper para formatar valores de magia que podem ser objetos complexos (5etools)
+    const formatSpellValue = (value: any): string => {
+        if (!value) return '-';
+        if (typeof value === 'string') return value;
+        if (typeof value === 'number') return value.toString();
+
+        // Handle 5etools components object: { v: true, s: true, m: "text" }
+        if (value.v !== undefined || value.s !== undefined || value.m !== undefined) {
+            const parts = [];
+            if (value.v) parts.push('V');
+            if (value.s) parts.push('S');
+            if (value.m) {
+                if (typeof value.m === 'string') parts.push(`M (${value.m})`);
+                else parts.push('M');
+            }
+            return parts.join(', ') || '-';
+        }
+
+        // Handle 5etools range object: { type: 'point', distance: { type: 'feet', amount: 60 } }
+        if (value.type && value.distance) {
+            const dist = value.distance;
+            if (dist.amount !== undefined) {
+                const unit = dist.type === 'feet' ? 'pés' : dist.type === 'miles' ? 'milhas' : 'm';
+                return `${dist.amount} ${unit}`;
+            }
+            if (dist.type === 'self') return 'Pessoal';
+            if (dist.type === 'touch') return 'Toque';
+            if (dist.type === 'sight') return 'Visão';
+            if (dist.type === 'unlimited') return 'Ilimitado';
+        }
+
+        // Handle 5etools duration object: { type: 'timed', duration: { type: 'minute', amount: 1 } }
+        if (value.type === 'timed' && value.duration) {
+            const dur = value.duration;
+            const amount = dur.amount || 1;
+            let unit = 'rodadas';
+            if (dur.type === 'minute') unit = amount > 1 ? 'minutos' : 'minuto';
+            if (dur.type === 'hour') unit = amount > 1 ? 'horas' : 'hora';
+            if (dur.type === 'day') unit = amount > 1 ? 'dias' : 'dia';
+            return `${amount} ${unit}`;
+        }
+        if (value.type === 'instant') return 'Instantânea';
+        if (value.type === 'permanent') return 'Permanente';
+
+        // Fallback: try to stringify
+        return JSON.stringify(value);
+    };
+
 
     const handleOpenEquipmentModal = (item: OtherEquipmentItem | null) => { setEquipmentToEdit(item); setEquipmentModalOpen(true); };
     const handleSaveEquipment = (item: OtherEquipmentItem) => {
@@ -1715,6 +1763,8 @@ export default function CharacterSheetPage() {
                                         const spells = groupedSpells[level];
                                         const isExpanded = expandedSpellLevels[level];
                                         const levelLabel = level === 0 ? 'Truques' : `${level}º Nível`;
+                                        const slotInfo = character.spellcasting?.slots?.[level.toString()];
+                                        const slotDisplay = slotInfo ? ` • ${slotInfo.current}/${slotInfo.max} Slots` : '';
 
                                         return (
                                             <div key={level} className="bg-rpg-panel border border-rpg-gold/10 rounded-lg shadow-md overflow-hidden transition-all">
@@ -1724,7 +1774,7 @@ export default function CharacterSheetPage() {
                                                 >
                                                     <div className="flex items-center gap-3">
                                                         <span className="w-8 h-8 flex items-center justify-center bg-purple-900/40 text-purple-300 rounded-full text-sm font-bold border border-purple-500/20">{level}</span>
-                                                        <h3 className="text-lg font-bold text-rpg-gold font-cinzel uppercase tracking-widest">{levelLabel}</h3>
+                                                        <h3 className="text-lg font-bold text-rpg-gold font-cinzel uppercase tracking-widest">{levelLabel}{slotDisplay}</h3>
                                                         <span className="text-[10px] bg-black/40 text-rpg-grey px-2 py-0.5 rounded-full font-sans uppercase tracking-tighter border border-rpg-gold/5">{spells.length} {spells.length === 1 ? 'Magia' : 'Magias'}</span>
                                                     </div>
                                                     <span className={`text-rpg-gold transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`}>
@@ -1755,9 +1805,9 @@ export default function CharacterSheetPage() {
                                                                 </div>
 
                                                                 <div className="flex flex-wrap gap-x-3 gap-y-1 mb-2 text-[10px] text-rpg-grey/70 uppercase font-sans tracking-tight border-b border-rpg-gold/5 pb-1">
-                                                                    <span>{spell.castingTime}</span>
-                                                                    <span>{spell.range}</span>
-                                                                    <span>{spell.duration}</span>
+                                                                    <span>{formatSpellValue(spell.castingTime)}</span>
+                                                                    <span>{formatSpellValue(spell.range)}</span>
+                                                                    <span>{formatSpellValue(spell.duration)}</span>
                                                                     <span className="text-purple-400/60 italic">{spell.school}</span>
                                                                 </div>
 

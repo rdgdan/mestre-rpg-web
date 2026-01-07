@@ -1,4 +1,5 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import { ParsedMechanic } from './dnd-parser';
 
 /**
  * Interface para representar uma habilidade gerada pela I.A.
@@ -67,5 +68,53 @@ export class AIWeaver {
         const result = await model.generateContent(prompt);
         const response = await result.response;
         return JSON.parse(response.text());
+    }
+
+    /**
+     * Traduz uma mecânica (nome e descrição) para português
+     */
+    static async translateMechanic(mechanic: ParsedMechanic): Promise<ParsedMechanic> {
+        const model = await this.getModel();
+
+        // Preservar o nome original antes da tradução para de-duplicação
+        const originalName = mechanic.originalName || mechanic.name;
+
+        const prompt = `
+            Você é um tradutor especialista em RPG e D&D 5e. 
+            Sua tarefa é traduzir a seguinte mecânica para PORTUGUÊS DO BRASIL.
+            IMPORTANTE: Todo o texto de retorno (nome e descrição) DEVE estar em PORTUGUÊS.
+            Mantenha os termos técnicos oficiais (ex: Saving Throw -> Teste de Resistência).
+            
+            Informação Original:
+            Nome: "${mechanic.name}"
+            Tipo: ${mechanic.type}
+            Conteúdo: "${mechanic.content}"
+
+            Retorne um JSON com:
+            "name": O nome traduzido para português
+            "description": A descrição/conteúdo traduzido para português e bem formatado
+        `;
+
+        try {
+            console.log(`[AIWeaver] Traduzindo "${mechanic.name}"...`);
+            const result = await model.generateContent(prompt);
+            const response = await result.response;
+            const translated = JSON.parse(response.text());
+
+            console.log(`[AIWeaver] Tradução concluída: "${translated.name}"`);
+
+            return {
+                ...mechanic,
+                name: translated.name || mechanic.name,
+                originalName: originalName, // Sempre preservar o original
+                content: translated.description || mechanic.content
+            };
+        } catch (error) {
+            console.error(`[AIWeaver] Erro ao traduzir "${mechanic.name}":`, error);
+            return {
+                ...mechanic,
+                originalName: originalName // Mesmo com erro, preserva o original
+            };
+        }
     }
 }

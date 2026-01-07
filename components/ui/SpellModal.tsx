@@ -29,8 +29,18 @@ const SpellModal: React.FC<SpellModalProps> = ({ isOpen, onClose, onSave, spellT
   const [spell, setSpell] = useState<Spell>(defaultSpell);
 
   useEffect(() => {
-    if (spellToEdit) setSpell(spellToEdit);
-    else setSpell(defaultSpell);
+    if (spellToEdit) {
+      // Normalize complex objects to strings
+      const normalized = {
+        ...spellToEdit,
+        castingTime: typeof spellToEdit.castingTime === 'string' ? spellToEdit.castingTime : '',
+        range: typeof spellToEdit.range === 'string' ? spellToEdit.range : '',
+        duration: typeof spellToEdit.duration === 'string' ? spellToEdit.duration : ''
+      };
+      setSpell(normalized);
+    } else {
+      setSpell(defaultSpell);
+    }
   }, [spellToEdit, isOpen]);
 
   if (!isOpen) return null;

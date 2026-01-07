@@ -22,6 +22,7 @@ import {
 import { searchNpcs, npcTemplates, NPCTemplate } from '@/lib/npc-combatants-data';
 import { ArchiveStorage } from '@/lib/archive-storage';
 import { ParsedMechanic } from '@/lib/dnd-parser';
+import { AIWeaver } from '@/lib/ai-weaver';
 
 type TabType = 'grimorio' | 'bestiario' | 'itens' | 'regras' | 'notas' | 'npcs' | 'arquivista';
 
@@ -193,6 +194,53 @@ function GrimorioTab({ searchQuery, onAddSpell }: { searchQuery: string; onAddSp
     const openEditModal = (spell: Spell) => {
         setNewSpell({ ...spell } as any);
         setIsAddModalOpen(true);
+    };
+
+    // Helper para formatar valores de magia que podem ser objetos complexos (5etools)
+    const formatSpellValue = (value: any): string => {
+        if (!value) return '-';
+        if (typeof value === 'string') return value;
+        if (typeof value === 'number') return value.toString();
+
+        // Handle 5etools components object: { v: true, s: true, m: "text" }
+        if (value.v !== undefined || value.s !== undefined || value.m !== undefined) {
+            const parts = [];
+            if (value.v) parts.push('V');
+            if (value.s) parts.push('S');
+            if (value.m) {
+                if (typeof value.m === 'string') parts.push(`M (${value.m})`);
+                else parts.push('M');
+            }
+            return parts.join(', ') || '-';
+        }
+
+        // Handle 5etools range object
+        if (value.type && value.distance) {
+            const dist = value.distance;
+            if (dist.amount !== undefined) {
+                const unit = dist.type === 'feet' ? 'pés' : dist.type === 'miles' ? 'milhas' : 'm';
+                return `${dist.amount} ${unit}`;
+            }
+            if (dist.type === 'self') return 'Pessoal';
+            if (dist.type === 'touch') return 'Toque';
+            if (dist.type === 'sight') return 'Visão';
+            if (dist.type === 'unlimited') return 'Ilimitado';
+        }
+
+        // Handle 5etools duration object
+        if (value.type === 'timed' && value.duration) {
+            const dur = value.duration;
+            const amount = dur.amount || 1;
+            let unit = 'rodadas';
+            if (dur.type === 'minute') unit = amount > 1 ? 'minutos' : 'minuto';
+            if (dur.type === 'hour') unit = amount > 1 ? 'horas' : 'hora';
+            if (dur.type === 'day') unit = amount > 1 ? 'dias' : 'dia';
+            return `${amount} ${unit}`;
+        }
+        if (value.type === 'instant') return 'Instantânea';
+        if (value.type === 'permanent') return 'Permanente';
+
+        return JSON.stringify(value);
     };
 
     const allSpells = [...searchSpells(searchQuery, {
@@ -461,16 +509,16 @@ function GrimorioTab({ searchQuery, onAddSpell }: { searchQuery: string; onAddSp
                                 </p>
                                 <div className="space-y-3 text-sm">
                                     <div>
-                                        <span className="font-bold text-rpg-gold">Tempo de Conjuração:</span> {selectedSpell.castingTime}
+                                        <span className="font-bold text-rpg-gold">Tempo de Conjuração:</span> {formatSpellValue(selectedSpell.castingTime)}
                                     </div>
                                     <div>
-                                        <span className="font-bold text-rpg-gold">Alcance:</span> {selectedSpell.range}
+                                        <span className="font-bold text-rpg-gold">Alcance:</span> {formatSpellValue(selectedSpell.range)}
                                     </div>
                                     <div>
-                                        <span className="font-bold text-rpg-gold">Componentes:</span> {selectedSpell.components}
+                                        <span className="font-bold text-rpg-gold">Componentes:</span> {formatSpellValue(selectedSpell.components)}
                                     </div>
                                     <div>
-                                        <span className="font-bold text-rpg-gold">Duração:</span> {selectedSpell.duration}
+                                        <span className="font-bold text-rpg-gold">Duração:</span> {formatSpellValue(selectedSpell.duration)}
                                     </div>
                                     <div>
                                         <span className="font-bold text-rpg-gold">Classes:</span> {selectedSpell.classes.join(', ')}
@@ -2032,7 +2080,13 @@ function ArquivistaTab() {
     const [books, setBooks] = useState<string[]>([]);
     const [isScanning, setIsScanning] = useState(false);
     const [results, setResults] = useState<any>(null);
+    const [isImportingAll, setIsImportingAll] = useState(false);
+    const [isCleaning, setIsCleaning] = useState(false);
+    const [isTranslatingDict, setIsTranslatingDict] = useState(false);
+    const [cleanupStatus, setCleanupStatus] = useState('');
+    const [importProgress, setImportProgress] = useState({ current: 0, total: 0, success: 0, failed: 0 });
     const { user } = useAuth();
+
 
     useEffect(() => {
         const fetchBooks = async () => {
@@ -2070,37 +2124,136 @@ function ArquivistaTab() {
         }
     };
 
-    const importMechanic = async (mechanic: ParsedMechanic) => {
-        if (!user || !results) return;
+    const importMechanic = async (mechanic: ParsedMechanic, silent = false) => {
+        if (!user || !results) return false;
         try {
             const success = await ArchiveStorage.saveMechanic(user.uid, mechanic, results.info.title);
-            if (success) {
-                alert(`✅ ${mechanic.name} importado com sucesso!`);
-            } else {
-                alert(`❌ Erro ao importar ${mechanic.name}`);
+            if (!silent) {
+                if (success) {
+                    alert(`✅ ${mechanic.name} importado com sucesso!`);
+                } else {
+                    alert(`❌ Erro ao importar ${mechanic.name} ou já existe.`);
+                }
             }
+            return success;
         } catch (error) {
             console.error('Erro ao importar:', error);
-            alert('Erro crítico ao importar.');
+            if (!silent) alert('Erro crítico ao importar.');
+            return false;
         }
     };
+
+    const importAllMechanics = async () => {
+        if (!user || !results || !results.mechanics) return;
+        if (!confirm(`Deseja importar todos os ${results.mechanics.length} registros? Duplicatas serão ignoradas.`)) return;
+
+        setIsImportingAll(true);
+        const total = results.mechanics.length;
+        setImportProgress({ current: 0, total, success: 0, failed: 0 });
+
+        let currentSuccess = 0;
+        let currentFailed = 0;
+
+        for (let i = 0; i < total; i++) {
+            const mechanic = results.mechanics[i];
+            const result = await importMechanic(mechanic, true);
+
+            if (result) currentSuccess++;
+            else currentFailed++;
+
+            setImportProgress({
+                current: i + 1,
+                total,
+                success: currentSuccess,
+                failed: currentFailed
+            });
+
+            // Pequeno delay para não sobrecarregar
+            if (i % 5 === 0) await new Promise(resolve => setTimeout(resolve, 50));
+        }
+
+        setIsImportingAll(false);
+        alert(`✅ Importação finalizada!\n\nImportados: ${currentSuccess}\nDuplicados ou Falhas: ${currentFailed}`);
+    };
+
+    const performCleanup = async () => {
+        if (!user) return;
+        if (!confirm('Deseja iniciar a limpeza do banco de dados? Duplicatas serão removidas e registros antigos serão normalizados.')) return;
+
+        setIsCleaning(true);
+        try {
+            const result = await ArchiveStorage.cleanupDuplicates(user.uid, (msg) => setCleanupStatus(msg));
+            alert(`✅ Limpeza concluída!\n\nProcessados: ${result.processed}\nRemovidos: ${result.deleted}`);
+        } catch (error) {
+            console.error('Erro na limpeza:', error);
+            alert('Erro crítico durante a limpeza.');
+        } finally {
+            setIsCleaning(false);
+            setCleanupStatus('');
+        }
+    };
+
+    const performDictionaryTranslation = async () => {
+        if (!user) return;
+        if (!confirm('Deseja traduzir todos os itens usando o dicionário comunitário? Isso não gasta tokens de I.A.')) return;
+
+        setIsTranslatingDict(true);
+        try {
+            const result = await ArchiveStorage.bulkTranslateWithDictionary((curr, tot, msg) => {
+                setCleanupStatus(msg);
+            });
+            alert(`✅ Tradução via Dicionário concluída!\n\nItens traduzidos: ${result.translated}\nFalhas/Não encontrados: ${result.failed}`);
+        } catch (error) {
+            console.error('Erro na tradução via dicionário:', error);
+            alert('Erro durante o processamento do dicionário.');
+        } finally {
+            setIsTranslatingDict(false);
+            setCleanupStatus('');
+        }
+    };
+
 
     const fetchFromAPI = async (type: string) => {
         setIsScanning(true);
         setResults(null);
         try {
-            const res = await fetch(`/api/dnd-api?type=${type}`);
-            const data = await res.json();
+            const [dataRes, dict] = await Promise.all([
+                fetch(`/api/dnd-api?type=${type}`),
+                ArchiveStorage.getTranslationDictionary(type)
+            ]);
 
-            if (res.ok) {
-                // Converter formato da API para nosso formato
-                const mechanics = data.items.map((item: any) => ({
-                    type: type === 'spells' ? 'spell' : type === 'monsters' ? 'monster' : 'item',
-                    name: item.name,
-                    content: item.desc?.join(' ') || item.description || JSON.stringify(item).substring(0, 200),
-                    raw: JSON.stringify(item),
-                    metadata: item
-                }));
+            const data = await dataRes.json();
+
+            if (dataRes.ok) {
+                const mechanics = data.items.map((item: any) => {
+                    const extractContent = (item: any): string => {
+                        if (item.entries) {
+                            const processEntries = (entries: any[]): string => {
+                                return entries.map(e => {
+                                    if (typeof e === 'string') return e;
+                                    if (e.entries) return processEntries(e.entries);
+                                    if (e.items) return e.items.map((it: any) => typeof it === 'string' ? it : it.name || '').join(', ');
+                                    return '';
+                                }).join(' ');
+                            };
+                            return processEntries(item.entries);
+                        }
+                        return item.desc?.join(' ') || item.description || '';
+                    };
+
+                    const content = extractContent(item);
+                    let m = {
+                        type: type === 'spells' ? 'spell' : type === 'monsters' ? 'monster' : type === 'rules' ? 'rule' : type === 'classes' ? 'class' : type === 'races' ? 'race' : 'item',
+                        name: item.name,
+                        originalName: item.name,
+                        content: content || 'Sem descrição disponível.',
+                        raw: JSON.stringify(item),
+                        metadata: item
+                    };
+
+                    // Aplicar tradução se existir no dicionário
+                    return ArchiveStorage.applyTranslation(m, dict);
+                });
 
                 setResults({
                     count: mechanics.length,
@@ -2125,17 +2278,43 @@ function ArquivistaTab() {
         setIsScanning(true);
         setResults(null);
         try {
-            const res = await fetch(`/api/fivetools?type=${type}`);
-            const data = await res.json();
+            const [dataRes, dict] = await Promise.all([
+                fetch(`/api/fivetools?type=${type}`),
+                ArchiveStorage.getTranslationDictionary(type)
+            ]);
 
-            if (res.ok) {
-                const mechanics = data.items.map((item: any) => ({
-                    type: type === 'spells' ? 'spell' : type === 'monsters' ? 'monster' : type === 'classes' || type === 'races' ? 'rule' : 'item',
-                    name: item.name,
-                    content: item.entries?.map((e: any) => typeof e === 'string' ? e : JSON.stringify(e)).join(' ') || item.description || JSON.stringify(item).substring(0, 200),
-                    raw: JSON.stringify(item),
-                    metadata: item
-                }));
+            const data = await dataRes.json();
+
+            if (dataRes.ok) {
+                const mechanics = data.items.map((item: any) => {
+                    const extractContent = (item: any): string => {
+                        if (item.entries) {
+                            const processEntries = (entries: any[]): string => {
+                                return entries.map(e => {
+                                    if (typeof e === 'string') return e;
+                                    if (e.entries) return processEntries(e.entries);
+                                    if (e.items) return e.items.map((it: any) => typeof it === 'string' ? it : it.name || '').join(', ');
+                                    return '';
+                                }).join(' ');
+                            };
+                            return processEntries(item.entries);
+                        }
+                        return item.description || '';
+                    };
+
+                    const content = extractContent(item);
+                    let m = {
+                        type: type === 'spells' ? 'spell' : type === 'monsters' ? 'monster' : type === 'classes' ? 'class' : type === 'races' ? 'race' : type === 'rules' ? 'rule' : 'item',
+                        name: item.name,
+                        originalName: item.name,
+                        content: content || 'Sem descrição disponível.',
+                        raw: JSON.stringify(item),
+                        metadata: item
+                    };
+
+                    // Aplicar tradução se existir no dicionário
+                    return ArchiveStorage.applyTranslation(m, dict);
+                });
 
                 setResults({
                     count: mechanics.length,
@@ -2211,7 +2390,47 @@ function ArquivistaTab() {
                             >
                                 👥 Raças
                             </button>
+                            <button
+                                onClick={() => fetchFrom5etools('items')}
+                                disabled={isScanning}
+                                className="w-full bg-purple-600/20 hover:bg-purple-600/40 text-purple-200 border border-purple-500/30 px-3 py-2 rounded text-xs font-bold transition-all disabled:opacity-50"
+                            >
+                                ⚔️ Equipamentos
+                            </button>
+                            <button
+                                onClick={() => fetchFrom5etools('rules')}
+                                disabled={isScanning}
+                                className="w-full bg-blue-600/20 hover:bg-blue-600/40 text-blue-200 border border-blue-500/30 px-3 py-2 rounded text-xs font-bold transition-all disabled:opacity-50"
+                            >
+                                📜 Regras Gerais
+                            </button>
                         </div>
+                    </div>
+
+                    <div className="border-t border-rpg-gold/10 pt-4 mt-4">
+                        <h3 className="text-lg font-bold font-cinzel text-rpg-gold mb-2">Manutenção</h3>
+                        <p className="text-xs text-rpg-grey mb-3">Otimize seu banco de dados</p>
+                        <button
+                            onClick={performCleanup}
+                            disabled={isScanning || isCleaning}
+                            className="w-full bg-red-600/20 hover:bg-red-600/40 text-red-200 border border-red-500/30 px-3 py-2 rounded text-xs font-bold transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                        >
+                            {isCleaning ? '⏳ Limpando...' : '🧹 Limpar Duplicatas'}
+                        </button>
+                        {isCleaning && cleanupStatus && (
+                            <p className="text-[10px] text-rpg-gold mt-2 animate-pulse">{cleanupStatus}</p>
+                        )}
+
+                        <button
+                            onClick={performDictionaryTranslation}
+                            disabled={isScanning || isCleaning || isTranslatingDict}
+                            className="w-full mt-2 bg-green-600/20 hover:bg-green-600/40 text-green-200 border border-green-500/30 px-3 py-2 rounded text-xs font-bold transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                        >
+                            {isTranslatingDict ? '⏳ Sincronizando...' : '📚 Tradução via Dicionário'}
+                        </button>
+                        {isTranslatingDict && cleanupStatus && (
+                            <p className="text-[10px] text-rpg-gold mt-2 animate-pulse">{cleanupStatus}</p>
+                        )}
                     </div>
 
                     <div className="border-t border-rpg-gold/10 pt-4 mt-4">
@@ -2241,12 +2460,43 @@ function ArquivistaTab() {
                 <div className="md:col-span-2">
                     {results && results.info ? (
                         <div className="space-y-4">
-                            <div className="bg-rpg-gold/10 border border-rpg-gold/30 p-4 rounded-lg flex justify-between items-center">
-                                <div>
-                                    <h4 className="font-bold text-rpg-gold">{results.info?.title || 'Livro'}</h4>
-                                    <p className="text-xs text-rpg-grey">{results.count} mecânicas detectadas.</p>
+                            <div className="bg-rpg-gold/10 border border-rpg-gold/30 p-4 rounded-lg flex flex-col gap-4">
+                                <div className="flex justify-between items-center">
+                                    <div>
+                                        <h4 className="font-bold text-rpg-gold">{results.info?.title || 'Livro'}</h4>
+                                        <p className="text-xs text-rpg-grey">{results.count} mecânicas detectadas.</p>
+                                    </div>
+                                    <div className="flex flex-col items-end gap-2">
+                                        <div className="flex items-center gap-3">
+                                            <span className="text-xs bg-rpg-gold/20 text-rpg-gold px-2 py-1 rounded">{results.info?.pages || 0} páginas</span>
+                                            <button
+                                                onClick={importAllMechanics}
+                                                disabled={isImportingAll}
+                                                className="bg-rpg-gold hover:bg-rpg-gold-light text-rpg-dark px-4 py-2 rounded font-bold text-xs transition-all shadow-glow-gold/20 disabled:opacity-50"
+                                            >
+                                                {isImportingAll ? '⏳ Importando...' : '✨ Importar Tudo'}
+                                            </button>
+                                        </div>
+                                    </div>
                                 </div>
-                                <span className="text-xs bg-rpg-gold/20 text-rpg-gold px-2 py-1 rounded">{results.info?.pages || 0} páginas</span>
+
+                                {isImportingAll && (
+                                    <div className="space-y-2">
+                                        <div className="w-full bg-rpg-dark/50 rounded-full h-1.5 overflow-hidden border border-rpg-gold/10">
+                                            <div
+                                                className="bg-rpg-gold h-full transition-all duration-300"
+                                                style={{ width: `${(importProgress.current / importProgress.total) * 100}%` }}
+                                            />
+                                        </div>
+                                        <div className="flex justify-between text-[10px] uppercase font-bold">
+                                            <span className="text-rpg-grey">Processando: {importProgress.current} / {importProgress.total}</span>
+                                            <div className="flex gap-3">
+                                                <span className="text-green-400">Sucesso: {importProgress.success}</span>
+                                                <span className="text-rpg-red">Pulados: {importProgress.failed}</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
                             </div>
 
                             <div className="max-h-[600px] overflow-y-auto space-y-3 pr-2 custom-scrollbar">
@@ -2257,9 +2507,11 @@ function ArquivistaTab() {
                                                 <span className={`text-[10px] uppercase font-bold px-1.5 py-0.5 rounded ${m.type === 'spell' ? 'bg-blue-900/40 text-blue-300' :
                                                     m.type === 'monster' ? 'bg-red-900/40 text-red-300' :
                                                         m.type === 'item' ? 'bg-purple-900/40 text-purple-300' :
-                                                            'bg-gray-900/40 text-gray-300'
+                                                            m.type === 'class' ? 'bg-green-900/40 text-green-300' :
+                                                                m.type === 'race' ? 'bg-yellow-900/40 text-yellow-300' :
+                                                                    'bg-gray-900/40 text-gray-300'
                                                     }`}>
-                                                    {m.type === 'spell' ? 'Magia' : m.type === 'monster' ? 'Monstro' : m.type === 'item' ? 'Item' : 'Regra'}
+                                                    {m.type === 'spell' ? 'Magia' : m.type === 'monster' ? 'Monstro' : m.type === 'item' ? 'Item' : m.type === 'class' ? 'Classe' : m.type === 'race' ? 'Raça' : 'Regra'}
                                                 </span>
                                                 <h5 className="font-bold text-rpg-gold-light">{m.name}</h5>
                                             </div>

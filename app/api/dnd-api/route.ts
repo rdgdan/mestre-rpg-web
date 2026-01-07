@@ -1,13 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-const FIVETOOLS_BASE = 'https://raw.githubusercontent.com/rpgnext/5etools-mirror-rpgnext/master/data';
+const FIVETOOLS_BASE = 'https://raw.githubusercontent.com/5etools-mirror-3/5etools-src/main/data';
 
 // Lista de arquivos de magias para uma cobertura mais ampla
 const SPELL_FILES = [
-    'spells-phb.json', // Player's Handbook
-    'spells-dmg.json', // Dungeon Master's Guide
-    'spells-xge.json', // Xanathar's Guide to Everything
-    'spells-tce.json', // Tasha's Cauldron of Everything
+    'spells-phb.json',
+    'spells-dmg.json',
+    'spells-xge.json',
+    'spells-tce.json',
+    'spells-scag.json'
 ];
 
 // Função para buscar e processar um único arquivo JSON
@@ -29,7 +30,7 @@ export async function GET(req: NextRequest) {
     }
 
     try {
-        console.log(`Buscando TODOS os ${type} em português do 5etools (RPGNext)...`);
+        console.log(`Buscando TODOS os ${type} do 5etools (Stable Mirror)...`);
 
         let items: any[] = [];
 
@@ -59,18 +60,25 @@ export async function GET(req: NextRequest) {
 
             case 'races':
             case 'items':
-                const singleFileUrl = `${FIVETOOLS_BASE}/${type}.json`;
+            case 'equipment':
+            case 'rules':
+                const singleFileUrl = type === 'rules'
+                    ? `${FIVETOOLS_BASE}/variantrules.json`
+                    : type === 'equipment'
+                        ? `${FIVETOOLS_BASE}/items.json`
+                        : `${FIVETOOLS_BASE}/${type}.json`;
                 const singleFileData = await fetchJson(singleFileUrl);
                 if (singleFileData) {
                     if (type === 'races') items = singleFileData.race || [];
-                    if (type === 'items') items = singleFileData.item || singleFileData.baseitem || [];
+                    if (type === 'items' || type === 'equipment') items = singleFileData.item || singleFileData.baseitem || [];
+                    if (type === 'rules') items = singleFileData.variantrule || [];
                 }
                 break;
 
             default:
                 return NextResponse.json({ error: 'Tipo inválido' }, { status: 400 });
         }
-        
+
         // Remove duplicadas pelo nome, caso existam entre diferentes arquivos
         const uniqueItems = Array.from(new Map(items.map(item => [item.name, item])).values());
 
