@@ -5,7 +5,7 @@
 
 export const SPELL_DESCRIPTIONS_PT: Record<string, string> = {
     // TRUQUES
-    "Absorb Elements": "A magia captura parte da energia recebida, diminuindo seu efeito sobre você e armazenando-a para seu próximo ataque corpo a corpo. Você tem resistência ao tipo de dano desencadeante até o início do seu próximo turno. Além disso, a primeira vez que você atingir com um ataque corpo a corpo em seu próximo turno, o alvo sofre 1d6 de dano extra do tipo desencadeante, e a magia termina.",
+
     "Booming Blade": "Você brande a arma usada na conjuração e faz um ataque corpo a corpo com ela contra uma criatura a 1,5 metro de você. Em um acerto, o alvo sofre os efeitos normais do ataque e fica envolto em energia estrondosa até o início do seu próximo turno. Se o alvo se mover voluntariamente antes disso, ele sofre imediatamente 1d8 de dano trovejante, e a magia termina.",
     "Green-Flame Blade": "Você brande a arma usada na conjuração e faz um ataque corpo a corpo com ela contra uma criatura a 1,5 metro de você. Em um acerto, o alvo sofre os efeitos normais do ataque, e fogo verde salta do alvo para uma criatura diferente de sua escolha que você possa ver a até 1,5 metro dele. A segunda criatura sofre dano de fogo igual ao seu modificador de habilidade de conjuração.",
     "Lightning Lure": "Você cria um chicote de energia elétrica que atinge uma criatura de sua escolha que você possa ver a até 4,5 metros de você. O alvo deve ser bem-sucedido em um teste de resistência de Força ou será puxado até 3 metros em linha reta em sua direção e sofrerá 1d8 de dano elétrico se estiver a até 1,5 metro de você.",
@@ -23,6 +23,7 @@ export const SPELL_DESCRIPTIONS_PT: Record<string, string> = {
     "Mold Earth": "Você escolhe uma porção de terra solta ou pedra e pode escavá-la, movê-la, criar formas ou transformar o terreno difícil em normal (e vice-versa).",
     "Primal Savagery": "Você canaliza magia primal para fazer seus dentes ou unhas ficarem afiados. Faça um ataque corpo a corpo com magia. Se acertar, causa 1d10 de dano ácido.",
     "Shape Water": "Você manipula uma área de água: move, muda a cor, congela ou muda a opacidade.",
+    "Friends": "Pela duração, você tem vantagem em todos os testes de Carisma direcionados a uma criatura de sua escolha que não seja hostil a você. Quando a magia termina, a criatura percebe que você usou magia para influenciar o humor dela e se torna hostil a você.",
     "Blade Ward": "Você estende a mão e trça um símbolo de proteção no ar. Até o final do seu próximo turno, você tem resistência contra dano de concussão, cortante e perfurante causado por ataques com armas.",
     "Thorn Whip": "Você cria um chicote longo, semelhante a uma vinha, coberto de espinhos que ataca ao seu comando. Faça um ataque corpo a corpo com magia contra uma criatura a até 9 metros. Se acertar, causa 1d6 de dano perfurante e se a criatura for Grande ou menor, você a puxa até 3 metros para perto de você.",
 
@@ -46,7 +47,7 @@ export const SPELL_DESCRIPTIONS_PT: Record<string, string> = {
     "Tasha's Hideous Laughter": "Uma criatura à sua escolha percebe tudo como hilariante e cai na gargalhada. Ela deve passar num teste de Sabedoria ou cairá no chão e ficará incapacitada, rindo.",
     "Witch Bolt": "Um raio de energia azul crepitante se lança em direção a uma criatura. Faça um ataque de magia. Se acertar, causa 1d12 de dano elétrico e, em cada um dos seus turnos, você pode usar sua ação para causar 1d12 de dano elétrico automaticamente.",
     "Zephyr Strike": "Você se move como o vento. Você não provoca ataques de oportunidade, e uma vez antes da magia acabar, você tem vantagem em um ataque e causa 1d8 de dano de força extra.",
-    "Absorb Elements": "A magia captura parte da energia recebida, diminuindo seu efeito e armazenando-a. Você tem resistência ao tipo de dano desencadeante e seu próximo ataque corpo a corpo causa 1d6 extra desse tipo.",
+    "Absorb Elements": "A magia captura parte da energia recebida, diminuindo seu efeito sobre você e armazenando-a para seu próximo ataque corpo a corpo. Você tem resistência ao tipo de dano desencadeante até o início do seu próximo turno. Além disso, a primeira vez que você atingir com um ataque corpo a corpo em seu próximo turno, o alvo sofre 1d6 de dano extra do tipo desencadeante, e a magia termina.",
     "Beast Bond": "Você estabelece um elo telepático com uma besta que seja amigável ou esteja enfeitiçada por você. O elo funciona enquanto vocês estiverem na mesma linha de visão.",
     "Snare": "Você cria uma armadilha mágica invisível usando uma corda. Quando uma criatura pisa nela, deve passar num teste de Destreza ou ser içada no ar e ficar contida.",
 
@@ -174,6 +175,7 @@ export const SPELL_DESCRIPTIONS_PT: Record<string, string> = {
     "Rary's Telepathic Bond": "Você cria um link telepático entre até 8 criaturas voluntárias. Elas podem conversar mentalmente.",
     "Skill Empowerment": "Você toca uma criatura e dá a ela Especialização (dobro de proficiência) em uma perícia.",
     "Steel Wind Strike": "Você desaparece e golpeia até 5 criaturas num piscar de olhos, causando 6d10 de dano de força em cada.",
+    "Swift Quiver": "Você transmuta sua aljava para que ela produza munição infinita. Você pode usar uma ação bônus para fazer dois ataques com uma arma que use munição. Se a arma tiver a propriedade de carregar, ela é ignorada.",
     "Summon Celestial": "Você convoca um anjo ou espírito celestial (Vingador ou Defensor) para auxiliar.",
     "Summon Draconic Spirit": "Você convoca um dragão espiritual (Cromático, Metálico ou Gema) que tem sopro e resistência.",
     "Synaptic Static": "Uma explosão psíquica em 6m de raio causa 8d6 de dano e deixa os sobreviventes com 'cérebro nublado' (-1d6 nos ataques).",
