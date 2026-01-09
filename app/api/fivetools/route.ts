@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { translateSpells } from '@/lib/spell-translator';
 
 const FIVETOOLS_BASE = 'https://raw.githubusercontent.com/5etools-mirror-3/5etools-src/main/data';
 
@@ -78,11 +79,18 @@ export async function GET(req: NextRequest) {
         // Limitar a 150 itens para a prévia (ajudando a performance do grid)
         const limitedItems = items.slice(0, 150);
 
-        console.log(`${limitedItems.length} itens carregados do tipo "${type}"`);
+        // Traduzir magias automaticamente se for tipo 'spells'
+        let finalItems = limitedItems;
+        if (type === 'spells') {
+            finalItems = translateSpells(limitedItems);
+            console.log(`${finalItems.length} magias traduzidas automaticamente!`);
+        }
+
+        console.log(`${finalItems.length} itens carregados do tipo "${type}"`);
 
         return NextResponse.json({
-            count: limitedItems.length,
-            items: limitedItems,
+            count: finalItems.length,
+            items: finalItems,
             source: '5etools'
         });
     } catch (error: any) {

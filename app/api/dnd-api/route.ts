@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { translateSpells } from '@/lib/spell-translator';
 
 const FIVETOOLS_BASE = 'https://raw.githubusercontent.com/5etools-mirror-3/5etools-src/main/data';
 
@@ -82,11 +83,18 @@ export async function GET(req: NextRequest) {
         // Remove duplicadas pelo nome, caso existam entre diferentes arquivos
         const uniqueItems = Array.from(new Map(items.map(item => [item.name, item])).values());
 
-        console.log(`${uniqueItems.length} itens únicos do tipo "${type}" carregados em português.`);
+        // Traduzir magias automaticamente se for tipo 'spells'
+        let finalItems = uniqueItems;
+        if (type === 'spells') {
+            finalItems = translateSpells(uniqueItems);
+            console.log(`${finalItems.length} magias traduzidas automaticamente!`);
+        }
+
+        console.log(`${finalItems.length} itens únicos do tipo "${type}" carregados.`);
 
         return NextResponse.json({
-            count: uniqueItems.length,
-            items: uniqueItems,
+            count: finalItems.length,
+            items: finalItems,
             source: '5etools-rpgnext'
         });
 
