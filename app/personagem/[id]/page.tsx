@@ -452,7 +452,7 @@ export default function CharacterSheetPage() {
         }
     }, 1500), [user]);
 
-    const updateCharacter = (updater: (char: Character) => Character) => {
+    const updateCharacter = useCallback((updater: (char: Character) => Character) => {
         if (isReadOnly) return; // Não permite edição em modo somente leitura
         setCharacter(prevChar => {
             if (!prevChar) return null;
@@ -461,7 +461,7 @@ export default function CharacterSheetPage() {
             debouncedSave(finalChar);
             return finalChar;
         });
-    };
+    }, [isReadOnly, debouncedSave]);
 
     // --- Carregamento de Dados ---
     useEffect(() => {
@@ -775,7 +775,7 @@ export default function CharacterSheetPage() {
                 }
             });
         }
-    }, [character, isLoading]);
+    }, [character, isLoading, updateCharacter]);
 
     const handleApplyLevelUp = (choices: { attributes: Record<string, number>; hpIncrease: number }) => {
         if (!character) return;

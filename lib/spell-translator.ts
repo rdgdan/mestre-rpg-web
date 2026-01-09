@@ -752,3 +752,7 @@ export function translateSpell(spell: any): any {
 
     return translated;
 }
+
+export function translateSpells(spells: any[]): any[] {
+    return spells.map(spell => translateSpell(spell));
+}
