@@ -69,7 +69,8 @@ export interface Character {
         name: string;
         description: string;
         level?: number;
-        type?: 'class' | 'race' | 'feat' | 'other'
+        type?: 'class' | 'race' | 'feat' | 'other';
+        source?: string;
     }[];
     conditions?: string[]; // Ex: 'Envenenado', 'Caído'
     activeEffects?: string[]; // IDs de efeitos ativos como 'rage', 'bless'
