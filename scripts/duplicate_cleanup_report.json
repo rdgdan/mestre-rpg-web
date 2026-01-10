@@ -1,0 +1,30 @@
+[
+  {
+    "group": "Spells Group",
+    "identifier": "aura de vida",
+    "originalName": "Aura of life",
+    "matchType": "exact_translated",
+    "kept": {
+      "collection": "magias",
+      "id": "C58716088734C6BD505616FC57C2875B"
+    },
+    "deleted": {
+      "collection": "magias",
+      "id": "LX1g98uuzGWDVlSVHzCP"
+    }
+  },
+  {
+    "group": "Spells Group",
+    "identifier": "aura de pureza",
+    "originalName": "Aura of purity",
+    "matchType": "exact_translated",
+    "kept": {
+      "collection": "magias",
+      "id": "ADAE27C6ED8EB99C9178EE8ECF60F3E2"
+    },
+    "deleted": {
+      "collection": "magias",
+      "id": "XmBHxbglxF1tjnUx61iq"
+    }
+  }
+]

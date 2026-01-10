@@ -23,6 +23,7 @@ import WeaponModal from '@/components/ui/WeaponModal';
 import EquipmentModal from '@/components/ui/EquipmentModal';
 import SpellModal from '@/components/ui/SpellModal';
 import SpellSelectModal from '@/components/ui/SpellSelectModal';
+import { searchSpells } from '@/lib/spells-data';
 import LevelUpModal from '@/components/ui/LevelUpModal';
 import {
     fetchClassFeaturesFromFirestore,
@@ -31,6 +32,9 @@ import {
     saveGeneratedSubclassToFirestore
 } from '@/lib/class-features-sync';
 import { SUBCLASSES, SUBCLASS_CHOICE_LEVELS } from '@/lib/class-features';
+import { StartingProficienciesModal } from '@/components/ui/StartingProficienciesModal';
+import { StartingEquipmentModal } from '@/components/ui/StartingEquipmentModal';
+import { CLASS_PROFICIENCIES } from '@/lib/class-proficiencies';
 
 // --- Constantes de Ficha 2.0 ---
 const COMMON_CONDITIONS = [
@@ -269,6 +273,11 @@ export default function CharacterSheetPage() {
     const [isScannerModalOpen, setIsScannerModalOpen] = useState(false);
     const [isScanning, setIsScanning] = useState(false);
 
+    // Automação: Proficiências
+    const [isProficiencyModalOpen, setIsProficiencyModalOpen] = useState(false);
+    const [isEquipmentStartModalOpen, setIsEquipmentStartModalOpen] = useState(false);
+    const [selectedClassForProficiency, setSelectedClassForProficiency] = useState<string>('');
+
     // Modais e Estados de Dados
     const [isSelectionModalOpen, setSelectionModalOpen] = useState(false);
     const [modalConfig, setModalConfig] = useState<{ type: 'class' | 'race' | 'weapon', title: string } | null>(null);
@@ -315,10 +324,15 @@ export default function CharacterSheetPage() {
         }
     };
 
-    const handleSelectSubclass = (subclassName: string) => {
+    const handleSelectSubclass = (subclassName: string | null) => {
+        if (!subclassName) {
+            setIsSubclassModalOpen(false);
+            return;
+        }
+
         updateCharacter(char => {
             const className = char.class;
-            const level = char.level;
+            const level = char.level || 1;
             const subclassData = SUBCLASSES[className]?.[subclassName];
 
             let newFeatures = [...(char.features || [])];
@@ -326,10 +340,15 @@ export default function CharacterSheetPage() {
             if (subclassData) {
                 // Injetar habilidades da subclasse até o nível atual
                 Object.entries(subclassData as Record<number, any>).forEach(([lvl, data]) => {
-                    if (parseInt(lvl) <= level) {
+                    const levelNum = parseInt(lvl);
+                    if (levelNum <= level) {
                         (data.features as any[]).forEach(feat => {
                             if (!newFeatures.some(f => f.name === feat.name)) {
-                                newFeatures.push({ ...feat, type: 'class' });
+                                newFeatures.push({
+                                    ...feat,
+                                    level: levelNum,
+                                    type: 'class' as const
+                                });
                             }
                         });
                     }
@@ -777,7 +796,7 @@ export default function CharacterSheetPage() {
         }
     }, [character, isLoading, updateCharacter]);
 
-    const handleApplyLevelUp = (choices: { attributes: Record<string, number>; hpIncrease: number }) => {
+    const handleApplyLevelUp = (choices: { attributes: Record<string, number>; hpIncrease: number; newSpells?: any[]; subclass?: string }) => {
         if (!character) return;
 
         updateCharacter(prev => {
@@ -791,7 +810,7 @@ export default function CharacterSheetPage() {
             const newLevel = prev.level; // O nível já foi atualizado pelo gatilho (XP ou Manual)
             const newFeatures = [...(prev.features || [])];
 
-            // Buscar características para o NOVO nível
+            // 1. Buscar características da CLASSE para o NOVO nível
             if (classProgression && classProgression[newLevel]) {
                 const levelProgression = classProgression[newLevel];
                 levelProgression.features.forEach(feat => {
@@ -809,13 +828,91 @@ export default function CharacterSheetPage() {
                 });
             }
 
+            // 2. Buscar características da SUBCLASSE (se houver escolha nova ou já existente)
+            const activeSubclass = choices.subclass || prev.subclass;
+            if (activeSubclass && prev.class) {
+                const subclassData = SUBCLASSES[prev.class]?.[activeSubclass]?.[newLevel];
+                if (subclassData) {
+                    // Features
+                    subclassData.features.forEach(feat => {
+                        const isDuplicate = newFeatures.some(f => f.name === feat.name);
+                        if (!isDuplicate) {
+                            newFeatures.push({
+                                ...feat,
+                                level: newLevel,
+                                type: 'class', // Usando 'class' pois as features de subclasse são extensões da classe
+                                source: activeSubclass
+                            });
+                        }
+                    });
+
+                    // Magias Automáticas (Automação Sugerida)
+                    if (subclassData.spells && subclassData.spells.length > 0) {
+                        // Buscar detalhes das magias
+                        // Precisamos de spellsDatabase. Vamos assumir que está importado ou usar uma função auxiliar.
+                        // Como não temos acesso direto ao banco aqui dentro, vamos tentar usar searchSpells se importada,
+                        // ou injetar manualmente se tivermos os dados.
+                        // Melhor: Assumir que `spellsDatabase` (hardcoded) pode ser importado de spells-data.
+
+                        // Importação dinâmica ou uso de função global seria ideal, mas aqui vamos tentar importar spellsDatabase no topo.
+                        // Se não der, usaremos searchSpells que já deve estar importada (verificar imports).
+                        // Assumindo que temos searchSpells de spells-data:
+                        const autoSpells = subclassData.spells.map(spellId =>
+                            searchSpells('', undefined).find(s => s.id === spellId)
+                        ).filter(Boolean);
+
+                        autoSpells.forEach(spell => {
+                            if (spell) {
+                                // Adicionar à lista de magias
+                                // Verificar se já não está na lista de "updatedSpells" (que será processada abaixo)
+                                // Mas precisamos adicionar ao "updatedSpells" antes do return.
+                                // Como "updatedSpells" é definido DEPOIS, vamos adicionar a uma lista temporária ou mover a definição.
+                            }
+                        });
+
+                        // Vamos mover a definição de updatedSpells para cima para poder usar aqui.
+                    }
+                }
+            }
+
+            // Magias (Evitar duplicatas)
+            // Lógica ajustada para incluir subclass spells
+            let updatedSpells = [...(prev.spells || [])];
+
+            // Adicionar Automatic Spells
+            if (activeSubclass && prev.class) {
+                const subclassData = SUBCLASSES[prev.class]?.[activeSubclass]?.[newLevel];
+                if (subclassData && subclassData.spells) {
+                    const allSpells = searchSpells('', undefined); // Busca todas hardcoded
+                    const autoSpells = subclassData.spells.map(id => allSpells.find(s => s.id === id)).filter(Boolean);
+
+                    autoSpells.forEach(spell => {
+                        if (spell && !updatedSpells.some(s => s.id === spell.id)) {
+                            updatedSpells.push(spell);
+                        }
+                    });
+                }
+            }
+
+            if (choices.newSpells && choices.newSpells.length > 0) {
+                const existingIds = new Set(updatedSpells.map(s => s.id));
+                choices.newSpells.forEach(spell => {
+                    if (spell && !existingIds.has(spell.id)) {
+                        updatedSpells.push(spell);
+                        existingIds.add(spell.id);
+                    }
+                });
+            }
+
             return {
                 ...prev,
                 level: newLevel,
                 attributes: newAttributes,
                 maxHp: (prev.maxHp || 0) + choices.hpIncrease,
                 currentHp: (prev.currentHp || 0) + choices.hpIncrease,
-                features: newFeatures
+                features: newFeatures,
+                spells: updatedSpells,
+                subclass: activeSubclass
             };
         });
     };
@@ -977,11 +1074,78 @@ export default function CharacterSheetPage() {
         setSelectionModalOpen(true);
     };
 
-    const handleSelectItem = (item: any) => {
+    const handleSelectItem = async (item: any) => {
         if (!modalConfig) return;
         setSelectionModalOpen(false);
-        if (modalConfig.type === 'class' || modalConfig.type === 'race') {
+
+        if (modalConfig.type === 'class') {
+            handleFieldChange('class', item);
+
+            // Automação: Carregar Features de Nível 1
+            setIsLoading(true);
+            try {
+                const { fetchClassFeaturesFromFirestore } = await import('@/lib/class-features-sync');
+                const { SUBCLASS_CHOICE_LEVELS } = await import('@/lib/class-features');
+
+                const classFeatures = await fetchClassFeaturesFromFirestore(item);
+                const level1Features = classFeatures[1]?.features || [];
+
+                updateCharacter(char => {
+                    // Remove features de classe antigas se houver (opcional, por enquanto apenas adiciona)
+                    // Filtra features que já existem para não duplicar
+                    const existingNames = new Set(char.features.map(f => f.name));
+                    const newFeatures = level1Features.filter(f => !existingNames.has(f.name)).map(f => ({ ...f, level: 1, type: 'class' as const }));
+
+                    return {
+                        ...char,
+                        features: [...char.features, ...newFeatures]
+                    };
+                });
+
+
+
+                // Verifica Subclasse
+                const subclassLevel = SUBCLASS_CHOICE_LEVELS[item] || 3;
+                if ((character.level || 1) >= subclassLevel) {
+                    // Pequeno delay para a UI atualizar
+                    setTimeout(() => setIsSubclassModalOpen(true), 500);
+                }
+
+
+                // Automação: Proficiências (Salvaguardas e Skills)
+                const profData = CLASS_PROFICIENCIES[item];
+
+                if (profData) {
+                    // 1. Aplicar Salvaguardas Automaticamente (assumindo que existe um campo ou apenas lógica interna)
+                    // Como não identificamos um campo explícito de "savingThrows" no Character, vamos pular a persistência direta 
+                    // a menos que encontremos onde isso fica. Mas abriremos o modal de skills.
+
+                    // 2. Abrir Modal de Skills
+                    setSelectedClassForProficiency(item);
+                    setIsProficiencyModalOpen(true);
+                }
+
+                // Automação: Verificar Magias (Abrir Modal se for Conjurador)
+                const { getCasterType } = await import('@/lib/level-progression');
+                const casterType = getCasterType(item);
+                if (casterType !== 'none') {
+                    // Abre o modal de Level Up em modo de "Ajuste Inicial" para escolher magias
+                    // Delay aumentado para garantir sequencia com modal de skills se necessário
+                    setTimeout(() => {
+                        alert("Como conjurador, você deve escolher suas magias iniciais!");
+                        setLevelUpModalOpen(true);
+                    }, 1500);
+                }
+
+            } catch (err) {
+                console.error("Erro na automação de classe:", err);
+            } finally {
+                setIsLoading(false);
+            }
+
+        } else if (modalConfig.type === 'race') {
             handleFieldChange(modalConfig.type, item);
+            // Automação de Raça (pode ser feita similarmente depois)
         } else if (modalConfig.type === 'weapon') {
             const base = weapons.find(w => w.name === item);
             if (base) {
@@ -1011,10 +1175,56 @@ export default function CharacterSheetPage() {
         setSpellSelectOpen(false);
     };
 
+
     const handleRemoveSpell = (spellName: string) => {
         updateCharacter(char => ({
             ...char, spells: (char.spells || []).filter(s => s.name.trim().toLowerCase() !== spellName.trim().toLowerCase())
         }));
+    };
+
+    // --- Subclasse (REMOVED) ---
+    const handleSelectSubclass_REMOVED = (subclassName: string | null) => {
+        if (!subclassName) {
+            setIsSubclassModalOpen(false);
+            return;
+        }
+
+        updateCharacter(char => {
+            // 1. Define o nome da subclasse
+            const updatedChar = { ...char, subclass: subclassName };
+
+            // 2. Busca features da subclasse para o nível atual
+            // SUBCLASSES é um objeto { [classe]: { [subclasse]: { [nivel]: { features: [] } } } }
+            const classSubclasses = SUBCLASSES[char.class];
+            if (classSubclasses && classSubclasses[subclassName]) {
+                const subclassProgression = classSubclasses[subclassName];
+                const newFeatures: any[] = [];
+
+                // Varre todos os níveis até o atual para pegar features retroativas se necessário
+                for (let lvl = 1; lvl <= (char.level || 1); lvl++) {
+                    if (subclassProgression[lvl]?.features) {
+                        subclassProgression[lvl].features.forEach((feat: any) => {
+                            // Evita duplicatas pelo nome
+                            if (!char.features.some(f => f.name === feat.name) && !newFeatures.some(f => f.name === feat.name)) {
+                                newFeatures.push({
+                                    ...feat,
+                                    level: lvl,
+                                    type: 'class' as const // Marca como feature de classe/subclasse
+                                });
+                            }
+                        });
+                    }
+                }
+
+                if (newFeatures.length > 0) {
+                    updatedChar.features = [...updatedChar.features, ...newFeatures];
+                }
+            }
+
+            return updatedChar;
+        });
+
+        setIsSubclassModalOpen(false);
     };
 
     if (isLoading || loadingAuth || !character) return <div className="flex items-center justify-center h-screen bg-gray-900"><div className="text-2xl text-white">Carregando...</div></div>;
@@ -1670,73 +1880,60 @@ export default function CharacterSheetPage() {
                                 )}
                             </div>
 
-                            {/* Visualização de Slots de Magia */}
-                            {character.spellcasting?.slots && Object.entries(character.spellcasting.slots).length > 0 && (
-                                <div className="mb-6 p-4 bg-rpg-panel border border-rpg-gold/10 rounded-lg shadow-inner animate-fade-in">
-                                    <div className="flex justify-between items-center mb-3">
-                                        <h3 className="text-sm font-bold text-rpg-gold font-cinzel uppercase tracking-widest flex items-center gap-2">
-                                            <span className="w-2 h-2 bg-purple-500 rounded-full animate-pulse"></span>
-                                            Slots de Magia
-                                        </h3>
-                                        {!isReadOnly && (
-                                            <button
-                                                onClick={() => {
-                                                    updateCharacter(prev => {
-                                                        const newSlots = { ...prev.spellcasting.slots };
-                                                        Object.keys(newSlots).forEach(lvl => {
-                                                            newSlots[lvl].current = newSlots[lvl].max;
-                                                        });
-                                                        return { ...prev, spellcasting: { ...prev.spellcasting, slots: newSlots } };
-                                                    });
-                                                }}
-                                                className="text-[10px] bg-rpg-slate border border-rpg-gold/20 px-2 py-1 rounded text-rpg-gold hover:bg-rpg-gold hover:text-rpg-dark transition-colors uppercase tracking-wider"
-                                            >
-                                                Descanso Longo (Recuperar Tudo)
-                                            </button>
-                                        )}
-                                    </div>
-                                    <div className="flex flex-wrap gap-4">
-                                        {Object.entries(character.spellcasting.slots)
-                                            .sort((a, b) => {
-                                                if (a[0] === 'pact') return -1;
-                                                return parseInt(a[0]) - parseInt(b[0]);
-                                            })
-                                            .map(([level, slotData]) => (
-                                                <div key={level} className="flex flex-col bg-rpg-dark/30 p-2 rounded border border-white/5 min-w-[80px] items-center">
-                                                    <span className="text-[10px] font-bold text-rpg-grey mb-1 text-center font-medieval truncate w-full">
-                                                        {level === 'pact' ? `PACTO` : `${level}º CÍRCULO`}
-                                                    </span>
-                                                    <div className="flex flex-wrap gap-1 justify-center">
-                                                        {Array.from({ length: slotData.max }).map((_, i) => {
-                                                            const isAvailable = i < slotData.current;
-                                                            return (
-                                                                <button
-                                                                    key={i}
-                                                                    disabled={isReadOnly}
-                                                                    onClick={() => {
-                                                                        const newCurrent = isAvailable ? slotData.current - 1 : slotData.current + 1;
-                                                                        handleNestedChange(`spellcasting.slots.${level}.current`, Math.max(0, Math.min(newCurrent, slotData.max)));
-                                                                    }}
-                                                                    className={`w-6 h-6 rounded-full border flex items-center justify-center transition-all duration-300 ${isAvailable
-                                                                        ? 'bg-purple-600 border-purple-400 shadow-[0_0_10px_rgba(147,51,234,0.5)] scale-100 hover:bg-purple-500'
-                                                                        : 'bg-gray-800 border-gray-700 opacity-50 scale-90 hover:opacity-80'
-                                                                        } ${isReadOnly ? 'cursor-not-allowed opacity-70' : 'cursor-pointer'}`}
-                                                                    title={isAvailable ? "Gastar Slot" : "Recuperar Slot"}
-                                                                >
-                                                                    {isAvailable && <span className="text-[8px] text-white">✨</span>}
+                            {/* Seção de Truques (Nível 0) */}
+                            {(() => {
+                                const cantrips = (character.spells || []).filter(s => s && (s.level === 0 || s.level === undefined)); // Assume 0/undefined as cantrip if not specified
+                                if (cantrips.length > 0) {
+                                    return (
+                                        <div className="mb-8">
+                                            <h3 className="text-sm font-bold text-rpg-gold font-cinzel uppercase tracking-widest mb-3 border-b border-rpg-gold/20 pb-1 flex items-center gap-2">
+                                                <span className="text-lg">✨</span> Truques & Talentos Mágicos
+                                            </h3>
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                {cantrips.sort((a, b) => (a.name || '').localeCompare(b.name || '')).map((spell, idx) => (
+                                                    <div key={spell.id || idx} className="bg-rpg-panel border border-rpg-gold/10 hover:border-rpg-gold/30 rounded-lg p-3 transition-all relative group">
+                                                        <div className="flex justify-between items-center mb-1">
+                                                            <span className="font-bold text-rpg-parchment font-medieval text-lg group-hover:text-rpg-gold transition-colors">{spell.name}</span>
+                                                            <div className="flex gap-1">
+                                                                {spell.concentration && <span className="text-[8px] bg-blue-900/60 text-blue-200 px-1.5 py-0.5 rounded font-black tracking-tighter" title="Concentração">C</span>}
+                                                                {spell.ritual && <span className="text-[8px] bg-amber-900/60 text-amber-200 px-1.5 py-0.5 rounded font-black tracking-tighter" title="Ritual">R</span>}
+                                                            </div>
+                                                        </div>
+                                                        <div className="flex flex-wrap gap-x-3 gap-y-1 mb-2 text-[10px] text-rpg-grey/70 uppercase font-sans tracking-tight border-b border-rpg-gold/5 pb-1">
+                                                            <span>{formatSpellValue(spell.castingTime)}</span>
+                                                            <span>{formatSpellValue(spell.range)}</span>
+                                                            <span>{formatSpellValue(spell.duration)}</span>
+                                                            <span className="text-purple-400/60 italic">{spell.school}</span>
+                                                        </div>
+                                                        <p className="text-xs text-rpg-grey/90 leading-relaxed line-clamp-3 group-hover:line-clamp-none transition-all duration-300">{spell.description}</p>
+                                                        {!isReadOnly && (
+                                                            <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity bg-rpg-panel shadow-sm rounded-full">
+                                                                <button onClick={() => handleRemoveSpell(spell.name)} className="p-1 text-rpg-red/60 hover:text-rpg-red transition-colors" title="Esquecer Magia">
+                                                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
                                                                 </button>
-                                                            );
-                                                        })}
+                                                            </div>
+                                                        )}
                                                     </div>
-                                                </div>
-                                            ))}
-                                    </div>
-                                </div>
-                            )}
+                                                ))}
+                                            </div>
+                                        </div>
+                                    );
+                                }
+                                return null;
+                            })()}
 
-                            <div className="space-y-4">
+                            {/* Magias Niveladas e Slots */}
+                            <div className="space-y-6">
                                 {(() => {
-                                    if (!character.spells || character.spells.length === 0) {
+                                    // Agrupar magias por nível (apenas nível 1+)
+                                    const validSpells = (character.spells || []).filter(s => s && typeof s === 'object' && s.level && s.level > 0);
+
+                                    // Obter lista de níveis que possuem slots OU magias aprendidas
+                                    const levelsWithSlots = Object.keys(character.spellcasting?.slots || {}).map(Number);
+                                    const levelsWithSpells = validSpells.map(s => s.level);
+                                    const allLevels = Array.from(new Set([...levelsWithSlots, ...levelsWithSpells])).sort((a, b) => a - b);
+
+                                    if (allLevels.length === 0 && (!character.spells || character.spells.length === 0)) {
                                         return (
                                             <div className="bg-rpg-panel border border-rpg-gold/10 p-10 rounded-lg shadow-md flex flex-col items-center justify-center text-rpg-grey/40">
                                                 <p className="text-6xl mb-4">📜</p>
@@ -1745,89 +1942,98 @@ export default function CharacterSheetPage() {
                                         );
                                     }
 
-                                    // Agrupar magias por nível com verificação de segurança
-                                    const validSpells = (character.spells || []).filter(s => s && typeof s === 'object');
-                                    const groupedSpells = validSpells.reduce((acc, spell) => {
-                                        const level = spell.level || 0;
-                                        if (!acc[level]) acc[level] = [];
-                                        acc[level].push(spell);
-                                        return acc;
-                                    }, {} as Record<number, typeof character.spells>);
+                                    return allLevels.map(level => {
+                                        const spells = validSpells.filter(s => s.level === level);
+                                        const isExpanded = expandedSpellLevels[level] !== false; // Default expanded
+                                        const levelLabel = `${level}º Nível`;
+                                        const slotInfo = character.spellcasting?.slots?.[level.toString()]; // Suporte a Pact Magic depois
 
-                                    // Níveis ordenados
-                                    const levels = Object.keys(groupedSpells)
-                                        .map(Number)
-                                        .sort((a, b) => a - b);
-
-                                    return levels.map(level => {
-                                        const spells = groupedSpells[level];
-                                        const isExpanded = expandedSpellLevels[level];
-                                        const levelLabel = level === 0 ? 'Truques' : `${level}º Nível`;
-                                        const slotInfo = character.spellcasting?.slots?.[level.toString()];
-                                        const slotDisplay = slotInfo ? ` • ${slotInfo.current}/${slotInfo.max} Slots` : '';
+                                        // Renderização dos Slots no Cabeçalho
+                                        const SlotCounter = () => {
+                                            if (!slotInfo) return null;
+                                            return (
+                                                <div className="flex items-center gap-1 bg-black/30 px-2 py-1 rounded ml-4 border border-white/5" onClick={e => e.stopPropagation()}>
+                                                    <span className="text-[10px] text-rpg-grey uppercase font-bold mr-2 tracking-wider">Slots:</span>
+                                                    {Array.from({ length: slotInfo.max }).map((_, i) => {
+                                                        const isAvailable = i < slotInfo.current;
+                                                        return (
+                                                            <button
+                                                                key={i}
+                                                                disabled={isReadOnly}
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    const newCurrent = isAvailable ? slotInfo.current - 1 : slotInfo.current + 1;
+                                                                    handleNestedChange(`spellcasting.slots.${level}.current`, Math.max(0, Math.min(newCurrent, slotInfo.max)));
+                                                                }}
+                                                                className={`w-4 h-4 rounded-full border transition-all ${isAvailable ? 'bg-purple-600 border-purple-400 shadow-[0_0_5px_rgba(147,51,234,0.5)] hover:bg-purple-500' : 'bg-gray-800 border-gray-700 opacity-50 hover:opacity-80'}`}
+                                                                title={isAvailable ? "Gastar Slot" : "Recuperar Slot"}
+                                                            ></button>
+                                                        );
+                                                    })}
+                                                </div>
+                                            );
+                                        };
 
                                         return (
                                             <div key={level} className="bg-rpg-panel border border-rpg-gold/10 rounded-lg shadow-md overflow-hidden transition-all">
-                                                <button
+                                                <div
+                                                    className="w-full flex justify-between items-center p-3 bg-rpg-slate/40 border-b border-rpg-gold/5 cursor-pointer hover:bg-rpg-slate/60 transition-colors"
                                                     onClick={() => setExpandedSpellLevels(prev => ({ ...prev, [level]: !prev[level] }))}
-                                                    className="w-full flex justify-between items-center p-4 bg-rpg-slate/40 hover:bg-rpg-slate/60 transition-colors border-b border-rpg-gold/5"
                                                 >
-                                                    <div className="flex items-center gap-3">
-                                                        <span className="w-8 h-8 flex items-center justify-center bg-purple-900/40 text-purple-300 rounded-full text-sm font-bold border border-purple-500/20">{level}</span>
-                                                        <h3 className="text-lg font-bold text-rpg-gold font-cinzel uppercase tracking-widest">{levelLabel}{slotDisplay}</h3>
-                                                        <span className="text-[10px] bg-black/40 text-rpg-grey px-2 py-0.5 rounded-full font-sans uppercase tracking-tighter border border-rpg-gold/5">{spells.length} {spells.length === 1 ? 'Magia' : 'Magias'}</span>
+                                                    <div className="flex items-center flex-wrap gap-2">
+                                                        <span className="w-6 h-6 flex items-center justify-center bg-purple-900/40 text-purple-300 rounded-full text-xs font-bold border border-purple-500/20">{level}</span>
+                                                        <h3 className="text-base font-bold text-rpg-gold font-cinzel uppercase tracking-widest mr-2">{levelLabel}</h3>
+                                                        <SlotCounter />
                                                     </div>
-                                                    <span className={`text-rpg-gold transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`}>
-                                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                                                            <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
-                                                        </svg>
-                                                    </span>
-                                                </button>
+                                                    <div className="flex items-center gap-4">
+                                                        <span className="text-[10px] text-rpg-grey uppercase tracking-widest">{spells.length} Magias</span>
+                                                        <span className={`text-rpg-gold transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`}>
+                                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                                                <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
+                                                            </svg>
+                                                        </span>
+                                                    </div>
+                                                </div>
 
                                                 {isExpanded && (
-                                                    <div className="p-4 grid grid-cols-1 md:grid-cols-2 gap-4 animate-fade-in">
-                                                        {spells.sort((a, b) => (a.name || '').localeCompare(b.name || '')).map((spell, idx) => (
-                                                            <div key={spell.id || idx} className="bg-rpg-slate/40 p-3 rounded-lg border border-rpg-gold/5 hover:border-purple-500/30 transition-all group relative">
-                                                                <div className="flex justify-between items-center mb-1">
-                                                                    <div className="flex items-center gap-2">
-                                                                        <button
-                                                                            disabled={isReadOnly}
-                                                                            onClick={() => togglePreparedSpell(spell.name)}
-                                                                            className={`w-3 h-3 rounded-full border transition-all ${spell.prepared ? 'bg-green-500 border-green-400 shadow-[0_0_5px_rgba(34,197,94,0.5)]' : 'border-white/20 hover:border-green-500/50'}`}
-                                                                            title={spell.prepared ? "Despreparar" : "Preparar"}
-                                                                        ></button>
-                                                                        <span className="font-bold text-rpg-parchment font-medieval text-lg group-hover:text-rpg-gold transition-colors">{spell.name}</span>
+                                                    <div className="p-4 grid grid-cols-1 md:grid-cols-2 gap-4 animate-fade-in bg-rpg-dark/20">
+                                                        {spells.length === 0 ? (
+                                                            <div className="col-span-full text-center py-4 text-rpg-grey/50 italic text-xs">Nenhuma magia aprendida deste nível.</div>
+                                                        ) : (
+                                                            spells.sort((a, b) => (a.name || '').localeCompare(b.name || '')).map((spell, idx) => (
+                                                                <div key={spell.id || idx} className="bg-rpg-slate/40 p-3 rounded-lg border border-rpg-gold/5 hover:border-purple-500/30 transition-all group relative">
+                                                                    <div className="flex justify-between items-center mb-1">
+                                                                        <div className="flex items-center gap-2">
+                                                                            <button
+                                                                                disabled={isReadOnly}
+                                                                                onClick={() => togglePreparedSpell(spell.name)}
+                                                                                className={`w-3 h-3 rounded-full border transition-all ${spell.prepared ? 'bg-green-500 border-green-400 shadow-[0_0_5px_rgba(34,197,94,0.5)]' : 'border-white/20 hover:border-green-500/50'}`}
+                                                                                title={spell.prepared ? "Despreparar" : "Preparar"}
+                                                                            ></button>
+                                                                            <span className="font-bold text-rpg-parchment font-medieval text-lg group-hover:text-rpg-gold transition-colors">{spell.name}</span>
+                                                                        </div>
+                                                                        <div className="flex gap-1">
+                                                                            {spell.concentration && <span className="text-[8px] bg-blue-900/60 text-blue-200 px-1.5 py-0.5 rounded font-black tracking-tighter" title="Concentração">C</span>}
+                                                                            {spell.ritual && <span className="text-[8px] bg-amber-900/60 text-amber-200 px-1.5 py-0.5 rounded font-black tracking-tighter" title="Ritual">R</span>}
+                                                                        </div>
                                                                     </div>
-                                                                    <div className="flex gap-1">
-                                                                        {spell.concentration && <span className="text-[8px] bg-blue-900/60 text-blue-200 px-1.5 py-0.5 rounded font-black tracking-tighter" title="Concentração">C</span>}
-                                                                        {spell.ritual && <span className="text-[8px] bg-amber-900/60 text-amber-200 px-1.5 py-0.5 rounded font-black tracking-tighter" title="Ritual">R</span>}
+                                                                    <div className="flex flex-wrap gap-x-3 gap-y-1 mb-2 text-[10px] text-rpg-grey/70 uppercase font-sans tracking-tight border-b border-rpg-gold/5 pb-1">
+                                                                        <span>{formatSpellValue(spell.castingTime)}</span>
+                                                                        <span>{formatSpellValue(spell.range)}</span>
+                                                                        <span>{formatSpellValue(spell.duration)}</span>
+                                                                        <span className="text-purple-400/60 italic">{spell.school}</span>
                                                                     </div>
+                                                                    <p className="text-xs text-rpg-grey/90 leading-relaxed line-clamp-2 group-hover:line-clamp-none transition-all duration-300">{spell.description}</p>
+                                                                    {!isReadOnly && (
+                                                                        <div className="flex justify-end mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                                            <button onClick={() => handleRemoveSpell(spell.name)} className="p-1 text-rpg-red/60 hover:text-rpg-red transition-colors" title="Esquecer Magia">
+                                                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-4v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                                                                            </button>
+                                                                        </div>
+                                                                    )}
                                                                 </div>
-
-                                                                <div className="flex flex-wrap gap-x-3 gap-y-1 mb-2 text-[10px] text-rpg-grey/70 uppercase font-sans tracking-tight border-b border-rpg-gold/5 pb-1">
-                                                                    <span>{formatSpellValue(spell.castingTime)}</span>
-                                                                    <span>{formatSpellValue(spell.range)}</span>
-                                                                    <span>{formatSpellValue(spell.duration)}</span>
-                                                                    <span className="text-purple-400/60 italic">{spell.school}</span>
-                                                                </div>
-
-                                                                <p className="text-xs text-rpg-grey/90 leading-relaxed line-clamp-2 group-hover:line-clamp-none transition-all duration-300">{spell.description}</p>
-
-                                                                {!isReadOnly && (
-                                                                    <div className="flex justify-end mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                                        <button
-                                                                            onClick={() => handleRemoveSpell(spell.name)}
-                                                                            className="p-1 text-rpg-red/60 hover:text-rpg-red transition-colors"
-                                                                            title="Esquecer Magia"
-                                                                        >
-                                                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-4v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                                                            </svg>
-                                                                        </button>
-                                                                    </div>
-                                                                )}
-                                                            </div>
-                                                        ))}
+                                                            ))
+                                                        )}
                                                     </div>
                                                 )}
                                             </div>
@@ -1946,12 +2152,79 @@ export default function CharacterSheetPage() {
                     level={character.level}
                     charClassName={character.class}
                     progression={classProgression?.[character.level]}
+                    currentSpells={character.spells}
+                    currentAttributes={character.attributes}
                 />
                 <TextScannerModal
                     isOpen={isScannerModalOpen}
                     onClose={() => setIsScannerModalOpen(false)}
                     onScan={handleScanText}
                     isScanning={isScanning}
+                />
+                <StartingProficienciesModal
+                    isOpen={isProficiencyModalOpen}
+                    onClose={() => setIsProficiencyModalOpen(false)}
+                    className={selectedClassForProficiency}
+                    onConfirm={(skills) => {
+                        updateCharacter(char => {
+                            // Skills é Record<string, boolean>
+                            const newSkills = { ...(char.skills || {}) } as any;
+                            skills.forEach(skill => {
+                                // Garantir tipo seguro
+                                newSkills[skill] = true;
+                            });
+                            return { ...char, skills: newSkills };
+                        });
+                        setIsProficiencyModalOpen(false);
+                        // Abre modal de equipamento após as proficiências
+                        setIsEquipmentStartModalOpen(true);
+                    }}
+                />
+                <StartingEquipmentModal
+                    isOpen={isEquipmentStartModalOpen}
+                    onClose={() => setIsEquipmentStartModalOpen(false)}
+                    className={selectedClassForProficiency}
+                    onConfirm={(newItems) => {
+                        updateCharacter(char => {
+                            const currentInv = { ...char.inventory };
+                            const weapons = [...(currentInv.weapons || [])];
+                            const otherEquip = [...(currentInv.otherEquipment || [])];
+
+                            newItems.forEach(item => {
+                                if (item.type === 'weapon') {
+                                    weapons.push({
+                                        id: Math.random().toString(36).substr(2, 9),
+                                        name: item.name,
+                                        quantity: item.quantity,
+                                        isEquipped: false,
+                                        weight: 0, // Poderia buscar do DB
+                                        damage: '1d6', // Placeholder, ideal buscar
+                                        damageType: 'cortante',
+                                        properties: []
+                                    } as any);
+                                } else {
+                                    otherEquip.push({
+                                        id: Math.random().toString(36).substr(2, 9),
+                                        name: item.name,
+                                        quantity: item.quantity,
+                                        weight: 0,
+                                        type: item.type === 'armor' ? 'armor' : item.type === 'shield' ? 'shield' : 'other',
+                                        description: '',
+                                        equipped: false
+                                    } as any);
+                                }
+                            });
+
+                            return {
+                                ...char,
+                                inventory: {
+                                    ...currentInv,
+                                    weapons,
+                                    otherEquipment: otherEquip
+                                }
+                            };
+                        });
+                    }}
                 />
             </div>
         </div>

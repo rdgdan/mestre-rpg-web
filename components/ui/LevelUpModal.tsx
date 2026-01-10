@@ -3,28 +3,63 @@
 "use client";
 
 import React from 'react';
-import { LevelProgression } from '@/lib/class-features';
+import { LevelProgression, SUBCLASSES, SUBCLASS_CHOICE_LEVELS } from '@/lib/class-features';
+import { getSpellsKnownCount, getFullCasterSlotLevel, getSpellcastingAbility, getCantripsKnownCount } from '@/lib/level-progression';
+import SpellSelectModal from './SpellSelectModal';
+import { Spell } from '@/lib/spells-data';
 
 interface LevelUpModalProps {
     isOpen: boolean;
     onClose: () => void;
-    onApply: (choices: { attributes: Record<string, number>; hpIncrease: number }) => void;
+    onApply: (choices: { attributes: Record<string, number>; hpIncrease: number; newSpells?: Spell[]; subclass?: string }) => void;
     level: number;
     charClassName: string;
     progression?: LevelProgression;
+    currentSpells?: Spell[];
+    currentAttributes?: Record<string, number>;
 }
 
-const LevelUpModal: React.FC<LevelUpModalProps> = ({ isOpen, onClose, onApply, level, charClassName, progression }) => {
+const LevelUpModal: React.FC<LevelUpModalProps> = ({ isOpen, onClose, onApply, level, charClassName, progression, currentSpells = [], currentAttributes = {} }) => {
     const [attrChoices, setAttrChoices] = React.useState<Record<string, number>>({
         strength: 0, dexterity: 0, constitution: 0, intelligence: 0, wisdom: 0, charisma: 0
     });
     const [hpIncrease, setHpIncrease] = React.useState(0);
+    const [spellModalOpen, setSpellModalOpen] = React.useState(false);
+    const [isCantripSelection, setIsCantripSelection] = React.useState(false); // Flag para saber se modal é truque
+    const [newSpells, setNewSpells] = React.useState<Spell[]>([]);
+    const [selectedSubclass, setSelectedSubclass] = React.useState<string>('');
 
     if (!isOpen) return null;
 
     const hasASI = progression?.features.some(f => f.name.includes("Melhoria no Valor de Atributo"));
     const totalPointsSpent = Object.values(attrChoices).reduce((a, b) => a + b, 0);
     const pointsRemaining = 2 - totalPointsSpent;
+
+
+
+    // Lógica de Magias
+    const spellsKnownTotal = getSpellsKnownCount(charClassName, level);
+    const cantripsKnownTotal = getCantripsKnownCount(charClassName, level);
+
+    // Classes preparadas ou Mago
+    const isWizard = charClassName.toLowerCase().includes('mago');
+    const isPreparedCaster = ['clérigo', 'druida', 'paladino'].some(c => charClassName.toLowerCase().includes(c));
+
+    // Quantas magias pode APRENDER (adicionar ao grimório/conhecidas)
+    let spellsToLearn = 0;
+    let cantripsToLearn = Math.max(0, cantripsKnownTotal - currentSpells.filter(s => s.level === 0).length);
+
+    if (isWizard) {
+        // Nível 1: 3 Truques + 6 Magias = 9
+        // Outros níveis: +2 Magias (Truques são fixos/incrementais à parte, mas simplificando)
+        spellsToLearn = level === 1 ? 6 : 2;
+        cantripsToLearn = level === 1 ? 3 : Math.max(0, cantripsKnownTotal - currentSpells.filter(s => s.level === 0).length);
+    } else if (spellsKnownTotal > 0) {
+        // Calcula quantas faltam para atingir o limite conhecido
+        spellsToLearn = Math.max(0, spellsKnownTotal - currentSpells.filter(s => s.level > 0).length);
+    }
+
+    const availableSpellLevel = getFullCasterSlotLevel(level); // Simplificado. Warlock/Half-caster precisaria de mais refino na função getFullCasterSlotLevel
 
     const handleAttrChange = (attr: string, delta: number) => {
         if (delta > 0 && pointsRemaining <= 0) return;
@@ -34,6 +69,12 @@ const LevelUpModal: React.FC<LevelUpModalProps> = ({ isOpen, onClose, onApply, l
 
     const isMaxLevel = level === 20;
     const isTierLevel = [5, 11, 17].includes(level);
+
+    // Lógica de Subclasse
+    const subclassLevel = SUBCLASS_CHOICE_LEVELS[charClassName];
+    const canChooseSubclass = level === subclassLevel;
+    const availableSubclasses = canChooseSubclass ? SUBCLASSES[charClassName] : {};
+    const hasSubclassesAvailable = Object.keys(availableSubclasses || {}).length > 0;
 
     return (
         <div className="fixed inset-0 bg-black/90 backdrop-blur-md flex justify-center items-center z-[100] p-2 sm:p-4 animate-in fade-in duration-500">
@@ -60,6 +101,63 @@ const LevelUpModal: React.FC<LevelUpModalProps> = ({ isOpen, onClose, onApply, l
 
                 {/* Conteúdo das Habilidades */}
                 <div className="p-4 sm:p-6 overflow-y-auto custom-scrollbar relative bg-rpg-panel/80 space-y-6 sm:space-y-8 flex-grow">
+                    {/* SEÇÃO DE MAGIAS (NOVA) */}
+                    {(spellsToLearn > 0 || isWizard) && (
+                        <div className="bg-purple-900/10 border border-purple-500/30 rounded-lg p-5 animate-in zoom-in-95 duration-500 delay-100 space-y-4">
+                            {/* TRUQUES */}
+                            {cantripsToLearn > 0 && (
+                                <div>
+                                    <div className="flex justify-between items-center mb-3">
+                                        <h3 className="text-xs font-bold text-purple-300 uppercase tracking-widest border-l-4 border-purple-500 pl-3">Novos Truques</h3>
+                                        <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase ${newSpells.filter(s => s.level === 0).length < cantripsToLearn ? 'bg-purple-600 text-white animate-pulse' : 'bg-gray-600 text-gray-300'}`}>
+                                            Escolha {cantripsToLearn - newSpells.filter(s => s.level === 0).length}
+                                        </span>
+                                    </div>
+                                    <button
+                                        onClick={() => { setIsCantripSelection(true); setSpellModalOpen(true); }}
+                                        className="w-full p-4 border border-dashed border-purple-400/30 rounded-lg hover:bg-purple-900/20 transition-all group flex items-center justify-center gap-2"
+                                    >
+                                        <span className="text-purple-300 group-hover:text-purple-100 font-bold uppercase tracking-widest text-xs">+ Selecionar Truque</span>
+                                    </button>
+                                    <div className="mt-2 space-y-1">
+                                        {newSpells.filter(s => s.level === 0).map(spell => (
+                                            <div key={spell.id} className="text-xs text-purple-200 bg-purple-900/40 px-2 py-1 rounded flex justify-between">
+                                                <span>{spell.name}</span>
+                                                <button onClick={() => setNewSpells(prev => prev.filter(s => s.id !== spell.id))} className="text-red-400 hover:text-red-200">×</button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* MAGIAS NIVELADAS */}
+                            {spellsToLearn > 0 && (
+                                <div>
+                                    <div className="flex justify-between items-center mb-3">
+                                        <h3 className="text-xs font-bold text-purple-300 uppercase tracking-widest border-l-4 border-purple-500 pl-3">Novas Magias</h3>
+                                        <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase ${newSpells.filter(s => s.level > 0).length < spellsToLearn ? 'bg-purple-600 text-white animate-pulse' : 'bg-gray-600 text-gray-300'}`}>
+                                            Escolha {spellsToLearn - newSpells.filter(s => s.level > 0).length}
+                                        </span>
+                                    </div>
+                                    <button
+                                        onClick={() => { setIsCantripSelection(false); setSpellModalOpen(true); }}
+                                        className="w-full p-4 border border-dashed border-purple-400/30 rounded-lg hover:bg-purple-900/20 transition-all group flex items-center justify-center gap-2"
+                                    >
+                                        <span className="text-purple-300 group-hover:text-purple-100 font-bold uppercase tracking-widest text-xs">+ Selecionar Magia</span>
+                                    </button>
+                                    <div className="mt-2 space-y-1">
+                                        {newSpells.filter(s => s.level > 0).map(spell => (
+                                            <div key={spell.id} className="text-xs text-purple-200 bg-purple-900/40 px-2 py-1 rounded flex justify-between">
+                                                <span>{spell.name}</span>
+                                                <button onClick={() => setNewSpells(prev => prev.filter(s => s.id !== spell.id))} className="text-red-400 hover:text-red-200">×</button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    )}
+
                     {/* SEÇÃO DE ATRIBUTOS (ASI) */}
                     {hasASI && (
                         <div className="bg-blue-900/10 border border-blue-500/30 rounded-lg p-5 animate-in zoom-in-95 duration-500">
@@ -75,7 +173,7 @@ const LevelUpModal: React.FC<LevelUpModalProps> = ({ isOpen, onClose, onApply, l
                                         <span className="text-[10px] sm:text-xs font-bold text-rpg-parchment uppercase">{attr.slice(0, 3)}</span>
                                         <div className="flex items-center gap-2 sm:gap-3">
                                             <button onClick={() => handleAttrChange(attr, -1)} className="w-8 h-8 sm:w-6 sm:h-6 flex items-center justify-center bg-rpg-slate rounded hover:bg-rpg-dark text-rpg-gold font-bold transition-colors">-</button>
-                                            <span className="w-4 text-center font-bold text-blue-300 text-sm sm:text-base">{attrChoices[attr]}</span>
+                                            <span className="w-4 text-center font-bold text-blue-300 text-sm sm:text-base">{(currentAttributes[attr] || 10) + attrChoices[attr]} <span className="text-[8px] text-rpg-grey">({attrChoices[attr] > 0 ? '+' + attrChoices[attr] : attrChoices[attr]})</span></span>
                                             <button onClick={() => handleAttrChange(attr, 1)} className="w-8 h-8 sm:w-6 sm:h-6 flex items-center justify-center bg-rpg-slate rounded hover:bg-rpg-dark text-rpg-gold font-bold transition-colors">+</button>
                                         </div>
                                     </div>
@@ -83,6 +181,34 @@ const LevelUpModal: React.FC<LevelUpModalProps> = ({ isOpen, onClose, onApply, l
                             </div>
                         </div>
                     )}
+
+                    {/* SEÇÃO DE ESCOLHA DE SUBCLASSE */}
+                    {canChooseSubclass && hasSubclassesAvailable && (
+                        <div className="bg-emerald-900/10 border border-emerald-500/30 rounded-lg p-5 animate-in zoom-in-95 duration-500 delay-200">
+                            <h3 className="text-xs font-bold text-emerald-300 uppercase tracking-widest border-l-4 border-emerald-500 pl-3 mb-4">
+                                Escolha seu Caminho: Subclasse
+                            </h3>
+                            <div className="grid grid-cols-1 gap-3">
+                                {Object.keys(availableSubclasses).map(subclassName => (
+                                    <button
+                                        key={subclassName}
+                                        onClick={() => setSelectedSubclass(subclassName)}
+                                        className={`p-4 rounded border text-left transition-all ${selectedSubclass === subclassName
+                                            ? 'bg-emerald-600/20 border-emerald-500 text-emerald-200 shadow-glow-emerald/20'
+                                            : 'bg-black/40 border-emerald-500/10 text-rpg-grey hover:bg-emerald-900/20 hover:text-emerald-300'
+                                            }`}
+                                    >
+                                        <div className="flex justify-between items-center mb-1">
+                                            <span className="font-bold font-medieval text-lg">{subclassName}</span>
+                                            {selectedSubclass === subclassName && <span className="text-emerald-400 font-bold">✓</span>}
+                                        </div>
+                                        {/* Poderia adicionar descrição aqui se disponível na estrutura */}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
 
                     {/* SEÇÃO DE HP */}
                     <div className="bg-rpg-red/5 border border-rpg-red/20 rounded-lg p-5">
@@ -134,7 +260,11 @@ const LevelUpModal: React.FC<LevelUpModalProps> = ({ isOpen, onClose, onApply, l
                 <div className="p-4 sm:p-6 border-t border-rpg-gold/20 flex justify-center bg-black/40 shrink-0">
                     <button
                         onClick={() => {
-                            onApply({ attributes: attrChoices, hpIncrease });
+                            if (canChooseSubclass && !selectedSubclass) {
+                                alert("Por favor, escolha uma subclasse para continuar.");
+                                return;
+                            }
+                            onApply({ attributes: attrChoices, hpIncrease, newSpells, subclass: selectedSubclass });
                             onClose();
                         }}
                         className="w-full sm:w-auto px-8 sm:px-12 py-3 bg-gradient-to-r from-rpg-gold via-yellow-400 to-rpg-gold text-rpg-dark font-black rounded shadow-[0_0_20px_rgba(255,215,0,0.3)] hover:shadow-[0_0_30px_rgba(255,215,0,0.5)] transform hover:scale-105 active:scale-95 transition-all uppercase tracking-widest text-xs sm:text-sm font-cinzel"
@@ -142,6 +272,43 @@ const LevelUpModal: React.FC<LevelUpModalProps> = ({ isOpen, onClose, onApply, l
                         Reivindicar Poder
                     </button>
                 </div>
+
+                <SpellSelectModal
+                    isOpen={spellModalOpen}
+                    onClose={() => setSpellModalOpen(false)}
+                    filterClass={charClassName}
+                    filterLevel={isCantripSelection ? 0 : (availableSpellLevel > 0 ? availableSpellLevel : undefined)}
+                    minLevel={isCantripSelection ? undefined : 1}
+                    onSelect={(spell) => {
+                        const limit = isCantripSelection ? cantripsToLearn : spellsToLearn;
+                        const currentCount = isCantripSelection ? newSpells.filter(s => s.level === 0).length : newSpells.filter(s => s.level > 0).length;
+
+                        // Validação de tipo (Magia vs Truque)
+                        if (isCantripSelection && spell.level !== 0) {
+                            alert("Por favor, selecione um Truque (Nível 0).");
+                            return;
+                        }
+                        if (!isCantripSelection && spell.level === 0) {
+                            alert("Por favor, selecione uma Magia de Nível 1 ou superior.");
+                            return;
+                        }
+
+                        if (currentCount >= limit) {
+                            alert(`Você já escolheu o limite de ${limit} ${isCantripSelection ? 'truques' : 'magias'}!`);
+                            return;
+                        }
+                        if (!newSpells.find(s => s.id === spell.id) && !currentSpells.find(s => s.id === spell.id)) {
+                            setNewSpells(prev => [...prev, spell]);
+                            setSpellModalOpen(false);
+                        } else {
+                            alert("Você já possui esta magia!");
+                        }
+                    }}
+                    onCreate={() => {
+                        // Opcional: implementar criação rápida
+                        setSpellModalOpen(false);
+                    }}
+                />
             </div>
         </div>
     );

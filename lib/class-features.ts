@@ -12,6 +12,7 @@ export interface LevelProgression {
     features: ClassFeature[];
     hitDice?: string;
     hpIncrease?: string;
+    spells?: string[]; // IDs das magias aprendidas automaticamente
 }
 
 const ASI: ClassFeature = { name: "Melhoria no Valor de Atributo", description: "Aumento de Atributo ou Talento.", isChoice: true };
@@ -379,7 +380,10 @@ export const SUBCLASSES: Record<string, Record<string, Record<number, LevelProgr
     },
     "Clérigo": {
         "Domínio da Vida": {
-            1: { features: [{ name: "Discípulo da Vida", description: "Suas magias de cura curam 2 + nível da magia extras." }, { name: "Proficiência Bônus", description: "Ganha proficiência com armaduras pesadas." }] },
+            1: {
+                features: [{ name: "Discípulo da Vida", description: "Suas magias de cura curam 2 + nível da magia extras." }, { name: "Proficiência Bônus", description: "Ganha proficiência com armaduras pesadas." }],
+                spells: ['bencao', 'curar-ferimentos']
+            },
             2: { features: [{ name: "Preservar a Vida", description: "Canalizar Divindade para curar aliados feridos." }] },
             6: { features: [{ name: "Curandeiro Abençoado", description: "Quando curar alguém, você também recupera PV." }] },
             8: { features: [{ name: "Golpe Divino", description: "+1d8 de dano radiante em ataques com arma (1/turno)." }] },

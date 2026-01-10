@@ -288,6 +288,32 @@ export const spellsDatabase: Spell[] = [
     },
     // NÍVEL 4
     {
+        id: 'dissipar-magia',
+        name: 'Dissipar Magia',
+        level: 3,
+        school: 'Abjuração',
+        castingTime: '1 ação',
+        range: '36 metros',
+        components: 'V, S',
+        duration: 'Instantânea',
+        description: 'Escolha uma criatura, objeto ou efeito mágico dentro do alcance. Qualquer magia de 3º nível ou inferior no alvo termina. Para cada magia de 4º nível ou superior no alvo, faça um teste de habilidade de conjuração. A CD é 10 + o nível da magia. Em um sucesso, a magia termina.',
+        classes: ['Mago', 'Feiticeiro', 'Clérigo', 'Druida', 'Paladino', 'Bardo', 'Bruxo'],
+        concentration: false
+    },
+    {
+        id: 'padrao-hipnotico',
+        name: 'Padrão Hipnótico',
+        level: 3,
+        school: 'Ilusão',
+        castingTime: '1 ação',
+        range: '36 metros',
+        components: 'S, M (um bastão de incenso brilhante ou um frasco de cristal cheio de material fosforescente)',
+        duration: 'Concentração, até 1 minuto',
+        description: 'Você cria um padrão distorcido de cores que se move pelo ar dentro de um cubo de 9 metros dentro do alcance. O padrão aparece por um momento e desaparece. Cada criatura na área que ver o padrão deve fazer um teste de resistência de Sabedoria. Em uma falha, a criatura fica enfeitiçada pela duração. Enquanto enfeitiçada por esta magia, a criatura fica incapacitada e tem deslocamento 0.',
+        classes: ['Bardo', 'Feiticeiro', 'Bruxo', 'Mago'],
+        concentration: true
+    },
+    {
         id: 'tempestade-de-gelo',
         name: 'Tempestade de Gelo',
         level: 4,
@@ -534,19 +560,34 @@ export async function fetchGlobalSpells(): Promise<Spell[]> {
         const spellsRef = collection(db, 'magias');
         const q = query(spellsRef, orderBy('name'));
         const snapshot = await getDocs(q);
-        return snapshot.docs.map(doc => ({
+
+        const dbSpells = snapshot.docs.map(doc => ({
             id: doc.id,
             ...doc.data()
         } as Spell));
+
+        // Mesclar com spellsDatabase (hardcoded)
+        // Preferência para o DB em caso de conflito de ID, mas garantindo que todos existam
+        const spellMap = new Map<string, Spell>();
+
+        // 1. Adicionar Hardcoded
+        spellsDatabase.forEach(spell => spellMap.set(spell.id, spell));
+
+        // 2. Adicionar/Sobrescrever com DB
+        dbSpells.forEach(spell => spellMap.set(spell.id, spell));
+
+        return Array.from(spellMap.values());
     } catch (error) {
         console.error('Erro ao buscar magias globais:', error);
-        return [];
+        // Fallback para hardcoded em caso de erro
+        return spellsDatabase;
     }
 }
 
 // Função auxiliar para buscar magias
 export function searchSpells(queryText: string, filters?: {
     level?: number;
+    minLevel?: number;
     school?: string;
     class?: string;
 }, baseSpells?: Spell[]): Spell[] {
@@ -563,7 +604,11 @@ export function searchSpells(queryText: string, filters?: {
 
     // Filtros adicionais
     if (filters?.level !== undefined) {
-        results = results.filter(spell => spell.level === filters.level);
+        results = results.filter(spell => spell.level <= filters.level);
+    }
+
+    if (filters?.minLevel !== undefined) {
+        results = results.filter(spell => spell.level >= filters.minLevel);
     }
 
     if (filters?.school) {
@@ -571,8 +616,17 @@ export function searchSpells(queryText: string, filters?: {
     }
 
     if (filters?.class) {
-        results = results.filter(spell => spell.classes.includes(filters.class));
+        const filterClassLower = filters.class.toLowerCase();
+        results = results.filter(spell =>
+            spell.classes.some(c => c.toLowerCase() === filterClassLower)
+        );
     }
+
+    // Ordenação: Nível ASC -> Nome ASC
+    results.sort((a, b) => {
+        if (a.level !== b.level) return a.level - b.level;
+        return a.name.localeCompare(b.name);
+    });
 
     return results;
 }

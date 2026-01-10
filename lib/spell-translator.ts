@@ -39,6 +39,8 @@ export const SPELL_NAMES: Record<string, string> = {
     "Ashardalon's Stride": "Passada de Ashardalon",
     "Astral Projection": "Projeção Astral",
     "Augury": "Augúrio",
+    "Aura of Life": "Aura de Vida",
+    "Aura of Purity": "Aura de Pureza",
     "Aura of Vitality": "Aura de Vitalidade",
     "Awaken": "Despertar",
 

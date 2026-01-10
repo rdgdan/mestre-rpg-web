@@ -6,9 +6,20 @@ interface SpellSelectModalProps {
   onClose: () => void;
   onSelect: (spell: Spell) => void;
   onCreate: () => void;
+  filterClass?: string;
+  filterLevel?: number;
+  minLevel?: number;
 }
 
-const SpellSelectModal: React.FC<SpellSelectModalProps> = ({ isOpen, onClose, onSelect, onCreate }) => {
+const SpellSelectModal: React.FC<SpellSelectModalProps> = ({
+  isOpen,
+  onClose,
+  onSelect,
+  onCreate,
+  filterClass,
+  filterLevel,
+  minLevel
+}) => {
   const [search, setSearch] = useState('');
   const [globalSpells, setGlobalSpells] = useState<Spell[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -23,7 +34,11 @@ const SpellSelectModal: React.FC<SpellSelectModalProps> = ({ isOpen, onClose, on
     }
   }, [isOpen]);
 
-  const filtered = searchSpells(search, {}, [...globalSpells]);
+  const filtered = searchSpells(search, {
+    class: filterClass,
+    level: filterLevel,
+    minLevel: minLevel
+  }, [...globalSpells]);
 
   if (!isOpen) return null;
   return (
@@ -42,7 +57,7 @@ const SpellSelectModal: React.FC<SpellSelectModalProps> = ({ isOpen, onClose, on
             <div key={spell.id} className="p-3 bg-rpg-slate/80 border border-rpg-gold/10 rounded-lg flex flex-col gap-1 hover:border-rpg-gold/30 transition-colors cursor-pointer" onClick={() => onSelect(spell)}>
               <div className="flex justify-between items-center">
                 <span className="font-bold text-rpg-parchment font-medieval text-lg">{spell.name}</span>
-                <span className="text-xs text-purple-300 uppercase tracking-widest font-bold">Nível {spell.level}</span>
+                <span className="text-xs text-purple-300 uppercase tracking-widest font-bold">{spell.level === 0 ? 'TRUQUE' : `Nível ${spell.level}`}</span>
               </div>
               <span className="text-xs text-rpg-grey">{spell.school}</span>
               <p className="text-xs text-rpg-grey/80 line-clamp-2">{spell.description}</p>
