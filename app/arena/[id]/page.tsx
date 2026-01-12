@@ -100,7 +100,7 @@ export default function SharedArenaPage() {
     }, []);
 
     // Helpers para renderização (definidos cedo para uso nas funções)
-    const isHost = session && user && user.uid === session.hostId;
+    const isHost = Boolean(session?.hostId && user?.uid && String(session.hostId) === String(user.uid));
     const currentCombatant = session?.combatants[session.turnIndex];
 
     const getHpStatusLabel = (c: Combatant) => {
@@ -832,6 +832,7 @@ export default function SharedArenaPage() {
                                     <input
                                         type="number"
                                         value={manualChar.level}
+                                        onFocus={(e) => e.target.select()}
                                         onChange={(e) => setManualChar({ ...manualChar, level: Number(e.target.value) })}
                                         className="w-full bg-rpg-slate border border-white/10 p-2 text-sm rounded font-medieval text-rpg-parchment outline-none focus:border-rpg-gold"
                                     />
@@ -841,6 +842,7 @@ export default function SharedArenaPage() {
                                     <input
                                         type="number"
                                         value={manualChar.hp}
+                                        onFocus={(e) => e.target.select()}
                                         onChange={(e) => setManualChar({ ...manualChar, hp: Number(e.target.value) })}
                                         className="w-full bg-rpg-slate border border-white/10 p-2 text-sm rounded font-medieval text-rpg-parchment outline-none focus:border-rpg-gold"
                                     />
@@ -850,6 +852,7 @@ export default function SharedArenaPage() {
                                     <input
                                         type="number"
                                         value={manualChar.ac}
+                                        onFocus={(e) => e.target.select()}
                                         onChange={(e) => setManualChar({ ...manualChar, ac: Number(e.target.value) })}
                                         className="w-full bg-rpg-slate border border-white/10 p-2 text-sm rounded font-medieval text-rpg-parchment outline-none focus:border-rpg-gold"
                                     />
@@ -863,6 +866,7 @@ export default function SharedArenaPage() {
                         <input
                             type="number"
                             value={joinInitiative}
+                            onFocus={(e) => e.target.select()}
                             onChange={(e) => setJoinInitiative(Number(e.target.value))}
                             className="w-full bg-rpg-slate border border-rpg-gold/10 p-3 rounded font-medieval text-rpg-parchment focus:border-rpg-gold outline-none text-2xl text-center font-bold"
                             placeholder="Resultado do dado..."
@@ -880,7 +884,7 @@ export default function SharedArenaPage() {
                         <button
                             type="button"
                             onClick={handleJoinBattle}
-                            disabled={!selectedCharId || isJoining}
+                            disabled={(!isManualJoin && !selectedCharId) || (isManualJoin && !manualChar.name) || isJoining}
                             className="bg-rpg-gold hover:bg-rpg-gold-light text-rpg-dark p-3 px-8 rounded font-bold font-cinzel shadow-glow-gold/20 transition-all disabled:opacity-50"
                         >
                             {isJoining ? 'Entrando...' : 'Entrar na Arena'}
