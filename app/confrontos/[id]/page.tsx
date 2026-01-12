@@ -14,6 +14,7 @@ import {
 import Modal from '@/components/Modal';
 import { translateMonster } from '@/lib/monster-translator';
 import { dndMonsters, MonsterData } from '@/lib/monsters-data';
+import { npcTemplates } from '@/lib/npc-combatants-data';
 
 // --- Interfaces ---
 interface StatusEffect {
@@ -72,6 +73,7 @@ export default function ConfrontoDetalhesPage() {
 
     const [isOnline, setIsOnline] = useState(false);
     const [myCharacters, setMyCharacters] = useState<any[]>([]);
+    const [customNpcs, setCustomNpcs] = useState<any[]>([]);
     const [charactersLoading, setCharactersLoading] = useState(false);
 
     // --- Estados de Busca de Monstro ---
@@ -89,27 +91,45 @@ export default function ConfrontoDetalhesPage() {
     }, [isAddModalOpen]);
 
     const filteredMonsters = useMemo(() => {
-        if (!monsterSearch) return [];
-        return dndMonsters.filter(m => {
-            const matchesSearch = m.name.toLowerCase().includes(monsterSearch.toLowerCase()) ||
-                m.type.toLowerCase().includes(monsterSearch.toLowerCase());
+        const search = (monsterSearch || '').toLowerCase().trim();
+        if (!search) return [];
 
-            if (newCombatant.type === 'npc') {
-                return matchesSearch && m.category === 'npc';
-            } else if (newCombatant.type === 'monster') {
-                return matchesSearch && m.category !== 'npc';
-            }
-            return matchesSearch;
+        if (newCombatant.type === 'npc') {
+            // Debug: Use a local fallback if imports are acting strange
+            const locals = (npcTemplates && Array.isArray(npcTemplates)) ? npcTemplates : [];
+            const customs = (customNpcs && Array.isArray(customNpcs)) ? customNpcs : [];
+
+            const combined = [...locals, ...customs];
+            return combined.filter(n => {
+                if (!n || !n.name) return false;
+                const nName = String(n.name).toLowerCase();
+                const nDesc = String(n.description || '').toLowerCase();
+                const nRace = String(n.race || '').toLowerCase();
+                const nRole = String(n.role || '').toLowerCase();
+
+                return nName.includes(search) ||
+                    nDesc.includes(search) ||
+                    nRace.includes(search) ||
+                    nRole.includes(search);
+            }).slice(0, 5);
+        }
+
+        const monsters = (dndMonsters && Array.isArray(dndMonsters)) ? dndMonsters : [];
+        return monsters.filter(m => {
+            if (!m || !m.name) return false;
+            const mName = String(m.name).toLowerCase();
+            const mType = String(m.type || '').toLowerCase();
+            return mName.includes(search) || mType.includes(search);
         }).slice(0, 5);
-    }, [monsterSearch, newCombatant.type]);
+    }, [monsterSearch, newCombatant.type, customNpcs]);
 
-    const handleSelectMonster = (monster: MonsterData) => {
+    const handleSelectMonster = (monster: any) => {
         setNewCombatant({
             ...newCombatant,
             name: monster.name,
             hp: monster.hp,
             ac: monster.ac,
-            cr: monster.challenge,
+            cr: monster.challenge || monster.cr,
             // Mantém o tipo atual (monster ou npc)
             type: newCombatant.type
         });
@@ -198,6 +218,26 @@ export default function ConfrontoDetalhesPage() {
 
         fetchChars();
     }, [user, newCombatant.type, myCharacters.length]);
+
+    // --- Carregar NPCs Customizados para aba de NPC ---
+    useEffect(() => {
+        if (!user || newCombatant.type !== 'npc' || customNpcs.length > 0) return;
+
+        const fetchNpcs = async () => {
+            try {
+                const { doc, getDoc } = await import('firebase/firestore');
+                const docRef = doc(db, 'custom_npcs', user.uid);
+                const docSnap = await getDoc(docRef);
+                if (docSnap.exists()) {
+                    setCustomNpcs(docSnap.data().npcs || []);
+                }
+            } catch (err) {
+                console.error("Erro ao carregar NPCs customizados:", err);
+            }
+        };
+
+        fetchNpcs();
+    }, [user, newCombatant.type, customNpcs.length]);
 
     // --- Sincronização Automática ---
     const syncState = async (updates: any) => {
@@ -616,25 +656,31 @@ export default function ConfrontoDetalhesPage() {
                                 </div>
 
                                 {/* Resultados da Busca */}
-                                {showMonsterResults && filteredMonsters.length > 0 && (
+                                {showMonsterResults && monsterSearch.trim().length > 0 && (
                                     <div className="absolute z-50 left-0 right-0 mt-2 bg-rpg-panel border border-rpg-gold/30 rounded-xl shadow-2xl overflow-hidden backdrop-blur-md">
-                                        {filteredMonsters.map((m, i) => (
-                                            <button
-                                                key={i}
-                                                type="button"
-                                                onClick={() => handleSelectMonster(m)}
-                                                className="w-full text-left p-4 hover:bg-rpg-gold/10 flex justify-between items-center group transition-colors border-b border-white/5 last:border-0"
-                                            >
-                                                <div>
-                                                    <div className="text-rpg-parchment font-medieval text-base group-hover:text-rpg-gold">{m.name}</div>
-                                                    <div className="text-[10px] text-rpg-grey uppercase tracking-wider">{m.type}</div>
-                                                </div>
-                                                <div className="text-right">
-                                                    <div className="text-rpg-gold font-cinzel text-xs">CR {m.challenge}</div>
-                                                    <div className="text-[10px] text-rpg-grey">{m.hp} HP | {m.ac} CA</div>
-                                                </div>
-                                            </button>
-                                        ))}
+                                        {filteredMonsters.length > 0 ? (
+                                            filteredMonsters.map((m, i) => (
+                                                <button
+                                                    key={i}
+                                                    type="button"
+                                                    onClick={() => handleSelectMonster(m)}
+                                                    className="w-full text-left p-4 hover:bg-rpg-gold/10 flex justify-between items-center group transition-colors border-b border-white/5 last:border-0"
+                                                >
+                                                    <div>
+                                                        <div className="text-rpg-parchment font-medieval text-base group-hover:text-rpg-gold">{m.name}</div>
+                                                        <div className="text-[10px] text-rpg-grey uppercase tracking-wider">{m.type || m.race || m.role}</div>
+                                                    </div>
+                                                    <div className="text-right">
+                                                        <div className="text-rpg-gold font-cinzel text-xs">CR {m.challenge}</div>
+                                                        <div className="text-[10px] text-rpg-grey">{m.hp} HP | {m.ac} CA</div>
+                                                    </div>
+                                                </button>
+                                            ))
+                                        ) : (
+                                            <div className="p-4 text-center text-rpg-grey italic border border-white/5">
+                                                Nenhum {newCombatant.type === 'monster' ? 'monstro' : 'NPC'} encontrado...
+                                            </div>
+                                        )}
                                     </div>
                                 )}
 
