@@ -9,7 +9,8 @@ import {
     doc,
     onSnapshot,
     updateDoc,
-    setDoc
+    setDoc,
+    collection
 } from 'firebase/firestore';
 import Modal from '@/components/Modal';
 import { translateMonster } from '@/lib/monster-translator';
@@ -90,16 +91,45 @@ export default function ConfrontoDetalhesPage() {
         }
     }, [isAddModalOpen]);
 
+    // --- NEW: Carregar monstros do Firestore ---
+    const [dbMonsters, setDbMonsters] = useState<any[]>([]);
+    const [dbStandardNpcs, setDbStandardNpcs] = useState<any[]>([]);
+
+    useEffect(() => {
+        // 1. Monstros
+        const qMonsters = collection(db, 'monsters');
+        const unsubMonsteers = onSnapshot(qMonsters, (snapshot) => {
+            const loaded = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            setDbMonsters(loaded);
+        });
+
+        // 2. NPCs Padrão (Guarda, Cultista, etc.)
+        const qNpcs = collection(db, 'npcs');
+        const unsubNpcs = onSnapshot(qNpcs, (snapshot) => {
+            const loaded = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            setDbStandardNpcs(loaded);
+        });
+
+        return () => {
+            unsubMonsteers();
+            unsubNpcs();
+        };
+    }, []);
+
     const filteredMonsters = useMemo(() => {
         const search = (monsterSearch || '').toLowerCase().trim();
         if (!search) return [];
 
         if (newCombatant.type === 'npc') {
-            // Debug: Use a local fallback if imports are acting strange
             const locals = (npcTemplates && Array.isArray(npcTemplates)) ? npcTemplates : [];
             const customs = (customNpcs && Array.isArray(customNpcs)) ? customNpcs : [];
 
-            const combined = [...locals, ...customs];
+            // --- MERGE LOGIC FOR NPCs: DB Standard + Custom + Local (fallback) ---
+            const dbMap = new Map(dbStandardNpcs.map(n => [n.name.toLowerCase().trim(), n]));
+            const localOnly = locals.filter(n => !dbMap.has(n.name.toLowerCase().trim()));
+
+            const combined = [...dbStandardNpcs, ...localOnly, ...customs];
+
             return combined.filter(n => {
                 if (!n || !n.name) return false;
                 const nName = String(n.name).toLowerCase();
@@ -114,14 +144,23 @@ export default function ConfrontoDetalhesPage() {
             }).slice(0, 5);
         }
 
-        const monsters = (dndMonsters && Array.isArray(dndMonsters)) ? dndMonsters : [];
-        return monsters.filter(m => {
+        // --- MERGE LOGIC: Database wins over Local ---
+        // 1. Create a map of normalized names from DB
+        const dbMap = new Map(dbMonsters.map(m => [m.name.toLowerCase().trim(), m]));
+
+        // 2. Start with local monsters, excluding those present in DB
+        const localOnly = dndMonsters.filter(m => !dbMap.has(m.name.toLowerCase().trim()));
+
+        // 3. Combine: DB Monsters + Local Monsters (not in DB)
+        const combinedMonsters = [...dbMonsters, ...localOnly];
+
+        return combinedMonsters.filter(m => {
             if (!m || !m.name) return false;
             const mName = String(m.name).toLowerCase();
             const mType = String(m.type || '').toLowerCase();
             return mName.includes(search) || mType.includes(search);
         }).slice(0, 5);
-    }, [monsterSearch, newCombatant.type, customNpcs]);
+    }, [monsterSearch, newCombatant.type, customNpcs, dbMonsters]);
 
     const handleSelectMonster = (monster: any) => {
         setNewCombatant({

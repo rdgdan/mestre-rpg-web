@@ -108,6 +108,7 @@ export const dndMonsters: MonsterData[] = [
     { name: "Urso-Coruja", hp: 59, ac: 13, challenge: "3", type: "Monstruosidade", xp: 700, dexterity: 12 },
     { name: "Wight", hp: 45, ac: 14, challenge: "3", type: "Morto-vivo", xp: 700, dexterity: 14 },
     { name: "Winter Wolf", hp: 75, ac: 13, challenge: "3", type: "Monstruosidade", xp: 700, dexterity: 13 },
+    { name: "Lobo Atroz", hp: 37, ac: 14, challenge: "1", type: "Fera", xp: 200, dexterity: 15 },
     { name: "Yeti", hp: 51, ac: 12, challenge: "3", type: "Monstruosidade", xp: 700, dexterity: 13 },
 
     // CR 4
@@ -273,28 +274,28 @@ export const dndMonsters: MonsterData[] = [
     { name: "Flesh Golem", hp: 93, ac: 9, challenge: "5", type: "Constructo", xp: 1800, dexterity: 9 },
     { name: "Stone Golem", hp: 178, ac: 17, challenge: "10", type: "Constructo", xp: 5900, dexterity: 9 },
     { name: "Iron Golem", hp: 210, ac: 20, challenge: "16", type: "Constructo", xp: 15000, dexterity: 9 },
-    { name: "Shield Guardian", hp: 142, ac: 17, challenge: "7", type: "Constructo", xp: 2900, dexterity: 8 },
+
     { name: "Wraith", hp: 67, ac: 13, challenge: "5", type: "Morto-vivo", xp: 1800, dexterity: 16 },
-    { name: "Banshee", hp: 58, ac: 12, challenge: "4", type: "Morto-vivo", xp: 1100, dexterity: 14 },
-    { name: "Wight", hp: 45, ac: 14, challenge: "3", type: "Morto-vivo", xp: 700, dexterity: 14 },
+
+
     { name: "Shadow", hp: 16, ac: 12, challenge: "1/2", type: "Morto-vivo", xp: 100, dexterity: 14 },
     { name: "Allosaurus", hp: 51, ac: 13, challenge: "2", type: "Fera", xp: 450, dexterity: 12 },
     { name: "Plesiosaurus", hp: 68, ac: 13, challenge: "2", type: "Fera", xp: 450, dexterity: 15 },
     { name: "Triceratops", hp: 95, ac: 13, challenge: "5", type: "Fera", xp: 1800, dexterity: 9 },
     { name: "Ankylosaurus", hp: 68, ac: 15, challenge: "3", type: "Fera", xp: 700, dexterity: 11 },
     { name: "Pteranodon", hp: 13, ac: 13, challenge: "1/4", type: "Fera", xp: 50, dexterity: 15 },
-    { name: "Darkmantle", hp: 22, ac: 11, challenge: "1/2", type: "Monstruosidade", xp: 100, dexterity: 12 },
-    { name: "Roper", hp: 93, ac: 20, challenge: "5", type: "Monstruosidade", xp: 1800, dexterity: 8 },
-    { name: "Rust Monster", hp: 27, ac: 14, challenge: "1/2", type: "Monstruosidade", xp: 100, dexterity: 13 },
-    { name: "Ettin", hp: 85, ac: 12, challenge: "4", type: "Gigante", xp: 1100, dexterity: 8 },
-    { name: "Cyclops", hp: 138, ac: 14, challenge: "6", type: "Gigante", xp: 2300, dexterity: 10 },
-    { name: "Fomorian", hp: 149, ac: 14, challenge: "8", type: "Gigante", xp: 3900, dexterity: 10 },
-    { name: "Djinni", hp: 161, ac: 17, challenge: "11", type: "Elemental", xp: 7200, dexterity: 15 },
-    { name: "Efreeti", hp: 200, ac: 17, challenge: "11", type: "Elemental", xp: 7200, dexterity: 12 },
-    { name: "Invisible Stalker", hp: 104, ac: 14, challenge: "6", type: "Elemental", xp: 2300, dexterity: 19 },
-    { name: "Xorn", hp: 73, ac: 19, challenge: "5", type: "Elemental", xp: 1800, dexterity: 10 },
-    { name: "Galeb Duhr", hp: 85, ac: 16, challenge: "6", type: "Elemental", xp: 2300, dexterity: 14 },
-    { name: "Azer", hp: 39, ac: 17, challenge: "2", type: "Elemental", xp: 450, dexterity: 12 },
+
+
+
+
+
+
+
+
+
+
+
+
     { name: "Mephit de Poeira", hp: 5, ac: 12, challenge: "1/2", type: "Elemental", xp: 100, dexterity: 14 },
     { name: "Mephit de Gelo", hp: 21, ac: 11, challenge: "1/2", type: "Elemental", xp: 100, dexterity: 13 },
     { name: "Mephit de Magma", hp: 22, ac: 11, challenge: "1/2", type: "Elemental", xp: 100, dexterity: 12 },
