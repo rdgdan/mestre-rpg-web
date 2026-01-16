@@ -75,141 +75,12 @@ export default function SharedArenaPage() {
     const [manualChar, setManualChar] = useState({ name: '', class: 'Guerreiro', level: 1, hp: 10, ac: 10 });
     const fileInputRef = useRef<HTMLInputElement>(null);
 
-    // Effect management for players
-    const [isEffectModalOpen, setIsEffectModalOpen] = useState(false);
-    const [cooldowns, setCooldowns] = useState<{ [key: string]: number }>({});
-    const [customEffName, setCustomEffName] = useState('');
-    const [customEffDur, setCustomEffDur] = useState(10);
+    // Host-only adjustments
     const [hpAdjustmentValues, sethpAdjustmentValues] = useState<Record<string, string>>({});
-    const [globalEffects, setGlobalEffects] = useState<GameEffectTemplate[]>([]);
-    const [isActionsModalOpen, setIsActionsModalOpen] = useState(false);
-    const [playerCombatant, setPlayerCombatant] = useState<Combatant | null>(null);
 
-    // Gera ações disponíveis baseado na classe e estado do combatante
-    const getAvailableActions = (combatant: Combatant) => {
-        const actions: { label: string; action: string; emoji: string; color: string }[] = [];
+    // Removido: ações de jogador. Agora somente mestre controla efeitos globais.
 
-        // Ações básicas
-        if (combatant.type === 'player') {
-            if (combatant.hp > 0) {
-                actions.push({ label: 'Ação Padrão', action: 'action', emoji: '⚔️', color: 'bg-blue-600' });
-                actions.push({ label: 'Ação Bônus', action: 'bonus', emoji: '✨', color: 'bg-purple-600' });
-                actions.push({ label: 'Reação', action: 'reaction', emoji: '🛡️', color: 'bg-orange-600' });
-                actions.push({ label: 'Movimento', action: 'move', emoji: '🏃', color: 'bg-green-600' });
-            }
-
-            // Ações específicas por classe
-            if (combatant.class?.toLowerCase().includes('bárbaro')) {
-                actions.push({ label: 'Entrar em Fúria', action: 'rage', emoji: '😤', color: 'bg-red-700' });
-            }
-            if (combatant.class?.toLowerCase().includes('paladino')) {
-                actions.push({ label: 'Imposição de Mãos', action: 'lay_on_hands', emoji: '✋', color: 'bg-yellow-600' });
-            }
-            if (combatant.class?.toLowerCase().includes('mago') || combatant.class?.toLowerCase().includes('bruxo') || combatant.class?.toLowerCase().includes('clérigo')) {
-                actions.push({ label: 'Lançar Magia', action: 'cast_spell', emoji: '🔮', color: 'bg-indigo-600' });
-            }
-            if (combatant.class?.toLowerCase().includes('ladino')) {
-                actions.push({ label: 'Ataque Furtivo', action: 'sneak_attack', emoji: '🗡️', color: 'bg-slate-700' });
-            }
-            if (combatant.class?.toLowerCase().includes('bardo')) {
-                actions.push({ label: 'Inspiração Bardica', action: 'bardic_inspiration', emoji: '🎵', color: 'bg-pink-600' });
-            }
-
-            // Ações de combate
-            actions.push({ label: 'Teste de Força', action: 'str_check', emoji: '💪', color: 'bg-red-600' });
-            actions.push({ label: 'Teste de Destreza', action: 'dex_check', emoji: '🎯', color: 'bg-green-600' });
-            actions.push({ label: 'Teste de Inteligência', action: 'int_check', emoji: '🧠', color: 'bg-blue-600' });
-            actions.push({ label: 'Teste de Sabedoria', action: 'wis_check', emoji: '👁️', color: 'bg-purple-600' });
-            actions.push({ label: 'Teste de Carisma', action: 'cha_check', emoji: '😊', color: 'bg-pink-600' });
-
-            // Ações de estado
-            actions.push({ label: 'Teste de Sobrevivência', action: 'death_save', emoji: '💓', color: 'bg-red-800' });
-            actions.push({ label: 'Recuperar', action: 'stabilize', emoji: '🩹', color: 'bg-green-700' });
-
-            // Estado negativo
-            if (combatant.hp <= 0) {
-                actions.push({ label: 'Caído - Teste de Morte', action: 'death_save', emoji: '💀', color: 'bg-red-900' });
-            }
-        }
-
-        return actions;
-    };
-
-    const executeAction = (combatant: Combatant, action: string) => {
-        const roll = Math.floor(Math.random() * 20) + 1;
-        let message = '';
-
-        switch (action) {
-            case 'rage':
-                message = `${combatant.name} entra em FÚRIA! (+2 dano, -2 CA) 😤`;
-                break;
-            case 'lay_on_hands':
-                message = `${combatant.name} usa Imposição de Mãos! Cura até ${combatant.level * 5} HP ✋`;
-                break;
-            case 'cast_spell':
-                message = `${combatant.name} está lançando uma magia... 🔮`;
-                break;
-            case 'sneak_attack':
-                message = `${combatant.name} tenta um Ataque Furtivo! (Rolou ${roll}) 🗡️`;
-                break;
-            case 'bardic_inspiration':
-                message = `${combatant.name} canta Inspiração Bardica! D8 para aliados 🎵`;
-                break;
-            case 'str_check':
-                message = `${combatant.name} faz Teste de Força: d20 = ${roll} 💪`;
-                break;
-            case 'dex_check':
-                message = `${combatant.name} faz Teste de Destreza: d20 = ${roll} 🎯`;
-                break;
-            case 'int_check':
-                message = `${combatant.name} faz Teste de Inteligência: d20 = ${roll} 🧠`;
-                break;
-            case 'wis_check':
-                message = `${combatant.name} faz Teste de Sabedoria: d20 = ${roll} 👁️`;
-                break;
-            case 'cha_check':
-                message = `${combatant.name} faz Teste de Carisma: d20 = ${roll} 😊`;
-                break;
-            case 'death_save': {
-                const success = roll >= 10;
-                message = `${combatant.name} faz Teste de Morte: ${success ? '✅ Sucesso!' : '❌ Falha!'} (${roll})`;
-                break;
-            }
-            case 'action':
-                message = `${combatant.name} está fazendo uma Ação Padrão... ⚔️`;
-                break;
-            case 'bonus':
-                message = `${combatant.name} usa uma Ação Bônus! ✨`;
-                break;
-            case 'reaction':
-                message = `${combatant.name} pode reagir! 🛡️`;
-                break;
-            case 'move':
-                message = `${combatant.name} se move! 🏃`;
-                break;
-            default:
-                message = `${combatant.name} faz algo...`;
-        }
-
-        alert(message);
-        setIsActionsModalOpen(false);
-    };
-
-    // Load global effects
-    useEffect(() => {
-        const loadFx = async () => {
-            try {
-                const docRef = doc(db, 'game_rules', 'effects');
-                const docSnap = await getDoc(docRef);
-                if (docSnap.exists()) {
-                    setGlobalEffects(docSnap.data().list || []);
-                }
-            } catch (err) {
-                console.error("Scale error:", err);
-            }
-        };
-        loadFx();
-    }, []);
+    // Removido: carregamento de efeitos globais para jogadores
 
     // Helpers para renderização (definidos cedo para uso nas funções)
     const isHost = Boolean(session?.hostId && user?.uid && String(session.hostId) === String(user.uid));
@@ -351,32 +222,35 @@ export default function SharedArenaPage() {
                 const encounterSnap = await getDoc(encounterRef);
                 if (encounterSnap.exists()) {
                     const encounterData = encounterSnap.data();
-                    const encounterCombatants = encounterData.combatants || [];
-                    
-                    // Verifica se o jogador já existe na encounter
-                    const existingIndex = encounterCombatants.findIndex((c: Combatant) => 
-                        c.externalId === (isManualJoin ? undefined : selectedCharId) ||
-                        (isManualJoin && c.name === manualChar.name)
-                    );
-                    
-                    // Pega o combatente que foi adicionado à arenas_online
+                    const encounterCombatants = Array.isArray(encounterData.combatants) ? encounterData.combatants : [];
+
+                    // Combatente recém-adicionado na arena
                     const newJoinedCombatant = sanitizedCombatants[sanitizedCombatants.length - 1];
-                    
+
+                    // Verifica por id/externalId
+                    const existingIndex = encounterCombatants.findIndex((c: Combatant) =>
+                        (c.externalId && newJoinedCombatant.externalId && c.externalId === newJoinedCombatant.externalId) ||
+                        c.id === newJoinedCombatant.id
+                    );
+
                     let updatedEncounterCombatants;
                     if (existingIndex > -1) {
-                        // Atualiza existente
                         updatedEncounterCombatants = [...encounterCombatants];
                         updatedEncounterCombatants[existingIndex] = newJoinedCombatant;
                     } else {
-                        // Adiciona novo
                         updatedEncounterCombatants = [...encounterCombatants, newJoinedCombatant];
                     }
-                    
-                    // Reordena por iniciativa
-                    updatedEncounterCombatants.sort((a: Combatant, b: Combatant) => b.initiative - a.initiative);
-                    
+
+                    // Dedupe por externalId/id
+                    const map = new Map<string, Combatant>();
+                    for (const c of updatedEncounterCombatants) {
+                        const key = String(c.externalId || c.id);
+                        map.set(key, c);
+                    }
+                    const deduped = Array.from(map.values()).sort((a, b) => b.initiative - a.initiative);
+
                     await updateDoc(encounterRef, {
-                        combatants: updatedEncounterCombatants
+                        combatants: deduped
                     });
                 }
             } catch (syncErr) {
@@ -456,93 +330,7 @@ export default function SharedArenaPage() {
         }
     };
 
-    const handlePlayerAddEffect = async (effectName: string, duration: number) => {
-        if (!user || !session) return;
-
-        // Encontrar o combatente do jogador
-        const myCombatantIndex = session.combatants.findIndex(c => c.ownerId === user.uid);
-        if (myCombatantIndex === -1) return;
-
-        // Verificar cooldown (prevenir cliques duplos/spam)
-        if (cooldowns[effectName] && Date.now() < cooldowns[effectName]) return;
-
-        setIsJoining(true); // Reusando estado de loading
-        try {
-            const sessionRef = doc(db, 'arenas_online', id as string);
-            const updatedCombatants = [...session.combatants];
-            const myCombatant = { ...updatedCombatants[myCombatantIndex] };
-
-            const newEffect = {
-                id: Math.random().toString(36).substr(2, 9),
-                name: effectName,
-                duration: duration
-            };
-
-            myCombatant.statusEffects = [...myCombatant.statusEffects, newEffect];
-            updatedCombatants[myCombatantIndex] = myCombatant;
-
-            const sanitizedCombatants = updatedCombatants.map(c => {
-                const clean = { ...c };
-                Object.keys(clean).forEach(key => {
-                    if (clean[key] === undefined) delete clean[key];
-                });
-                clean.statusEffects = Array.isArray(clean.statusEffects)
-                    ? clean.statusEffects.filter(e => e && e.id && e.name && typeof e.duration === 'number')
-                    : [];
-                return clean;
-            });
-            await updateDoc(sessionRef, {
-                combatants: sanitizedCombatants
-            });
-
-            setCooldowns(prev => ({ ...prev, [effectName]: Date.now() + 2000 }));
-            setIsEffectModalOpen(false);
-        } catch (err) {
-            console.error("Erro ao adicionar efeito:", err);
-        } finally {
-            setIsJoining(false);
-        }
-    };
-
-    const handleRemoveEffect = async (combatantId: string, effectId: string) => {
-        if (!user || !session) return;
-
-        // Verificar permissão: Host pode tudo, Player só no seu próprio
-        const combatant = session.combatants.find(c => c.id === combatantId);
-        if (!combatant) return;
-
-        const isMyCharacter = user.uid === combatant.ownerId;
-        if (!isHost && !isMyCharacter) return;
-
-        try {
-            const sessionRef = doc(db, 'arenas_online', id as string);
-            const updatedCombatants = session.combatants.map(c => {
-                if (c.id === combatantId) {
-                    return {
-                        ...c,
-                        statusEffects: c.statusEffects.filter(e => e.id !== effectId)
-                    };
-                }
-                return c;
-            });
-
-            const sanitizedCombatants = updatedCombatants.map(c => {
-                const clean = { ...c };
-                Object.keys(clean).forEach(key => {
-                    if (clean[key] === undefined) delete clean[key];
-                });
-                clean.statusEffects = Array.isArray(clean.statusEffects)
-                    ? clean.statusEffects.filter(e => e && e.id && e.name && typeof e.duration === 'number')
-                    : [];
-                return clean;
-            });
-            await updateDoc(sessionRef, {
-                combatants: sanitizedCombatants
-            });
-        } catch (err) {
-            console.error("Erro ao remover efeito:", err);
-        }
-    };
+    // Removidos: adicionar/remover efeitos por jogadores
 
     const handleHostAdvanceTurn = async (direction: 'next' | 'prev') => {
         // Extra guard: block any non-host from ever updating turn/round, even if they try to call this function
@@ -705,67 +493,72 @@ export default function SharedArenaPage() {
             )}
 
             {/* STATUS BAR */}
-            <section className={`bg-rpg-slate/40 border-b border-rpg-gold/10 p-4 sticky top-0 ${session.phase === 'preparation' ? 'sm:top-[74px]' : 'sm:top-0'} z-20 backdrop-blur-md transition-[top]`}>
-                <div className="container mx-auto flex justify-between items-center">
-                    <div className="flex items-center gap-8">
-                        <div className="flex flex-col">
-                            <span className="text-[10px] text-rpg-grey uppercase font-cinzel tracking-widest">Rodada</span>
-                            <span className="text-xl font-bold text-rpg-gold font-medieval">{session.round}</span>
-                        </div>
-                        <div className="flex flex-col border-l border-white/10 pl-8">
-                            <span className="text-[10px] text-rpg-grey uppercase font-cinzel tracking-widest">Turno de</span>
-                            <div className="flex items-center gap-3">
-                                {/* Botões de turno só para host */}
-                                {isHost ? (
-                                    <>
-                                        <button
-                                            onClick={() => handleHostAdvanceTurn('prev')}
-                                            className="text-rpg-gold hover:text-white transition-all scale-125"
-                                            title="Turno Anterior"
-                                        >
-                                            ◀
-                                        </button>
-                                        <span className="text-xl font-bold text-rpg-parchment font-medieval">
-                                            {currentCombatant?.name || "Aguardando"}
-                                        </span>
-                                        <button
-                                            onClick={() => handleHostAdvanceTurn('next')}
-                                            className="text-rpg-gold hover:text-white transition-all scale-125"
-                                            title="Próximo Turno"
-                                        >
-                                            ▶
-                                        </button>
-                                    </>
-                                ) : (
-                                    <span className="text-xl font-bold text-rpg-parchment font-medieval">
+            <section className={`bg-rpg-slate/40 border-b border-rpg-gold/10 sticky top-0 ${session.phase === 'preparation' ? 'sm:top-[74px]' : 'sm:top-0'} z-20 backdrop-blur-md transition-[top]`}>
+                {/* VISÃO DO MESTRE - Expandida */}
+                {isHost && (
+                    <div className="p-4">
+                        <div className="container mx-auto flex flex-col sm:flex-row justify-between items-start sm:items-center gap-6">
+                            {/* Rodada */}
+                            <div className="flex items-baseline gap-4">
+                                <div className="flex flex-col gap-1">
+                                    <span className="text-[10px] text-rpg-grey uppercase font-cinzel tracking-widest">Rodada</span>
+                                    <span className="text-3xl font-bold text-rpg-gold font-medieval">{session.round}</span>
+                                </div>
+                            </div>
+
+                            {/* Turno Atual */}
+                            <div className="flex flex-col gap-2 flex-1 sm:flex-none">
+                                <span className="text-[10px] text-rpg-grey uppercase font-cinzel tracking-widest">Turno de</span>
+                                <div className="flex items-center gap-3 bg-rpg-dark/50 border border-rpg-gold/20 rounded-lg p-3">
+                                    <button
+                                        onClick={() => handleHostAdvanceTurn('prev')}
+                                        className="text-rpg-gold hover:text-white transition-all hover:scale-125 text-xl"
+                                        title="Turno Anterior"
+                                    >
+                                        ◀
+                                    </button>
+                                    <span className="text-lg sm:text-xl font-bold text-rpg-parchment font-medieval flex-1">
                                         {currentCombatant?.name || "Aguardando"}
                                     </span>
-                                )}
-                            </div>
-                            {/* Feedback para jogadores não-host */}
-                            {!isHost && (
-                                <div className="mt-2 text-xs text-rpg-grey italic flex items-center gap-2">
-                                    <span>⏳ Aguardando o mestre avançar o turno...</span>
+                                    <button
+                                        onClick={() => handleHostAdvanceTurn('next')}
+                                        className="text-rpg-gold hover:text-white transition-all hover:scale-125 text-xl"
+                                        title="Próximo Turno"
+                                    >
+                                        ▶
+                                    </button>
                                 </div>
-                            )}
+                            </div>
                         </div>
                     </div>
-                    <div className="hidden md:block">
-                        {session.phase !== 'combat' && (
-                            <button
-                                onClick={openJoinModal}
-                                className="bg-rpg-gold hover:bg-rpg-gold-light text-rpg-dark px-4 py-1.5 rounded font-bold font-cinzel text-sm shadow-glow-gold/20 flex items-center gap-2 transition-all hover:scale-105"
-                            >
-                                <span>➕</span> Participar do Combate
-                            </button>
-                        )}
+                )}
+
+                {/* VISÃO DO JOGADOR - Compacta */}
+                {!isHost && (
+                    <div className="p-2 sm:p-3">
+                        <div className="container mx-auto flex items-center justify-between gap-3">
+                            {/* Rodada + Turno em uma linha */}
+                            <div className="flex items-center gap-4 text-sm">
+                                <div className="flex items-center gap-2">
+                                    <span className="text-[9px] text-rpg-grey uppercase font-cinzel tracking-widest font-bold">Rodada</span>
+                                    <span className="text-xl font-bold text-rpg-gold font-medieval">{session.round}</span>
+                                </div>
+                                <div className="text-white/20">|</div>
+                                <div className="flex items-center gap-2">
+                                    <span className="text-[9px] text-rpg-grey uppercase font-cinzel tracking-widest font-bold">Turno</span>
+                                    <span className="text-sm font-bold text-rpg-parchment font-medieval truncate max-w-xs">
+                                        {currentCombatant?.name || "Aguardando"}
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
                     </div>
-                </div>
+                )}
             </section>
 
             {/* COMBAT LIST */}
-            <main className="container mx-auto p-4 sm:p-8 flex-grow">
-                <div className="max-w-3xl mx-auto flex flex-col gap-3">
+            <main className="container mx-auto p-4 sm:p-6 flex-grow">
+                <div className="max-w-4xl mx-auto flex flex-col gap-4">
                     {session.combatants.map((c, index) => {
                         const isCurrent = index === session.turnIndex;
                         const isPlayer = c.type === 'player';
@@ -776,124 +569,121 @@ export default function SharedArenaPage() {
                             <div
                                 key={c.id}
                                 className={`
-                                    relative bg-rpg-panel border rounded-lg p-3 transition-all
-                                    ${session.phase === 'combat' && isCurrent ? 'border-rpg-gold ring-1 ring-rpg-gold/30 shadow-glow-gold/10 scale-[1.02]' : 'border-white/5 opacity-80'}
-                                    ${c.hp <= 0 ? 'grayscale opacity-40' : ''}
+                                    relative bg-rpg-panel border rounded-lg p-4 transition-all
+                                    ${session.phase === 'combat' && isCurrent ? 'border-rpg-gold ring-2 ring-rpg-gold/50 shadow-glow-gold/20 scale-[1.01]' : 'border-white/10 opacity-90 hover:opacity-100'}
+                                    ${c.hp <= 0 ? 'grayscale opacity-50' : ''}
                                 `}
                             >
-                                <div className="flex items-center gap-4">
+                                {/* Header com Iniciativa e Nome */}
+                                <div className="flex items-start gap-4 mb-4">
                                     {/* Iniciativa */}
-                                    <div className="w-10 h-10 rounded bg-rpg-slate border border-rpg-gold/20 flex flex-col items-center justify-center shrink-0">
-                                        <span className="text-[8px] text-rpg-grey font-cinzel leading-none uppercase">Ini</span>
-                                        <span className="text-lg font-bold font-medieval text-rpg-gold">{c.initiative}</span>
+                                    <div className="w-14 h-14 rounded-lg bg-rpg-slate/60 border border-rpg-gold/40 flex flex-col items-center justify-center shrink-0 shadow-sm">
+                                        <span className="text-[9px] text-rpg-grey font-cinzel leading-none uppercase font-bold">Ini</span>
+                                        <span className="text-2xl font-bold font-medieval text-rpg-gold mt-1">{c.initiative}</span>
                                     </div>
 
-                                    {/* Info */}
+                                    {/* Info do Combatente */}
                                     <div className="flex-grow min-w-0">
-                                        <div className="flex items-center gap-2 mb-1">
-                                            <h3 className="text-xl font-bold font-medieval text-rpg-parchment truncate">
+                                        <div className="flex flex-wrap items-center gap-2 mb-2">
+                                            <h3 className="text-xl sm:text-2xl font-bold font-medieval text-rpg-parchment truncate">
                                                 {c.name}
                                             </h3>
-                                            <span className={`px-2 py-0.5 rounded text-[8px] uppercase font-bold tracking-widest border
-                                                ${c.type === 'monster' ? 'bg-red-900/30 text-red-100 border-red-500/30' :
-                                                    c.type === 'npc' ? 'bg-blue-900/30 text-blue-100 border-blue-500/30' :
-                                                        'bg-rpg-gold/20 text-rpg-gold border-rpg-gold/30'}`}>
-                                                {c.type === 'monster' ? '?' : c.type === 'npc' ? 'NPC' : 'Herói'}
+                                            <span className={`px-2.5 py-1 rounded text-[9px] uppercase font-bold tracking-widest border
+                                                ${c.type === 'monster' ? 'bg-red-900/40 text-red-200 border-red-500/40' :
+                                                    c.type === 'npc' ? 'bg-blue-900/40 text-blue-200 border-blue-500/40' :
+                                                        'bg-rpg-gold/30 text-rpg-gold border-rpg-gold/50'}`}>
+                                                {c.type === 'monster' ? '🗡️ MONSTRO' : c.type === 'npc' ? '🤖 NPC' : '🛡️ HERÓI'}
                                             </span>
                                             {c.externalId && (
                                                 <Link
                                                     href={`/personagem/${c.externalId}`}
                                                     target="_blank"
-                                                    className="text-[8px] text-rpg-gold hover:text-white uppercase font-bold border border-rpg-gold/20 px-2 py-0.5 rounded ml-2"
+                                                    className="text-[9px] text-rpg-gold hover:text-white uppercase font-bold border border-rpg-gold/40 hover:border-rpg-gold px-2 py-1 rounded ml-auto transition-all"
                                                 >
                                                     👁️ Ficha
                                                 </Link>
                                             )}
-                                            {isOwnHero && (
-                                                <>
-                                                    <button
-                                                        onClick={() => {
-                                                            setPlayerCombatant(c);
-                                                            setIsActionsModalOpen(true);
-                                                        }}
-                                                        className="text-[8px] bg-blue-900/20 text-blue-400 hover:bg-blue-900/40 uppercase font-bold border border-blue-500/20 px-2 py-0.5 rounded ml-1"
-                                                    >
-                                                        ⚡ Ações
-                                                    </button>
-                                                    <button
-                                                        onClick={() => setIsEffectModalOpen(true)}
-                                                        className="text-[8px] bg-purple-900/20 text-purple-400 hover:bg-purple-900/40 uppercase font-bold border border-purple-500/20 px-2 py-0.5 rounded ml-1"
-                                                    >
-                                                        ✨ Ativar Efeito
-                                                    </button>
-                                                </>
-                                            )}
                                         </div>
 
-                                        <div className="flex flex-wrap gap-1">
-                                            {c.statusEffects.map(eff => (
-                                                <div key={eff.id} className="group relative">
-                                                    <span className="text-[9px] bg-purple-900/30 text-purple-200 px-1.5 py-0.5 rounded border border-purple-500/20 flex items-center gap-1">
+                                        {/* Efeitos Ativos */}
+                                        {c.statusEffects.length > 0 && (
+                                            <div className="flex flex-wrap gap-2 mb-3">
+                                                {c.statusEffects.map(eff => (
+                                                    <span
+                                                        key={eff.id}
+                                                        className="text-[9px] bg-purple-900/40 text-purple-200 px-2.5 py-1 rounded border border-purple-500/40 inline-flex items-center gap-1 font-cinzel"
+                                                    >
                                                         ✨ {eff.name} ({eff.duration})
-                                                        {(isOwnHero || isHost) && (
-                                                            <button
-                                                                onClick={() => handleRemoveEffect(c.id, eff.id)}
-                                                                className="ml-1 text-red-400 hover:text-red-200 opacity-0 group-hover:opacity-100 transition-opacity"
-                                                                title="Encerrar Efeito"
-                                                            >
-                                                                ✕
-                                                            </button>
-                                                        )}
                                                     </span>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </div>
-
-                                    {/* HP BAR & Status */}
-                                    <div className="flex items-center gap-3">
-                                        {showFullHP ? (
-                                            // VISÃO COMPLETA (Mestre ou Dono do Personagem)
-                                            <div className="w-32 md:w-48 shrink-0">
-                                                <div className="flex justify-between items-center mb-1">
-                                                    <span className="text-[10px] uppercase font-cinzel text-rpg-grey">{getHpStatusLabel(c)}</span>
-                                                    <span className="text-[10px] font-bold text-rpg-parchment">{c.hp}/{c.maxHp}</span>
-                                                </div>
-                                                <div className="h-1.5 bg-black/40 rounded-full border border-white/5 overflow-hidden">
-                                                    <div
-                                                        className={`h-full transition-all duration-500 ${c.hp / c.maxHp > 0.5 ? 'bg-green-600' : c.hp / c.maxHp > 0.2 ? 'bg-yellow-600' : 'bg-red-600'}`}
-                                                        style={{ width: `${(c.hp / c.maxHp) * 100}%` }}
-                                                    ></div>
-                                                </div>
-                                                {/* Botões de HP só para host */}
-                                                {isHost && (
-                                                    <div className="flex items-center gap-1 bg-black/40 rounded border border-white/10 p-1 mt-2">
-                                                        <input
-                                                            type="number"
-                                                            placeholder="0"
-                                                            value={hpAdjustmentValues[c.id] || ''}
-                                                            onChange={(e) => sethpAdjustmentValues(prev => ({ ...prev, [c.id]: e.target.value }))}
-                                                            onKeyDown={(e) => {
-                                                                if (e.key === 'Enter') {
-                                                                    handleHostUpdateHp(c.id, -1);
-                                                                }
-                                                            }}
-                                                            className="w-10 h-6 bg-rpg-slate/50 border border-white/5 rounded px-1 text-[10px] text-center focus:border-rpg-gold outline-none font-medieval [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                                                        />
-                                                        <button onClick={() => handleHostUpdateHp(c.id, -1)} className="w-6 h-6 flex items-center justify-center text-red-500 hover:bg-red-500/10 transition-all font-bold text-sm">-</button>
-                                                        <button onClick={() => handleHostUpdateHp(c.id, 1)} className="w-6 h-6 flex items-center justify-center text-green-500 hover:bg-green-500/10 transition-all font-bold text-sm border-l border-white/10">+</button>
-                                                    </div>
-                                                )}
-                                            </div>
-                                        ) : (
-                                            // VISÃO LIMITADA (Jogador vendo Monstro/NPC/Outro Jogador)
-                                            <div className="w-32 md:w-48 flex items-center justify-end">
-                                                <span className="text-sm font-cinzel text-rpg-grey italic tracking-widest bg-rpg-slate/50 px-3 py-1 rounded-md border border-white/10">
-                                                    {getHpStatusLabel(c)}
-                                                </span>
+                                                ))}
                                             </div>
                                         )}
                                     </div>
+                                </div>
+
+                                {/* HP Bar e Status */}
+                                <div className="mt-4 pt-4 border-t border-white/10">
+                                    {showFullHP ? (
+                                        // VISÃO COMPLETA (Mestre ou Dono)
+                                        <div className="space-y-3">
+                                            <div>
+                                                <div className="flex justify-between items-center mb-1.5">
+                                                    <span className="text-[10px] uppercase font-cinzel text-rpg-grey font-bold">{getHpStatusLabel(c)}</span>
+                                                    <span className="text-sm font-bold text-rpg-parchment font-medieval">{c.hp} / {c.maxHp}</span>
+                                                </div>
+                                                <div className="h-2.5 bg-rpg-slate/40 rounded-full border border-white/10 overflow-hidden shadow-inner">
+                                                    <div
+                                                        className={`h-full transition-all duration-500 rounded-full ${
+                                                            c.hp / c.maxHp > 0.5
+                                                                ? 'bg-gradient-to-r from-green-600 to-green-400'
+                                                                : c.hp / c.maxHp > 0.2
+                                                                ? 'bg-gradient-to-r from-yellow-600 to-yellow-400'
+                                                                : 'bg-gradient-to-r from-red-600 to-red-400'
+                                                        }`}
+                                                        style={{ width: `${(c.hp / c.maxHp) * 100}%` }}
+                                                    ></div>
+                                                </div>
+                                            </div>
+
+                                            {/* Ajustes de HP (Host Only) */}
+                                            {isHost && (
+                                                <div className="flex items-center gap-2 bg-rpg-slate/30 rounded-lg border border-white/5 p-2">
+                                                    <input
+                                                        type="number"
+                                                        placeholder="Dano/Cura"
+                                                        value={hpAdjustmentValues[c.id] || ''}
+                                                        onChange={(e) => sethpAdjustmentValues(prev => ({ ...prev, [c.id]: e.target.value }))}
+                                                        onKeyDown={(e) => {
+                                                            if (e.key === 'Enter') {
+                                                                const value = parseInt(hpAdjustmentValues[c.id] || '0');
+                                                                if (value) handleHostUpdateHp(c.id, -value);
+                                                            }
+                                                        }}
+                                                        className="flex-1 max-w-20 h-8 bg-rpg-dark/50 border border-white/10 rounded px-2 text-xs text-center focus:border-rpg-gold outline-none font-medieval"
+                                                    />
+                                                    <button
+                                                        onClick={() => {
+                                                            const value = parseInt(hpAdjustmentValues[c.id] || '0');
+                                                            if (value) {
+                                                                handleHostUpdateHp(c.id, -value);
+                                                                sethpAdjustmentValues(prev => ({ ...prev, [c.id]: '' }));
+                                                            }
+                                                        }}
+                                                        className="h-8 px-3 flex items-center justify-center text-red-400 hover:bg-red-900/40 transition-all font-bold text-sm border border-red-500/30 rounded hover:border-red-500"
+                                                    >
+                                                        ✓ Aplicar
+                                                    </button>
+                                                </div>
+                                            )}
+                                        </div>
+                                    ) : (
+                                        // VISÃO LIMITADA
+                                        <div className="flex items-center justify-center p-3 bg-rpg-slate/30 rounded-lg border border-white/5">
+                                            <span className="text-sm font-cinzel text-rpg-grey italic uppercase tracking-widest font-bold">
+                                                {getHpStatusLabel(c)}
+                                            </span>
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         );
@@ -1055,101 +845,7 @@ export default function SharedArenaPage() {
                 </div>
             </Modal>
 
-            {/* MODAL EFEITOS (Para Jogadores) */}
-            <Modal isOpen={isEffectModalOpen} onClose={() => setIsEffectModalOpen(false)} title="Ativar Magia / Habilidade">
-                <div className="space-y-4">
-                    <p className="text-xs text-rpg-grey italic mb-2">Escolha o efeito que você ativou na mesa real:</p>
-
-                    <div className="grid grid-cols-2 gap-2 max-h-40 overflow-y-auto pr-1 custom-scrollbar">
-                        {globalEffects.map(eff => (
-                            <button
-                                key={eff.name}
-                                onClick={() => handlePlayerAddEffect(eff.name, eff.duration)}
-                                className="bg-rpg-slate border border-white/5 p-2 rounded text-[10px] font-cinzel text-rpg-parchment hover:border-purple-500/50 hover:bg-purple-900/10 transition-all text-left flex items-center gap-2"
-                            >
-                                <span className="text-purple-400">✨</span> {eff.name}
-                            </button>
-                        ))}
-                    </div>
-
-                    <div className="border-t border-white/5 pt-4">
-                        <label className="block text-[10px] uppercase font-cinzel text-rpg-grey mb-2">Efeito Personalizado</label>
-                        <div className="flex flex-col gap-2">
-                            <div className="flex gap-2">
-                                <input
-                                    type="text"
-                                    list="online-effects-list"
-                                    value={customEffName}
-                                    onChange={(e) => {
-                                        const val = e.target.value;
-                                        setCustomEffName(val);
-                                        const matching = globalEffects.find(f => f.name === val);
-                                        if (matching) setCustomEffDur(matching.duration);
-                                    }}
-                                    className="flex-grow bg-rpg-slate border border-white/10 p-2 rounded text-xs text-rpg-parchment outline-none focus:border-purple-500"
-                                    placeholder="Procure ou digite..."
-                                />
-                                <datalist id="online-effects-list">
-                                    {globalEffects.map(f => (
-                                        <option key={f.name} value={f.name}>{f.name}</option>
-                                    ))}
-                                </datalist>
-                                <div className="w-20">
-                                    <input
-                                        type="number"
-                                        value={customEffDur}
-                                        onChange={(e) => setCustomEffDur(Number(e.target.value))}
-                                        className="w-full bg-rpg-slate border border-white/10 p-2 rounded text-xs text-rpg-parchment outline-none focus:border-purple-500 text-center"
-                                        placeholder="Rodadas"
-                                    />
-                                </div>
-                            </div>
-                            <button
-                                onClick={() => {
-                                    if (customEffName) {
-                                        handlePlayerAddEffect(customEffName, customEffDur);
-                                        setCustomEffName('');
-                                    }
-                                }}
-                                disabled={!customEffName || (cooldowns[customEffName] && Date.now() < cooldowns[customEffName])}
-                                className="bg-purple-700 hover:bg-purple-600 text-white px-4 py-2 rounded text-[10px] font-bold uppercase transition-all disabled:opacity-50"
-                            >
-                                Adicionar Efeito
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </Modal>
-
-            {/* MODAL AÇÕES */}
-            <Modal isOpen={isActionsModalOpen} onClose={() => setIsActionsModalOpen(false)} title={`⚡ Ações de ${playerCombatant?.name || 'Herói'}`}>
-                {playerCombatant && (
-                    <div className="space-y-4">
-                        <p className="text-sm text-rpg-grey mb-6 text-center font-medieval">
-                            {playerCombatant.class} - Nível {playerCombatant.level} | HP: {playerCombatant.hp}/{playerCombatant.maxHp}
-                        </p>
-                        
-                        <div className="grid grid-cols-2 gap-3">
-                            {getAvailableActions(playerCombatant).map((action, idx) => (
-                                <button
-                                    key={idx}
-                                    onClick={() => executeAction(playerCombatant, action.action)}
-                                    className={`${action.color} hover:opacity-90 text-white p-4 rounded-lg font-bold font-cinzel text-sm transition-all transform hover:scale-105 active:scale-95 shadow-lg border border-white/20 flex flex-col items-center gap-2`}
-                                >
-                                    <span className="text-2xl">{action.emoji}</span>
-                                    <span className="text-xs text-center leading-tight">{action.label}</span>
-                                </button>
-                            ))}
-                        </div>
-
-                        <div className="mt-6 p-4 bg-rpg-slate/50 rounded-lg border border-rpg-gold/10">
-                            <p className="text-xs text-rpg-grey text-center italic">
-                                💡 As ações aparecem baseadas na classe do seu personagem. Comunique com o mestre sobre o resultado!
-                            </p>
-                        </div>
-                    </div>
-                )}
-            </Modal>
+            {/* Removidos: modais de ações e efeitos do jogador */}
         </div>
     );
 }

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import Link from 'next/link';
 import { useRouter, useParams } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
@@ -48,6 +48,17 @@ export default function ConfrontoDetalhesPage() {
     const params = useParams();
     const id = params.id as string;
 
+    // Garantir unicidade por `externalId` (preferência) ou `id`
+    const dedupeCombatants = (arr: Combatant[]) => {
+        const map = new Map<string, Combatant>();
+        for (const c of arr || []) {
+            const key = String(c.externalId || c.id);
+            // o último vence (dados mais recentes)
+            map.set(key, c);
+        }
+        return Array.from(map.values());
+    };
+
     // --- Estados Principais ---
     const [phase, setPhase] = useState<'preparation' | 'initiative' | 'combat'>('preparation');
     const [combatants, setCombatants] = useState<Combatant[]>([]);
@@ -59,6 +70,9 @@ export default function ConfrontoDetalhesPage() {
     // --- Modais ---
     const [isAddModalOpen, setIsAddModalOpen] = useState(false);
     const [isXPModalOpen, setIsXPModalOpen] = useState(false);
+    const [isClassFxOpen, setIsClassFxOpen] = useState(false);
+    const [classFxTarget, setClassFxTarget] = useState<Combatant | null>(null);
+    const [characterInfo, setCharacterInfo] = useState<Record<string, { class: string; level: number }>>({});
     const [hpAdjustmentValues, sethpAdjustmentValues] = useState<Record<string, string>>({});
 
     // --- Novo Combatente Form ---
@@ -96,6 +110,62 @@ export default function ConfrontoDetalhesPage() {
     // --- NEW: Carregar monstros do Firestore ---
     const [dbMonsters, setDbMonsters] = useState<any[]>([]);
     const [dbStandardNpcs, setDbStandardNpcs] = useState<any[]>([]);
+
+    // Efeitos específicos por classe D&D
+    const CLASS_EFFECTS: Record<string, StatusEffect[]> = {
+        'Bárbaro': [
+            { id: 'rage', name: 'Fúria', duration: 10 },
+            { id: 'reckless', name: 'Ataque Temerário', duration: 1 },
+        ],
+        'Bardo': [
+            { id: 'inspiration', name: 'Inspiração Bárdica', duration: 10 },
+            { id: 'counter-charm', name: 'Contra-encanto', duration: 1 },
+        ],
+        'Clérigo': [
+            { id: 'bless', name: 'Bênção', duration: 10 },
+            { id: 'sanctuary', name: 'Santuário', duration: 1 },
+            { id: 'shield-faith', name: 'Escudo da Fé', duration: 10 },
+        ],
+        'Druida': [
+            { id: 'wild-shape', name: 'Forma Selvagem', duration: 10 },
+            { id: 'barkskin', name: 'Pele de Árvore', duration: 10 },
+        ],
+        'Guerreiro': [
+            { id: 'action-surge', name: 'Surto de Ação', duration: 1 },
+            { id: 'second-wind', name: 'Retomada de Fôlego', duration: 1 },
+            { id: 'indomitable', name: 'Indomável', duration: 1 },
+        ],
+        'Ladino': [
+            { id: 'evasion', name: 'Evasão', duration: 1 },
+            { id: 'uncanny-dodge', name: 'Esquiva Sobrenatural', duration: 1 },
+        ],
+        'Monge': [
+            { id: 'flurry', name: 'Rajada de Golpes', duration: 1 },
+            { id: 'patient-defense', name: 'Defesa Paciente', duration: 1 },
+            { id: 'stunning-strike', name: 'Ataque Atordoante', duration: 1 },
+        ],
+        'Paladino': [
+            { id: 'lay-hands', name: 'Mãos Curadoras', duration: 1 },
+            { id: 'divine-smite', name: 'Destruição Divina', duration: 1 },
+            { id: 'aura-protection', name: 'Aura de Proteção', duration: 10 },
+        ],
+        'Patrulheiro': [
+            { id: 'hunters-mark', name: 'Marca do Caçador', duration: 10 },
+            { id: 'favored-foe', name: 'Inimigo Favorito', duration: 10 },
+        ],
+        'Feiticeiro': [
+            { id: 'metamagic', name: 'Metamagia', duration: 1 },
+            { id: 'tides-chaos', name: 'Marés do Caos', duration: 1 },
+        ],
+        'Bruxo': [
+            { id: 'hex', name: 'Maldição', duration: 10 },
+            { id: 'invocation', name: 'Invocação Mística', duration: 10 },
+        ],
+        'Mago': [
+            { id: 'arcane-recovery', name: 'Recuperação Arcana', duration: 1 },
+            { id: 'spell-mastery', name: 'Mestria em Magia', duration: 1 },
+        ],
+    };
 
     useEffect(() => {
         // 1. Monstros
@@ -202,7 +272,7 @@ export default function ConfrontoDetalhesPage() {
             if (docSnap.exists()) {
                 const data = docSnap.data();
                 setEncounterTitle(data.title || 'Encontro');
-                setCombatants(data.combatants || []);
+                setCombatants(dedupeCombatants(data.combatants || []));
                 setPhase(data.phase || 'preparation');
                 setRound(data.round || 1);
                 setTurnIndex(data.turnIndex || 0);
@@ -247,7 +317,7 @@ export default function ConfrontoDetalhesPage() {
                         }
                     });
                     
-                    return merged;
+                    return dedupeCombatants(merged);
                 });
             }
         }, (err) => {
@@ -317,8 +387,46 @@ export default function ConfrontoDetalhesPage() {
         fetchNpcs();
     }, [user, newCombatant.type, customNpcs.length]);
 
+    // --- Carregar informações de classe dos personagens jogadores ---
+    useEffect(() => {
+        if (loading) return;
+
+        const playerCombatants = combatants.filter(c => c.type === 'player' && c.externalId);
+        const missingIds = playerCombatants
+            .map(c => c.externalId!)
+            .filter(id => !characterInfo[id]);
+
+        if (missingIds.length === 0) return;
+
+        const fetchCharacterData = async () => {
+            const newInfo: Record<string, { class: string; level: number }> = {};
+            
+            for (const charId of missingIds) {
+                try {
+                    const docRef = doc(db, 'personagens', charId);
+                    const docSnap = await getDoc(docRef);
+                    if (docSnap.exists()) {
+                        const data = docSnap.data();
+                        newInfo[charId] = {
+                            class: data.class || 'Guerreiro',
+                            level: data.level || 1
+                        };
+                    }
+                } catch (err) {
+                    console.error(`Erro ao buscar personagem ${charId}:`, err);
+                }
+            }
+
+            if (Object.keys(newInfo).length > 0) {
+                setCharacterInfo(prev => ({ ...prev, ...newInfo }));
+            }
+        };
+
+        fetchCharacterData();
+    }, [combatants, loading, characterInfo]);
+
     // --- Sincronização Automática ---
-    const syncState = async (updates: any) => {
+    const syncState = useCallback(async (updates: any) => {
         if (!id) return;
         try {
             // Sanitiza o objeto updates para remover campos undefined
@@ -329,6 +437,10 @@ export default function ConfrontoDetalhesPage() {
                 }
             });
 
+            // Dedupe antes de salvar
+            if (sanitizedUpdates.combatants) {
+                sanitizedUpdates.combatants = dedupeCombatants(sanitizedUpdates.combatants);
+            }
             await updateDoc(doc(db, 'encounters', id), sanitizedUpdates);
 
             // Se a arena estiver online, sincroniza com a coleção de sessões compartilhadas
@@ -356,7 +468,7 @@ export default function ConfrontoDetalhesPage() {
                 }
 
                 // Sanitiza combatentes para o Firestore
-                const sanitizedCombatants = mergedCombatants.map((c: any) => {
+                const sanitizedCombatants = dedupeCombatants(mergedCombatants).map((c: any) => {
                     const clean = { ...c };
                     Object.keys(clean).forEach(key => {
                         if (clean[key] === undefined) delete clean[key];
@@ -387,7 +499,7 @@ export default function ConfrontoDetalhesPage() {
         } catch (err) {
             console.error("Erro ao sincronizar:", err);
         }
-    };
+    }, [id, isOnline, user?.uid, phase, round, turnIndex]);
 
     // --- Ações de Combate ---
     const handleAddCombatant = async (e: React.FormEvent) => {
@@ -499,6 +611,30 @@ export default function ConfrontoDetalhesPage() {
     const finishCombat = () => {
         setIsXPModalOpen(true);
     };
+
+    // --- Efeitos de Classe (Individual) ---
+    const applyClassEffectToCombatant = useCallback(async (combatantId: string, effect: StatusEffect) => {
+        const updated = combatants.map(c => {
+            if (c.id !== combatantId) return c;
+            const has = Array.isArray(c.statusEffects) && c.statusEffects.some(se => se.id === effect.id);
+            if (has) return c; // evita duplicata
+            return { ...c, statusEffects: [...(c.statusEffects || []), effect] } as Combatant;
+        });
+        setCombatants(updated);
+        await syncState({ combatants: updated });
+    }, [combatants, syncState]);
+
+    const removeClassEffectFromCombatant = useCallback(async (combatantId: string, effectId: string) => {
+        const updated = combatants.map(c => {
+            if (c.id !== combatantId) return c;
+            return {
+                ...c,
+                statusEffects: (c.statusEffects || []).filter(se => se.id !== effectId)
+            } as Combatant;
+        });
+        setCombatants(updated);
+        await syncState({ combatants: updated });
+    }, [combatants, syncState]);
 
     const toggleOnlineCombat = async () => {
         if (!user || !id) return;
@@ -654,7 +790,7 @@ export default function ConfrontoDetalhesPage() {
                 <div className="grid grid-cols-1 gap-3 sm:gap-4 max-w-4xl mx-auto">
                     {combatants.map((c, index) => (
                         <div
-                            key={c.id}
+                            key={String(c.externalId || c.id)}
                             className={`
                                 relative p-3 sm:p-5 rounded-xl border-2 transition-all duration-300
                                 ${phase === 'combat' && turnIndex === index ? 'bg-rpg-gold/15 border-rpg-gold shadow-glow-gold/20 scale-[1.01] z-10' : 'bg-rpg-panel/80 border-rpg-gold/10 shadow-lg'}
@@ -675,11 +811,32 @@ export default function ConfrontoDetalhesPage() {
                                             {c.ac && <span className="bg-rpg-dark/50 px-1.5 py-0.5 rounded border border-white/5">CA {c.ac}</span>}
                                             {c.cr && <span className="bg-rpg-dark/50 px-1.5 py-0.5 rounded border border-white/5">CR {c.cr}</span>}
                                         </div>
+                                        {/* Efeitos Ativos */}
+                                        {c.statusEffects && c.statusEffects.length > 0 && (
+                                            <div className="flex flex-wrap gap-1.5 mt-2">
+                                                {c.statusEffects.map((fx) => (
+                                                    <div
+                                                        key={fx.id}
+                                                        className="group/fx flex items-center gap-1 px-2 py-1 rounded-md bg-purple-900/30 border border-purple-500/40 text-purple-300 text-[9px] sm:text-[10px] font-bold"
+                                                    >
+                                                        <span>{fx.name}</span>
+                                                        <button
+                                                            onClick={() => removeClassEffectFromCombatant(c.id, fx.id)}
+                                                            className="opacity-50 group-hover/fx:opacity-100 hover:text-red-400 transition-all"
+                                                            title="Remover efeito"
+                                                        >
+                                                            ×
+                                                        </button>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
 
-                                <div className="flex items-center gap-3 sm:gap-5 w-full sm:w-auto mt-2 sm:mt-0 pt-3 sm:pt-0 border-t border-white/5 sm:border-0">
-                                    <div className="flex-1 sm:w-56">
+                                <div className="flex flex-col gap-3 w-full pt-3 border-t border-white/5">
+                                    {/* Barra de Vida */}
+                                    <div className="w-full">
                                         <div className="flex justify-between text-[10px] sm:text-xs font-bold mb-1.5 font-medieval tracking-widest">
                                             <span className="text-rpg-grey">VIDA: <span className="text-rpg-parchment">{c.hp} / {c.maxHp}</span></span>
                                             <span className={c.hp / c.maxHp < 0.3 ? 'text-red-500 animate-pulse' : 'text-rpg-grey'}>{Math.round((c.hp / c.maxHp) * 100)}%</span>
@@ -692,7 +849,55 @@ export default function ConfrontoDetalhesPage() {
                                         </div>
                                     </div>
 
-                                    <div className="flex gap-1.5 sm:gap-2 shrink-0">
+                                    {/* Botões de Controle - Embaixo */}
+                                    <div className="flex gap-1.5 sm:gap-2 items-center justify-start flex-wrap">
+                                        {c.type === 'player' && (
+                                            <button
+                                                onClick={() => {
+                                                    setClassFxTarget(c);
+                                                    setIsClassFxOpen(true);
+                                                }}
+                                                className="w-10 h-10 sm:w-11 sm:h-11 rounded-lg bg-indigo-900/20 border border-indigo-500/40 text-indigo-300 hover:bg-indigo-900/40 transition-all text-sm active:scale-95 shadow-sm flex items-center justify-center"
+                                                title="Efeitos de Classe"
+                                            >
+                                                ✨
+                                            </button>
+                                        )}
+                                        
+                                        {/* Input Dano Rápido */}
+                                        <div className="flex gap-1 items-center bg-rpg-dark/30 rounded-lg border border-white/5 px-2 py-1.5">
+                                            <input
+                                                type="number"
+                                                inputMode="numeric"
+                                                placeholder="Dano"
+                                                value={hpAdjustmentValues[c.id] || ''}
+                                                onChange={(e) => sethpAdjustmentValues(prev => ({ ...prev, [c.id]: e.target.value }))}
+                                                onKeyDown={(e) => {
+                                                    if (e.key === 'Enter') {
+                                                        const value = parseInt(hpAdjustmentValues[c.id] || '0');
+                                                        if (value) {
+                                                            updateHP(c.id, -value);
+                                                            sethpAdjustmentValues(prev => ({ ...prev, [c.id]: '' }));
+                                                        }
+                                                    }
+                                                }}
+                                                className="w-14 h-10 bg-rpg-dark/50 border border-white/10 rounded px-2 text-sm text-center focus:border-rpg-gold outline-none font-medieval text-white font-bold"
+                                            />
+                                            <button
+                                                onClick={() => {
+                                                    const value = parseInt(hpAdjustmentValues[c.id] || '0');
+                                                    if (value) {
+                                                        updateHP(c.id, -value);
+                                                        sethpAdjustmentValues(prev => ({ ...prev, [c.id]: '' }));
+                                                    }
+                                                }}
+                                                className="h-10 px-3 flex items-center justify-center text-red-400 hover:bg-red-900/40 transition-all font-bold text-sm rounded active:scale-95"
+                                                title="Aplicar Dano"
+                                            >
+                                                ✓
+                                            </button>
+                                        </div>
+                                        
                                         <button
                                             onClick={() => updateHP(c.id, -5)}
                                             className="w-10 h-10 sm:w-11 sm:h-11 rounded-lg bg-red-900/20 border border-red-500/40 text-red-400 hover:bg-red-900/40 transition-all font-bold text-lg active:scale-95 shadow-sm"
@@ -973,6 +1178,80 @@ export default function ConfrontoDetalhesPage() {
                     </div>
                 </div>
             </Modal>
+
+            {/* Modal Efeitos de Classe (Individual) */}
+            <Modal 
+                isOpen={isClassFxOpen} 
+                onClose={() => {
+                    setIsClassFxOpen(false);
+                    setClassFxTarget(null);
+                }} 
+                title={`Efeitos • ${classFxTarget?.name || ''}`}
+            >
+                <div className="space-y-3">
+                    {(() => {
+                        const charClass = classFxTarget?.externalId ? characterInfo[classFxTarget.externalId]?.class : undefined;
+                        const availableEffects = charClass ? (CLASS_EFFECTS[charClass] || []) : [];
+                        const charLevel = classFxTarget?.externalId ? characterInfo[classFxTarget.externalId]?.level : undefined;
+
+                        if (!charClass || availableEffects.length === 0) {
+                            return (
+                                <div className="text-center py-4 px-2">
+                                    <div className="text-3xl mb-2 opacity-30">🎭</div>
+                                    <p className="text-rpg-grey text-xs italic">
+                                        {!charClass 
+                                            ? 'Carregando...'
+                                            : 'Nenhum efeito disponível.'}
+                                    </p>
+                                </div>
+                            );
+                        }
+
+                        return (
+                            <>
+                                <div className="text-center pb-2 border-b border-white/10 mb-2">
+                                    <div className="text-rpg-gold font-cinzel text-xs tracking-widest uppercase">{charClass}</div>
+                                    {charLevel && <div className="text-rpg-grey text-[9px] mt-0.5">Nível {charLevel}</div>}
+                                </div>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-60 overflow-y-auto pr-2">
+                                    {availableEffects.map((fx) => {
+                                        const hasEffect = classFxTarget?.statusEffects?.some(se => se.id === fx.id);
+                                        return (
+                                            <div key={fx.id} className="p-2 rounded-lg bg-rpg-panel border border-white/10">
+                                                <div className="text-rpg-parchment font-cinzel text-[11px] sm:text-xs mb-1.5 leading-tight">{fx.name}</div>
+                                                <div className="flex gap-1">
+                                                    <button
+                                                        onClick={() => {
+                                                            applyClassEffectToCombatant(classFxTarget!.id, fx);
+                                                        }}
+                                                        disabled={hasEffect}
+                                                        className={`flex-1 px-2 py-1.5 rounded text-[10px] font-bold transition-all active:scale-95 ${
+                                                            hasEffect 
+                                                                ? 'bg-gray-700 text-gray-400 cursor-not-allowed opacity-50'
+                                                                : 'bg-green-700 text-white hover:bg-green-600'
+                                                        }`}
+                                                    >
+                                                        {hasEffect ? 'Ativo' : 'Aplicar'}
+                                                    </button>
+                                                    {hasEffect && (
+                                                        <button
+                                                            onClick={() => removeClassEffectFromCombatant(classFxTarget!.id, fx.id)}
+                                                            className="flex-1 bg-red-800 text-white px-2 py-1.5 rounded text-[10px] hover:bg-red-700 transition-all active:scale-95 font-bold"
+                                                        >
+                                                            ✕
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </>
+                        );
+                    })()}
+                </div>
+            </Modal>
         </div>
     );
 }
+
