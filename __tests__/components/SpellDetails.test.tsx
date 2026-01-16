@@ -32,7 +32,7 @@ describe('SpellDetails', () => {
 
     expect(screen.getByText('Fireball')).toBeInTheDocument();
     expect(screen.getByText(/Nível 3/)).toBeInTheDocument();
-    expect(screen.getByText('Evocation')).toBeInTheDocument();
+    expect(screen.getByText(/Evocation/)).toBeInTheDocument();
   });
 
   it('should render null when spell is null', () => {
@@ -43,7 +43,7 @@ describe('SpellDetails', () => {
       />
     );
 
-    expect(container.firstChild).toBeEmptyDOMElement();
+    expect(container.firstChild).toBeNull();
   });
 
   it('should display spell components', () => {

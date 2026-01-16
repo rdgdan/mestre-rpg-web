@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
+import { logger } from '@/lib/logger';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { Campaign } from '@/types/campaign';
 
@@ -131,7 +132,7 @@ export default function CampaignOracle({ campaign }: CampaignOracleProps) {
                     successModel = modelName;
                     break; // Sucesso! Sai do loop
                 } catch (innerErr: any) {
-                    console.warn(`Falha no modelo ${modelName}:`, innerErr.message);
+                    logger.warn(`Falha no modelo ${modelName}:`, innerErr.message);
                     // Continua para o próximo modelo
                 }
             }

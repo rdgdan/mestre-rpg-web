@@ -2,6 +2,7 @@
 "use client";
 
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { logger } from '@/lib/logger';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { doc, getDoc, setDoc, getDocs, collection, writeBatch } from 'firebase/firestore';
@@ -674,7 +675,7 @@ export default function CharacterSheetPage() {
                                 const wNameNormalized = normalizeStr(w.name);
                                 const matches = allWeapons.filter(gi => normalizeStr(gi.name) === wNameNormalized);
 
-                                console.log(`[DEBUG] Buscando Arma: "${w.name}" (Normalizado: "${wNameNormalized}")`);
+                                logger.debug(`Buscando Arma: "${w.name}" (Normalizado: "${wNameNormalized}")`);
                                 if (matches.length > 0) {
                                     // Prioridade: code > database
                                     const match = matches.find(m => (m as any).origin === 'code') ||
@@ -682,17 +683,17 @@ export default function CharacterSheetPage() {
                                         matches[0];
 
                                     if (matches.length > 1) {
-                                        console.warn(`[AVISO] Múltiplos registros para "${w.name}":`, matches.map(m => (m as any).origin));
+                                        logger.warn(`[AVISO] Múltiplos registros para "${w.name}":`, matches.map(m => ((m as any).origin)));
                                     }
 
-                                    console.log(`[DEBUG] Correspondência ENCONTRADA (${(match as any).origin || 'unknown'}):`, match);
+                                    logger.debug("Correspondência ENCONTRADA (${(match as any).origin || 'unknown'}):", match);
                                     const p = parseDmg(match.damage || '1d8');
                                     needsUpdate = true;
 
                                     const oldWeight = w.weight || 0;
                                     const newWeight = match.weight || 0;
                                     if (oldWeight !== newWeight) {
-                                        console.log(`[DEBUG] Corrigindo Peso de "${w.name}": ${oldWeight} -> ${newWeight}`);
+                                        logger.debug(`Corrigindo Peso de "${w.name}": ${oldWeight} -> ${newWeight}`);
                                     }
 
                                     // ESTRATÉGIA: Pega tudo do banco/código, mas mantém o que é específico do import
@@ -718,7 +719,7 @@ export default function CharacterSheetPage() {
                                 // Removido o guard para sempre tentar enriquecer por nome (preferência por dados oficiais)
                                 const match = allEquipment.find(gi => normalizeStr(gi.name) === normalizeStr(e.name));
                                 if (match) {
-                                    console.log(`[DEBUG] Equipamento ENCONTRADO (${(match as any).origin || 'unknown'}):`, match);
+                                    logger.debug("Equipamento ENCONTRADO (${(match as any).origin || 'unknown'}):", match);
                                     needsUpdate = true;
                                     return {
                                         ...e,

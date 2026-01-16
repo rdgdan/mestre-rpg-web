@@ -1,4 +1,5 @@
 import { db } from './firebase';
+import { logger } from '@/lib/logger';
 import { collection, doc, setDoc, getDoc, updateDoc, deleteDoc, arrayUnion, query, where, getDocs } from 'firebase/firestore';
 import { ParsedMechanic } from './dnd-parser';
 
@@ -288,7 +289,7 @@ export class ArchiveStorage {
                     }
                 }
             } catch (err) {
-                console.warn(`[Cleanup] Coleção ${sourceCol} possivelmente não existe ou erro:`, err);
+                logger.warn(`[Cleanup] Coleção ${sourceCol} possivelmente não existe ou erro:`, err);
             }
         }
 
@@ -433,7 +434,7 @@ export class ArchiveStorage {
             if (!html) return '';
             return html.replace(/<[^>]*>?/gm, '')
                 .replace(/&nbsp;/g, ' ')
-                .replace(/@Compendium\[[^\]]*\]\{([^\}]*)\}/g, '$1'); // Limpa links do Foundry
+                .replace(/@Compendium\[[^\]]*\]{([^}]*)}}/g, '$1'); // Limpa links do Foundry
         };
 
         // Tenta busca exata, case-insensitive ou base name
@@ -442,7 +443,7 @@ export class ArchiveStorage {
         if (!translation) {
             const original = (mechanic.originalName || mechanic.name).toLowerCase();
             // Regex para remover (Source) no fim
-            const baseName = original.replace(/\s*\([^\)]+\)$/, '').trim();
+            const baseName = original.replace(/\s*\([^)]+\)$/, '').trim();
 
             const key = Object.keys(dictionary).find(k => {
                 const kLower = k.toLowerCase();
@@ -465,7 +466,7 @@ export class ArchiveStorage {
         if (mechanic.name.includes('(')) {
             return {
                 ...mechanic,
-                name: mechanic.name.replace(/\s*\([^\)]+\)$/, '').trim()
+                name: mechanic.name.replace(/\s*\([^)]+\)$/, '').trim()
             };
         }
 

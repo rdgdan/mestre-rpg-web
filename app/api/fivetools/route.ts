@@ -31,10 +31,11 @@ export async function GET(req: NextRequest) {
         let items: any[] = [];
 
         switch (type) {
-            case 'spells':
+            case 'spells': {
                 const spellData = await fetchJson(`${FIVETOOLS_BASE}/spells/spells-phb.json`);
                 items = spellData?.spell || [];
                 break;
+            }
 
             case 'classes':
             case 'monsters': {
@@ -57,20 +58,23 @@ export async function GET(req: NextRequest) {
                 break;
             }
 
-            case 'races':
+            case 'races': {
                 const racesData = await fetchJson(`${FIVETOOLS_BASE}/races.json`);
                 items = racesData?.race || [];
                 break;
+            }
 
-            case 'items':
+            case 'items': {
                 const itemsData = await fetchJson(`${FIVETOOLS_BASE}/items.json`);
                 items = itemsData?.item || itemsData?.baseitem || [];
                 break;
+            }
 
-            case 'rules':
+            case 'rules': {
                 const rulesData = await fetchJson(`${FIVETOOLS_BASE}/variantrules.json`);
                 items = rulesData?.variantrule || [];
                 break;
+            }
 
             default:
                 return NextResponse.json({ error: 'Tipo inválido' }, { status: 400 });

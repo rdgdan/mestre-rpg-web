@@ -1,5 +1,6 @@
 // Sistema de progressão de XP para D&D 5e
 import { db } from './firebase';
+import { logger } from '@/lib/logger';
 import { collection, getDocs, writeBatch, doc, deleteDoc } from 'firebase/firestore';
 
 // Tabela oficial de XP por nível do D&D 5e
@@ -118,7 +119,7 @@ export async function removeDuplicatesFromFirestore(collectionName: string): Pro
             const normalizedName = data.name?.toLowerCase().trim();
 
             if (!normalizedName) {
-                console.warn(`Documento sem nome em ${collectionName}:`, docSnap.id);
+                logger.warn(`Documento sem nome em ${collectionName}:`, docSnap.id);
                 return;
             }
 

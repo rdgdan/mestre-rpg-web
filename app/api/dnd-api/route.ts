@@ -36,16 +36,17 @@ export async function GET(req: NextRequest) {
         let items: any[] = [];
 
         switch (type) {
-            case 'spells':
+            case 'spells': {
                 const spellPromises = SPELL_FILES.map(file => fetchJson(`${FIVETOOLS_BASE}/spells/${file}`));
                 const spellResults = await Promise.all(spellPromises);
                 items = spellResults
                     .filter(result => result && result.spell) // Filtra falhas e arquivos sem a propriedade 'spell'
                     .flatMap(result => result.spell);
                 break;
+            }
 
             case 'classes':
-            case 'monsters':
+            case 'monsters': {
                 const indexUrl = `${FIVETOOLS_BASE}/${type === 'classes' ? 'class' : 'bestiary'}/index.json`;
                 const indexData = await fetchJson(indexUrl);
                 if (indexData) {
@@ -58,11 +59,12 @@ export async function GET(req: NextRequest) {
                         .flatMap(result => result[propName]);
                 }
                 break;
+            }
 
             case 'races':
             case 'items':
             case 'equipment':
-            case 'rules':
+            case 'rules': {
                 const singleFileUrl = type === 'rules'
                     ? `${FIVETOOLS_BASE}/variantrules.json`
                     : type === 'equipment'
@@ -75,6 +77,7 @@ export async function GET(req: NextRequest) {
                     if (type === 'rules') items = singleFileData.variantrule || [];
                 }
                 break;
+            }
 
             default:
                 return NextResponse.json({ error: 'Tipo inválido' }, { status: 400 });
