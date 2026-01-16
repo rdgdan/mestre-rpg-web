@@ -1,0 +1,18 @@
+#!/bin/bash
+# Pre-commit hook para executar lint e type-check
+
+echo "🔍 Executando lint..."
+npm run lint
+LINT_EXIT=$?
+
+echo "📝 Verificando tipos..."
+npm run type-check
+TYPE_EXIT=$?
+
+if [ $LINT_EXIT -ne 0 ] || [ $TYPE_EXIT -ne 0 ]; then
+  echo "❌ Commit abortado. Corrija os erros acima."
+  exit 1
+fi
+
+echo "✅ Validações passaram!"
+exit 0

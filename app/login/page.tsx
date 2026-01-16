@@ -4,6 +4,7 @@ import { useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { signInWithEmailAndPassword, GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
+import { logger } from '@/lib/logger';
 import Link from 'next/link';
 
 function LoginContent() {
@@ -37,9 +38,7 @@ function LoginContent() {
       await signInWithPopup(auth, provider);
       router.push(redirectUrl);
     } catch (error: any) {
-      console.error("Erro no Login Google:", error);
-      console.error("Code:", error.code);
-      console.error("Message:", error.message);
+      logger.error('Erro no Login Google', { code: error.code, message: error.message });
       setError(`Erro no Login Google: ${error.code} - ${error.message}`);
     }
   };

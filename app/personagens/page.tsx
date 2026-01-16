@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import { db } from '@/lib/firebase';
+import { logger } from '@/lib/logger';
 import {
   collection,
   addDoc,
@@ -52,7 +53,7 @@ export default function CharacterListPage() {
         setCharacters(charsData);
         setIsLoading(false);
       }, (error) => {
-        console.error("Erro ao buscar personagens:", error);
+        logger.error('Erro ao buscar personagens', error);
         setIsLoading(false);
       });
 
@@ -92,11 +93,11 @@ export default function CharacterListPage() {
       const characterData = mapImportedDataToCharacter(jsonData, user.uid, ''); // Passa imageUrl vazia
 
       const newCharDoc = await addDoc(collection(db, 'personagens'), characterData);
-      console.log("Personagem importado com sucesso! ID:", newCharDoc.id);
+      logger.info('Personagem importado com sucesso!', { id: newCharDoc.id });
       alert("Personagem importado com sucesso!");
 
     } catch (error) {
-      console.error("Erro ao importar personagem:", error);
+      logger.error('Erro ao importar personagem', error);
       alert(`Não foi possível importar o personagem. Verifique o console para mais detalhes.`);
     } finally {
       setIsLoading(false);
@@ -119,7 +120,7 @@ export default function CharacterListPage() {
     try {
       await deleteDoc(doc(db, 'personagens', id));
     } catch (error) {
-      console.error("Erro ao deletar personagem:", error);
+      logger.error('Erro ao deletar personagem', error);
       alert("Não foi possível apagar o personagem. Tente novamente.");
     }
   };
