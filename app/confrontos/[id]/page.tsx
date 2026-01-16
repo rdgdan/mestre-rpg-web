@@ -10,7 +10,8 @@ import {
     onSnapshot,
     updateDoc,
     setDoc,
-    collection
+    collection,
+    getDoc
 } from 'firebase/firestore';
 import Modal from '@/components/Modal';
 import { translateMonster } from '@/lib/monster-translator';
@@ -218,6 +219,43 @@ export default function ConfrontoDetalhesPage() {
         return () => unsubscribe();
     }, [user, id, router, authLoading]);
 
+    // --- Sincronizar Jogadores que Entraram via Arena ---
+    useEffect(() => {
+        if (!id || !isOnline) return;
+
+        const arenaRef = doc(db, 'arenas_online', id);
+        const unsubscribe = onSnapshot(arenaRef, (arenaSnap) => {
+            if (arenaSnap.exists()) {
+                const arenaCombatants = arenaSnap.data().combatants || [];
+                
+                // Mescla combatentes: mantém os da encounters, mas atualiza/adiciona os de arenas_online
+                setCombatants((currentCombatants) => {
+                    const merged = [...currentCombatants];
+                    
+                    arenaCombatants.forEach((arenaComb: Combatant) => {
+                        const existingIndex = merged.findIndex(c => 
+                            c.id === arenaComb.id || c.externalId === arenaComb.externalId
+                        );
+                        
+                        if (existingIndex > -1) {
+                            // Atualiza existente com dados da arena (ex: HP, status)
+                            merged[existingIndex] = { ...merged[existingIndex], ...arenaComb };
+                        } else {
+                            // Adiciona novo (jogador que entrou via arena)
+                            merged.push(arenaComb);
+                        }
+                    });
+                    
+                    return merged;
+                });
+            }
+        }, (err) => {
+            console.warn("Erro ao sincronizar arenas_online:", err);
+        });
+
+        return () => unsubscribe();
+    }, [id, isOnline]);
+
     // --- Sincronização Proativa (Observador de Estado) ---
     useEffect(() => {
         if (!isOnline || !id || loading) return;
@@ -282,15 +320,42 @@ export default function ConfrontoDetalhesPage() {
     const syncState = async (updates: any) => {
         if (!id) return;
         try {
-            await updateDoc(doc(db, 'encounters', id), updates);
+            // Sanitiza o objeto updates para remover campos undefined
+            const sanitizedUpdates = { ...updates };
+            Object.keys(sanitizedUpdates).forEach(key => {
+                if (sanitizedUpdates[key] === undefined) {
+                    delete sanitizedUpdates[key];
+                }
+            });
+
+            await updateDoc(doc(db, 'encounters', id), sanitizedUpdates);
 
             // Se a arena estiver online, sincroniza com a coleção de sessões compartilhadas
             if (isOnline || updates.isOnline) {
                 const sessionRef = doc(db, 'arenas_online', id);
 
+                // Obtém combatentes atuais do arenas_online para manter jogadores que entraram via arena
+                let mergedCombatants = updates.combatants || combatants || [];
+                try {
+                    const arenaSnap = await getDoc(sessionRef);
+                    if (arenaSnap.exists()) {
+                        const arenaCombatants = arenaSnap.data().combatants || [];
+                        // Adiciona combatentes que só existem em arenas_online (jogadores que entraram via arena)
+                        arenaCombatants.forEach((arenaComb: any) => {
+                            const exists = mergedCombatants.findIndex((c: any) => 
+                                c.id === arenaComb.id || c.externalId === arenaComb.externalId
+                            );
+                            if (exists === -1) {
+                                mergedCombatants.push(arenaComb);
+                            }
+                        });
+                    }
+                } catch (err) {
+                    console.warn("Não foi possível ler arenas_online para merge", err);
+                }
+
                 // Sanitiza combatentes para o Firestore
-                const currentCombatants = updates.combatants || combatants;
-                const sanitizedCombatants = currentCombatants.map((c: any) => {
+                const sanitizedCombatants = mergedCombatants.map((c: any) => {
                     const clean = { ...c };
                     Object.keys(clean).forEach(key => {
                         if (clean[key] === undefined) delete clean[key];
@@ -301,6 +366,9 @@ export default function ConfrontoDetalhesPage() {
 
                     return clean;
                 });
+
+                // Reordena por iniciativa
+                sanitizedCombatants.sort((a: any, b: any) => b.initiative - a.initiative);
 
                 if (user?.uid) {
                     await setDoc(sessionRef, {
@@ -333,11 +401,13 @@ export default function ConfrontoDetalhesPage() {
             ac: Number(newCombatant.ac) || 10,
             cr: newCombatant.cr || '0',
             status: 'active',
-            statusEffects: [],
-            externalId: newCombatant.externalId || undefined,
-            ownerId: newCombatant.ownerId || undefined,
-            ownerName: newCombatant.ownerName || undefined
+            statusEffects: []
         };
+
+        // Adiciona apenas campos opcionais se tiverem valores
+        if (newCombatant.externalId) newEntry.externalId = newCombatant.externalId;
+        if (newCombatant.ownerId) newEntry.ownerId = newCombatant.ownerId;
+        if (newCombatant.ownerName) newEntry.ownerName = newCombatant.ownerName;
 
         const updated = [...combatants, newEntry];
         setCombatants(updated);
@@ -377,7 +447,22 @@ export default function ConfrontoDetalhesPage() {
     };
 
     const startCombat = async () => {
-        const sorted = [...combatants].sort((a, b) => b.initiative - a.initiative);
+        // Rolar iniciativas dos monstros e NPCs
+        const updatedCombatants = combatants.map(c => {
+            if (c.type === 'monster' || c.type === 'npc') {
+                // Rolar d20 + modificador de DEX (assumindo DEX)
+                const roll = Math.floor(Math.random() * 20) + 1; // d20
+                const dexMod = -1; // Modificador genérico (pode ser melhorado)
+                return {
+                    ...c,
+                    initiative: roll + dexMod
+                };
+            }
+            // Jogadores mantêm iniciativa manual
+            return c;
+        });
+
+        const sorted = [...updatedCombatants].sort((a, b) => b.initiative - a.initiative);
         setCombatants(sorted);
         setPhase('combat');
         setRound(1);

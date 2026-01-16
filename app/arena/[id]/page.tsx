@@ -82,6 +82,118 @@ export default function SharedArenaPage() {
     const [customEffDur, setCustomEffDur] = useState(10);
     const [hpAdjustmentValues, sethpAdjustmentValues] = useState<Record<string, string>>({});
     const [globalEffects, setGlobalEffects] = useState<GameEffectTemplate[]>([]);
+    const [isActionsModalOpen, setIsActionsModalOpen] = useState(false);
+    const [playerCombatant, setPlayerCombatant] = useState<Combatant | null>(null);
+
+    // Gera ações disponíveis baseado na classe e estado do combatante
+    const getAvailableActions = (combatant: Combatant) => {
+        const actions: { label: string; action: string; emoji: string; color: string }[] = [];
+
+        // Ações básicas
+        if (combatant.type === 'player') {
+            if (combatant.hp > 0) {
+                actions.push({ label: 'Ação Padrão', action: 'action', emoji: '⚔️', color: 'bg-blue-600' });
+                actions.push({ label: 'Ação Bônus', action: 'bonus', emoji: '✨', color: 'bg-purple-600' });
+                actions.push({ label: 'Reação', action: 'reaction', emoji: '🛡️', color: 'bg-orange-600' });
+                actions.push({ label: 'Movimento', action: 'move', emoji: '🏃', color: 'bg-green-600' });
+            }
+
+            // Ações específicas por classe
+            if (combatant.class?.toLowerCase().includes('bárbaro')) {
+                actions.push({ label: 'Entrar em Fúria', action: 'rage', emoji: '😤', color: 'bg-red-700' });
+            }
+            if (combatant.class?.toLowerCase().includes('paladino')) {
+                actions.push({ label: 'Imposição de Mãos', action: 'lay_on_hands', emoji: '✋', color: 'bg-yellow-600' });
+            }
+            if (combatant.class?.toLowerCase().includes('mago') || combatant.class?.toLowerCase().includes('bruxo') || combatant.class?.toLowerCase().includes('clérigo')) {
+                actions.push({ label: 'Lançar Magia', action: 'cast_spell', emoji: '🔮', color: 'bg-indigo-600' });
+            }
+            if (combatant.class?.toLowerCase().includes('ladino')) {
+                actions.push({ label: 'Ataque Furtivo', action: 'sneak_attack', emoji: '🗡️', color: 'bg-slate-700' });
+            }
+            if (combatant.class?.toLowerCase().includes('bardo')) {
+                actions.push({ label: 'Inspiração Bardica', action: 'bardic_inspiration', emoji: '🎵', color: 'bg-pink-600' });
+            }
+
+            // Ações de combate
+            actions.push({ label: 'Teste de Força', action: 'str_check', emoji: '💪', color: 'bg-red-600' });
+            actions.push({ label: 'Teste de Destreza', action: 'dex_check', emoji: '🎯', color: 'bg-green-600' });
+            actions.push({ label: 'Teste de Inteligência', action: 'int_check', emoji: '🧠', color: 'bg-blue-600' });
+            actions.push({ label: 'Teste de Sabedoria', action: 'wis_check', emoji: '👁️', color: 'bg-purple-600' });
+            actions.push({ label: 'Teste de Carisma', action: 'cha_check', emoji: '😊', color: 'bg-pink-600' });
+
+            // Ações de estado
+            actions.push({ label: 'Teste de Sobrevivência', action: 'death_save', emoji: '💓', color: 'bg-red-800' });
+            actions.push({ label: 'Recuperar', action: 'stabilize', emoji: '🩹', color: 'bg-green-700' });
+
+            // Estado negativo
+            if (combatant.hp <= 0) {
+                actions.push({ label: 'Caído - Teste de Morte', action: 'death_save', emoji: '💀', color: 'bg-red-900' });
+            }
+        }
+
+        return actions;
+    };
+
+    const executeAction = (combatant: Combatant, action: string) => {
+        const roll = Math.floor(Math.random() * 20) + 1;
+        let message = '';
+
+        switch (action) {
+            case 'rage':
+                message = `${combatant.name} entra em FÚRIA! (+2 dano, -2 CA) 😤`;
+                break;
+            case 'lay_on_hands':
+                message = `${combatant.name} usa Imposição de Mãos! Cura até ${combatant.level * 5} HP ✋`;
+                break;
+            case 'cast_spell':
+                message = `${combatant.name} está lançando uma magia... 🔮`;
+                break;
+            case 'sneak_attack':
+                message = `${combatant.name} tenta um Ataque Furtivo! (Rolou ${roll}) 🗡️`;
+                break;
+            case 'bardic_inspiration':
+                message = `${combatant.name} canta Inspiração Bardica! D8 para aliados 🎵`;
+                break;
+            case 'str_check':
+                message = `${combatant.name} faz Teste de Força: d20 = ${roll} 💪`;
+                break;
+            case 'dex_check':
+                message = `${combatant.name} faz Teste de Destreza: d20 = ${roll} 🎯`;
+                break;
+            case 'int_check':
+                message = `${combatant.name} faz Teste de Inteligência: d20 = ${roll} 🧠`;
+                break;
+            case 'wis_check':
+                message = `${combatant.name} faz Teste de Sabedoria: d20 = ${roll} 👁️`;
+                break;
+            case 'cha_check':
+                message = `${combatant.name} faz Teste de Carisma: d20 = ${roll} 😊`;
+                break;
+            case 'death_save': {
+                const success = roll >= 10;
+                message = `${combatant.name} faz Teste de Morte: ${success ? '✅ Sucesso!' : '❌ Falha!'} (${roll})`;
+                break;
+            }
+            case 'action':
+                message = `${combatant.name} está fazendo uma Ação Padrão... ⚔️`;
+                break;
+            case 'bonus':
+                message = `${combatant.name} usa uma Ação Bônus! ✨`;
+                break;
+            case 'reaction':
+                message = `${combatant.name} pode reagir! 🛡️`;
+                break;
+            case 'move':
+                message = `${combatant.name} se move! 🏃`;
+                break;
+            default:
+                message = `${combatant.name} faz algo...`;
+        }
+
+        alert(message);
+        setIsActionsModalOpen(false);
+    };
 
     // Load global effects
     useEffect(() => {
@@ -153,7 +265,7 @@ export default function SharedArenaPage() {
         setIsJoining(true);
         try {
             const sessionRef = doc(db, 'arenas_online', id as string);
-            let updatedCombatants = [...session.combatants];
+            const updatedCombatants = [...session.combatants];
 
             if (isManualJoin) {
                 // Criação de personagem temporário
@@ -232,6 +344,45 @@ export default function SharedArenaPage() {
             await updateDoc(sessionRef, {
                 combatants: sanitizedCombatants
             });
+
+            // Sincroniza com 'encounters' para o mestre ver o jogador entrar
+            try {
+                const encounterRef = doc(db, 'encounters', id as string);
+                const encounterSnap = await getDoc(encounterRef);
+                if (encounterSnap.exists()) {
+                    const encounterData = encounterSnap.data();
+                    const encounterCombatants = encounterData.combatants || [];
+                    
+                    // Verifica se o jogador já existe na encounter
+                    const existingIndex = encounterCombatants.findIndex((c: Combatant) => 
+                        c.externalId === (isManualJoin ? undefined : selectedCharId) ||
+                        (isManualJoin && c.name === manualChar.name)
+                    );
+                    
+                    // Pega o combatente que foi adicionado à arenas_online
+                    const newJoinedCombatant = sanitizedCombatants[sanitizedCombatants.length - 1];
+                    
+                    let updatedEncounterCombatants;
+                    if (existingIndex > -1) {
+                        // Atualiza existente
+                        updatedEncounterCombatants = [...encounterCombatants];
+                        updatedEncounterCombatants[existingIndex] = newJoinedCombatant;
+                    } else {
+                        // Adiciona novo
+                        updatedEncounterCombatants = [...encounterCombatants, newJoinedCombatant];
+                    }
+                    
+                    // Reordena por iniciativa
+                    updatedEncounterCombatants.sort((a: Combatant, b: Combatant) => b.initiative - a.initiative);
+                    
+                    await updateDoc(encounterRef, {
+                        combatants: updatedEncounterCombatants
+                    });
+                }
+            } catch (syncErr) {
+                console.warn("Não foi possível sincronizar com encounters (sessão pode não estar iniciada)", syncErr);
+                // Não falha se encounters não existir - mestre pode ter criado apenas arena
+            }
 
             setIsJoinModalOpen(false);
             alert("Você entrou na batalha!");
@@ -659,12 +810,23 @@ export default function SharedArenaPage() {
                                                 </Link>
                                             )}
                                             {isOwnHero && (
-                                                <button
-                                                    onClick={() => setIsEffectModalOpen(true)}
-                                                    className="text-[8px] bg-purple-900/20 text-purple-400 hover:bg-purple-900/40 uppercase font-bold border border-purple-500/20 px-2 py-0.5 rounded ml-1"
-                                                >
-                                                    ✨ Ativar Efeito
-                                                </button>
+                                                <>
+                                                    <button
+                                                        onClick={() => {
+                                                            setPlayerCombatant(c);
+                                                            setIsActionsModalOpen(true);
+                                                        }}
+                                                        className="text-[8px] bg-blue-900/20 text-blue-400 hover:bg-blue-900/40 uppercase font-bold border border-blue-500/20 px-2 py-0.5 rounded ml-1"
+                                                    >
+                                                        ⚡ Ações
+                                                    </button>
+                                                    <button
+                                                        onClick={() => setIsEffectModalOpen(true)}
+                                                        className="text-[8px] bg-purple-900/20 text-purple-400 hover:bg-purple-900/40 uppercase font-bold border border-purple-500/20 px-2 py-0.5 rounded ml-1"
+                                                    >
+                                                        ✨ Ativar Efeito
+                                                    </button>
+                                                </>
                                             )}
                                         </div>
 
@@ -957,6 +1119,36 @@ export default function SharedArenaPage() {
                         </div>
                     </div>
                 </div>
+            </Modal>
+
+            {/* MODAL AÇÕES */}
+            <Modal isOpen={isActionsModalOpen} onClose={() => setIsActionsModalOpen(false)} title={`⚡ Ações de ${playerCombatant?.name || 'Herói'}`}>
+                {playerCombatant && (
+                    <div className="space-y-4">
+                        <p className="text-sm text-rpg-grey mb-6 text-center font-medieval">
+                            {playerCombatant.class} - Nível {playerCombatant.level} | HP: {playerCombatant.hp}/{playerCombatant.maxHp}
+                        </p>
+                        
+                        <div className="grid grid-cols-2 gap-3">
+                            {getAvailableActions(playerCombatant).map((action, idx) => (
+                                <button
+                                    key={idx}
+                                    onClick={() => executeAction(playerCombatant, action.action)}
+                                    className={`${action.color} hover:opacity-90 text-white p-4 rounded-lg font-bold font-cinzel text-sm transition-all transform hover:scale-105 active:scale-95 shadow-lg border border-white/20 flex flex-col items-center gap-2`}
+                                >
+                                    <span className="text-2xl">{action.emoji}</span>
+                                    <span className="text-xs text-center leading-tight">{action.label}</span>
+                                </button>
+                            ))}
+                        </div>
+
+                        <div className="mt-6 p-4 bg-rpg-slate/50 rounded-lg border border-rpg-gold/10">
+                            <p className="text-xs text-rpg-grey text-center italic">
+                                💡 As ações aparecem baseadas na classe do seu personagem. Comunique com o mestre sobre o resultado!
+                            </p>
+                        </div>
+                    </div>
+                )}
             </Modal>
         </div>
     );
