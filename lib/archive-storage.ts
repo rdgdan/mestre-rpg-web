@@ -100,13 +100,13 @@ export class ArchiveStorage {
     }
 
     private static async saveMonster(name: string, originalName: string, content: string, source: string, metadata?: any) {
-        const exists = await this.checkDuplicate('monstros', name, originalName);
+        const exists = await this.checkDuplicate('monsters', name, originalName);
         if (exists) {
             console.log(`Monstro "${name}" (${originalName}) já existe, pulando...`);
             return false;
         }
 
-        const monsterRef = doc(collection(db, 'monstros'));
+        const monsterRef = doc(collection(db, 'monsters'));
         await setDoc(monsterRef, {
             name: name.charAt(0).toUpperCase() + name.slice(1),
             nameLower: name.toLowerCase(),
@@ -208,8 +208,8 @@ export class ArchiveStorage {
             'magias': 'magias',
             'items': 'itens',
             'itens': 'itens',
-            'monsters': 'monstros',
-            'monstros': 'monstros',
+            'monsters': 'monsters',
+            'monstros': 'monsters',
             'classes': 'classes',
             'races': 'races'
         };
@@ -330,7 +330,7 @@ export class ArchiveStorage {
         const mapping = [
             { col: 'magias', url: 'https://raw.githubusercontent.com/decito/dnd5e-pt-br/main/compendium/dnd5e.spells.json' },
             { col: 'itens', url: 'https://raw.githubusercontent.com/decito/dnd5e-pt-br/main/compendium/dnd5e.items.json' },
-            { col: 'monstros', url: 'https://raw.githubusercontent.com/decito/dnd5e-pt-br/main/compendium/dnd5e.monsters.json' },
+            { col: 'monsters', url: 'https://raw.githubusercontent.com/decito/dnd5e-pt-br/main/compendium/dnd5e.monsters.json' },
             { col: 'classes', url: 'https://raw.githubusercontent.com/decito/dnd5e-pt-br/main/compendium/dnd5e.classes.json' },
             { col: 'races', url: 'https://raw.githubusercontent.com/decito/dnd5e-pt-br/main/compendium/dnd5e.races.json' },
             { col: 'regras', url: 'https://raw.githubusercontent.com/decito/dnd5e-pt-br/main/compendium/dnd5e.rules.json' }
