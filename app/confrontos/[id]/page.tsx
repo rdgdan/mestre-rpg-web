@@ -59,6 +59,7 @@ export default function ConfrontoDetalhesPage() {
     // --- Modais ---
     const [isAddModalOpen, setIsAddModalOpen] = useState(false);
     const [isXPModalOpen, setIsXPModalOpen] = useState(false);
+    const [hpAdjustmentValues, sethpAdjustmentValues] = useState<Record<string, string>>({});
 
     // --- Novo Combatente Form ---
     const [newCombatant, setNewCombatant] = useState({
