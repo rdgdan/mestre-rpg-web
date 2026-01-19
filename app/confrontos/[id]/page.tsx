@@ -982,7 +982,7 @@ export default function ConfrontoDetalhesPage() {
                                                         await syncState({ combatants: updated });
                                                     }
                                                 }}
-                                                className="px-8 py-4 rounded-xl text-lg font-bold bg-emerald-600 border-4 border-emerald-400 text-white hover:bg-emerald-500 hover:scale-105 transition-all active:scale-95 shadow-2xl"
+                                                className="px-8 py-4 rounded-xl text-lg font-bold bg-green-600 border-4 border-green-400 text-white hover:bg-green-500 hover:scale-105 transition-all active:scale-95 shadow-2xl"
                                                 title={c.type === 'player' ? 'Curar com 1 HP' : 'Levantar com 1 HP'}
                                             >
                                                 ❤️ {c.type === 'player' ? 'CURAR' : 'LEVANTAR'} 1 DE HP
