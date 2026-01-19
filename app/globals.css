@@ -2,6 +2,37 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Animação para efeitos únicos/especiais */
+@keyframes shimmer-effect {
+  0% {
+    background-position: -1000px 0;
+  }
+  100% {
+    background-position: 1000px 0;
+  }
+}
+
+@keyframes pulse-glow {
+  0%, 100% {
+    box-shadow: 0 0 10px rgba(168, 85, 247, 0.5), inset 0 0 10px rgba(168, 85, 247, 0.1);
+  }
+  50% {
+    box-shadow: 0 0 20px rgba(168, 85, 247, 0.8), inset 0 0 15px rgba(168, 85, 247, 0.2);
+  }
+}
+
+.effect-unique {
+  animation: pulse-glow 3s ease-in-out infinite;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(168, 85, 247, 0.2),
+    transparent
+  );
+  background-size: 1000px 100%;
+  position: relative;
+}
+
 :root {
   --background-start-rgb: 18, 18, 18;
   /* Dark Charcoal */

@@ -924,9 +924,15 @@ export default function ConfrontoDetalhesPage() {
                         
                         // Detectar se tem ambos benefícios e malefícios
                         const benefitIds = ['rage', 'reckless', 'inspiration', 'counter-charm', 'bless', 'sanctuary', 'shield-faith', 'wild-shape', 'barkskin', 'action-surge', 'second-wind', 'indomitable', 'evasion', 'uncanny-dodge', 'flurry', 'patient-defense', 'lay-hands', 'divine-smite', 'aura-protection', 'invisivel', 'enfeiticado'];
+                        const commonConditionIds = ['caido', 'envenenado', 'atordoado', 'amedrontado', 'agarrado', 'incapacitado', 'invisivel', 'paralisado', 'petrificado', 'preso', 'inconsciente', 'cego', 'surdo', 'aterrorizado', 'exaurido', 'cansado', 'queimado', 'enfraquecido', 'fome', 'sangrando', 'ebrio', 'amaldicoado'];
                         const hasBenefits = hasEffects && c.statusEffects.some(se => benefitIds.includes(se.id) || (se as any).category === 'benefit');
                         const hasDebuffs = hasEffects && c.statusEffects.some(se => !benefitIds.includes(se.id) && (se as any).category !== 'benefit');
                         const hasBothEffects = hasBenefits && hasDebuffs;
+                        const hasOnlyBenefits = hasBenefits && !hasDebuffs;
+                        const hasOnlyDebuffs = hasDebuffs && !hasBenefits;
+                        // Detectar se tem efeitos únicos (de classe) vs condições globais
+                        const hasUniqueEffects = hasEffects && c.statusEffects.some(se => !commonConditionIds.includes(se.id));
+                        const hasOnlyGlobalConditions = hasEffects && c.statusEffects.every(se => commonConditionIds.includes(se.id));
                         
                         return (
                         <div
@@ -934,8 +940,11 @@ export default function ConfrontoDetalhesPage() {
                             className={`
                                 relative p-3 sm:p-5 rounded-xl transition-all duration-300
                                 ${hasBothEffects ? 'border-l-[6px] border-l-green-500 border-r-[6px] border-r-red-500 border-t-2 border-b-2 border-t-purple-500/50 border-b-purple-500/50' : 'border-2'}
+                                ${hasUniqueEffects && !hasOnlyGlobalConditions ? 'effect-unique' : ''}
                                 ${phase === 'combat' && turnIndex === index ? 'bg-rpg-gold/15 border-rpg-gold shadow-glow-gold/20 scale-[1.01] z-10' : 
                                   hasBothEffects ? 'bg-gradient-to-r from-green-950/20 via-rpg-dark/50 to-red-950/20 shadow-lg' :
+                                  hasOnlyBenefits ? 'bg-green-950/20 border-green-500/50 shadow-lg shadow-green-900/20' :
+                                  hasOnlyDebuffs ? 'bg-red-950/20 border-red-500/50 shadow-lg shadow-red-900/20' :
                                   c.type === 'player' ? 'bg-blue-950/20 border-blue-500/30 shadow-lg shadow-blue-900/10' :
                                   c.type === 'npc' ? 'bg-yellow-950/20 border-yellow-600/30 shadow-lg shadow-yellow-900/10' :
                                   'bg-red-950/20 border-red-600/30 shadow-lg shadow-red-900/10'}
