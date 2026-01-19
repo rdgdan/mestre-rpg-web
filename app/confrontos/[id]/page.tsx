@@ -936,6 +936,7 @@ export default function ConfrontoDetalhesPage() {
                         const hasOnlyGlobalConditions = hasEffects && c.statusEffects.every(se => commonConditionIds.includes(se.id));
                         // Detectar se combatente está caído
                         const isFallen = c.statusEffects.some(se => se.id === 'caido');
+                        const isDefeated = c.hp === 0;
                         
                         return (
                         <div
@@ -944,17 +945,24 @@ export default function ConfrontoDetalhesPage() {
                                 relative p-3 sm:p-5 rounded-xl transition-all duration-300
                                 ${hasBothEffects ? 'border-l-[6px] border-l-green-500 border-r-[6px] border-r-red-500 border-t-2 border-b-2 border-t-purple-500/50 border-b-purple-500/50' : 'border-2'}
                                 ${hasUniqueEffects && !hasOnlyGlobalConditions ? 'effect-unique' : ''}
-                                ${isFallen ? 'fallen-animation' : ''}
-                                ${phase === 'combat' && turnIndex === index ? 'bg-rpg-gold/15 border-rpg-gold shadow-glow-gold/20 scale-[1.01] z-10' : 
+                                ${isDefeated ? 'defeated-animation' : ''}
+                                ${phase === 'combat' && turnIndex === index && !isDefeated ? 'active-turn-animation bg-rpg-gold/15 border-rpg-gold scale-[1.01] z-10' : 
+                                  isDefeated ? 'bg-rpg-dark/80 border-gray-600/40' :
                                   hasBothEffects ? 'bg-gradient-to-r from-green-950/20 via-rpg-dark/50 to-red-950/20 shadow-lg' :
                                   hasOnlyBenefits ? 'bg-green-950/20 border-green-500/50 shadow-lg shadow-green-900/20' :
                                   hasOnlyDebuffs ? 'bg-orange-950/20 border-orange-500/50 shadow-lg shadow-orange-900/20' :
                                   c.type === 'player' ? 'bg-blue-950/20 border-blue-500/30 shadow-lg shadow-blue-900/10' :
                                   c.type === 'npc' ? 'bg-yellow-950/20 border-yellow-600/30 shadow-lg shadow-yellow-900/10' :
                                   'bg-red-950/20 border-red-600/30 shadow-lg shadow-red-900/10'}
-                                ${c.status === 'dead' ? 'opacity-40 grayscale blur-[0.5px]' : ''}
                             `}
                         >
+                            {/* Badge de Status quando HP = 0 */}
+                            {isDefeated && (
+                                <div className="absolute -top-2 -left-2 bg-red-900 text-red-100 px-6 py-2 rounded-full font-cinzel font-bold text-lg tracking-wide border-2 border-red-700 shadow-lg z-20">
+                                    {c.type === 'monster' ? '💀 MORTO' : '⚰️ CAÍDO'}
+                                </div>
+                            )}
+                            
                             <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
                                 <div className="flex items-center gap-3 sm:gap-5 flex-1 w-full">
                                     <div className="bg-rpg-dark border border-rpg-gold/30 w-10 h-10 sm:w-14 sm:h-14 rounded-lg flex items-center justify-center font-cinzel text-rpg-gold font-bold shrink-0 shadow-inner">
@@ -1130,11 +1138,12 @@ export default function ConfrontoDetalhesPage() {
                                                 🗑️ Todos
                                             </button>
                                             
-                                            {/* Botão de Curar Jogador Caído */}
-                                            {isFallen && c.type === 'player' && (
+                                            {/* Botão de Curar Jogador Caído (apenas quando HP = 0) */}
+                                            {isDefeated && (c.type === 'player' || c.type === 'npc') && (
                                                 <button
                                                     onClick={async () => {
-                                                        if (confirm(`Deseja curar ${c.name} com 1 HP para ele retornar ao combate?`)) {
+                                                        const actionText = c.type === 'player' ? 'Curar' : 'Levantar';
+                                                        if (confirm(`Deseja ${actionText.toLowerCase()} ${c.name} com 1 HP para ele retornar ao combate?`)) {
                                                             const updated = combatants.map(comb => {
                                                                 if (comb.id !== c.id) return comb;
                                                                 return {
@@ -1147,10 +1156,10 @@ export default function ConfrontoDetalhesPage() {
                                                             await syncState({ combatants: updated });
                                                         }
                                                     }}
-                                                    className="px-4 py-2.5 rounded-lg text-[11px] font-bold bg-emerald-900/30 border border-emerald-500/40 text-emerald-300 hover:bg-emerald-900/50 transition-all active:scale-95 shadow-sm animate-pulse"
-                                                    title="Curar 1 HP para retornar ao combate"
+                                                    className="w-full mt-3 px-4 py-3 rounded-lg text-sm font-bold bg-emerald-900/40 border-2 border-emerald-500/60 text-emerald-300 hover:bg-emerald-900/60 transition-all active:scale-95 shadow-lg"
+                                                    title={c.type === 'player' ? 'Curar com 1 HP' : 'Levantar com 1 HP'}
                                                 >
-                                                    ❤️ Curar 1 HP
+                                                    ❤️ {c.type === 'player' ? 'CURAR' : 'LEVANTAR'} 1 DE HP
                                                 </button>
                                             )}
                                         </div>
