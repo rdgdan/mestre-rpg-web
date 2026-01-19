@@ -245,7 +245,7 @@ const ConditionManager = ({ character, onToggleCondition, onToggleEffect }: {
                                     <button
                                         key={effect.id}
                                         onClick={() => onToggleEffect(effect.id)}
-                                        className="w-full px-2 py-1.5 rounded text-[9px] font-bold border transition-all bg-green-950/30 border-green-700/30 text-green-400 hover:bg-green-900/40 hover:border-green-600"
+                                        className="w-full px-3 py-3 rounded text-sm md:text-sm font-bold border transition-all bg-green-950/30 border-green-700/30 text-green-400 hover:bg-green-900/40 hover:border-green-600 mb-2 truncate"
                                     >
                                         + {effect.name}
                                     </button>
@@ -287,7 +287,7 @@ const ConditionManager = ({ character, onToggleCondition, onToggleEffect }: {
                                     <button
                                         key={effect.id}
                                         onClick={() => onToggleEffect(effect.id)}
-                                        className="w-full px-2 py-1.5 rounded text-[9px] font-bold border transition-all bg-red-950/30 border-red-700/30 text-red-400 hover:bg-red-900/40 hover:border-red-600"
+                                        className="w-full px-3 py-3 rounded text-sm md:text-sm font-bold border transition-all bg-red-950/30 border-red-700/30 text-red-400 hover:bg-red-900/40 hover:border-red-600 mb-2 truncate"
                                     >
                                         + {effect.name}
                                     </button>
