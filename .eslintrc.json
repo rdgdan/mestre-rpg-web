@@ -27,7 +27,8 @@
     "no-var": "error",
     "eqeqeq": ["warn", "always"],
     "@typescript-eslint/no-var-requires": "warn",
-    "@typescript-eslint/ban-ts-comment": "warn"
+    "@typescript-eslint/ban-ts-comment": "warn",
+    "react/no-unescaped-entities": "off"
   }
 }
 

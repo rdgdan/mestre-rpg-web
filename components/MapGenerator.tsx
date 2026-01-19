@@ -118,7 +118,7 @@ export default function MapGenerator({ campaign, characters }: MapGeneratorProps
                     </button>
                 </div>
                 <p className="text-xs text-[#e3d5c1]/50 italic">
-                    Dica: Tente palavras como "Cidade", "Vila", "Masmorra", "Caverna" para mudar o tipo de mapa.
+                    Dica: Tente palavras como &quot;Cidade&quot;, &quot;Vila&quot;, &quot;Masmorra&quot;, &quot;Caverna&quot; para mudar o tipo de mapa.
                 </p>
             </div>
 
@@ -166,7 +166,7 @@ export default function MapGenerator({ campaign, characters }: MapGeneratorProps
                     <div className="bg-[#e3d5c1] text-[#2b1b17] p-6 rounded-lg shadow-xl font-serif h-full overflow-y-auto custom-scrollbar border-l-4 border-[#2b1b17]">
                         <div className="border-b-2 border-[#2b1b17] pb-4 mb-4">
                             <h3 className="text-2xl font-bold mb-2">Informações</h3>
-                            <p className="italic text-lg">"{mapData.mastersVoice}"</p>
+                            <p className="italic text-lg">&quot;{mapData.mastersVoice}&quot;</p>
                         </div>
 
                         <div className="space-y-6">
