@@ -944,7 +944,7 @@ export default function ConfrontoDetalhesPage() {
                                 ${phase === 'combat' && turnIndex === index ? 'bg-rpg-gold/15 border-rpg-gold shadow-glow-gold/20 scale-[1.01] z-10' : 
                                   hasBothEffects ? 'bg-gradient-to-r from-green-950/20 via-rpg-dark/50 to-red-950/20 shadow-lg' :
                                   hasOnlyBenefits ? 'bg-green-950/20 border-green-500/50 shadow-lg shadow-green-900/20' :
-                                  hasOnlyDebuffs ? 'bg-red-950/20 border-red-500/50 shadow-lg shadow-red-900/20' :
+                                  hasOnlyDebuffs ? 'bg-orange-950/20 border-orange-500/50 shadow-lg shadow-orange-900/20' :
                                   c.type === 'player' ? 'bg-blue-950/20 border-blue-500/30 shadow-lg shadow-blue-900/10' :
                                   c.type === 'npc' ? 'bg-yellow-950/20 border-yellow-600/30 shadow-lg shadow-yellow-900/10' :
                                   'bg-red-950/20 border-red-600/30 shadow-lg shadow-red-900/10'}
