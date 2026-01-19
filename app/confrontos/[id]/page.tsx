@@ -1032,7 +1032,7 @@ export default function ConfrontoDetalhesPage() {
                                                         <div className="text-[9px] text-rpg-gold font-cinzel tracking-wider uppercase mb-1.5 opacity-70">Efeitos Ativos</div>
                                                         <div className="space-y-1">
                                                             {benefits.map(se => (
-                                                                <div key={se.id} className="p-1.5 rounded bg-gradient-to-r from-green-900/40 to-green-900/20 border border-green-600/50 text-green-300 text-[8px] font-bold truncate flex items-center gap-1">
+                                                                <div key={se.id} className="p-2 rounded bg-gradient-to-r from-green-900/40 to-green-900/20 border border-green-600/50 text-green-300 text-[12px] font-bold truncate flex items-center gap-1.5">
                                                                     <span>✦</span>
                                                                     <span className="truncate">{getEffectDisplayName(se.id, se.name)}</span>
                                                                 </div>
@@ -1048,7 +1048,7 @@ export default function ConfrontoDetalhesPage() {
                                                     <div className="text-[9px] text-rpg-gold font-cinzel tracking-wider uppercase mb-1.5 opacity-70">Efeitos Ativos</div>
                                                     <div className="space-y-1">
                                                         {debuffs.map(se => (
-                                                            <div key={se.id} className="p-1.5 rounded bg-gradient-to-r from-red-900/40 to-red-900/20 border border-red-600/50 text-red-300 text-[8px] font-bold truncate flex items-center gap-1">
+                                                            <div key={se.id} className="p-2 rounded bg-gradient-to-r from-red-900/40 to-red-900/20 border border-red-600/50 text-red-300 text-[12px] font-bold truncate flex items-center gap-1.5">
                                                                 <span>⚠</span>
                                                                 <span className="truncate">{getEffectDisplayName(se.id, se.name)}</span>
                                                             </div>
@@ -1057,6 +1057,66 @@ export default function ConfrontoDetalhesPage() {
                                                 </div>
                                             );
                                         })()
+                                    )}
+
+                                    {/* Botões de Limpar Efeitos */}
+                                    {hasEffects && (
+                                        <div className="flex gap-1 items-center justify-start flex-wrap">
+                                            {hasBenefits && (
+                                                <button
+                                                    onClick={async () => {
+                                                        const benefitIds = ['rage', 'reckless', 'inspiration', 'counter-charm', 'bless', 'sanctuary', 'shield-faith', 'wild-shape', 'barkskin', 'action-surge', 'second-wind', 'indomitable', 'evasion', 'uncanny-dodge', 'flurry', 'patient-defense', 'lay-hands', 'divine-smite', 'aura-protection', 'invisivel', 'enfeiticado'];
+                                                        const updated = combatants.map(comb => {
+                                                            if (comb.id !== c.id) return comb;
+                                                            return {
+                                                                ...comb,
+                                                                statusEffects: (comb.statusEffects || []).filter(se => !benefitIds.includes(se.id) && (se as any).category !== 'benefit')
+                                                            };
+                                                        });
+                                                        setCombatants(updated);
+                                                        await syncState({ combatants: updated });
+                                                    }}
+                                                    className="px-2 py-1 rounded text-[9px] font-bold bg-green-900/20 border border-green-600/40 text-green-400 hover:bg-green-900/40 transition-all active:scale-95"
+                                                    title="Limpar Benefícios"
+                                                >
+                                                    🗑️ Benef.
+                                                </button>
+                                            )}
+                                            {hasDebuffs && (
+                                                <button
+                                                    onClick={async () => {
+                                                        const benefitIds = ['rage', 'reckless', 'inspiration', 'counter-charm', 'bless', 'sanctuary', 'shield-faith', 'wild-shape', 'barkskin', 'action-surge', 'second-wind', 'indomitable', 'evasion', 'uncanny-dodge', 'flurry', 'patient-defense', 'lay-hands', 'divine-smite', 'aura-protection', 'invisivel', 'enfeiticado'];
+                                                        const updated = combatants.map(comb => {
+                                                            if (comb.id !== c.id) return comb;
+                                                            return {
+                                                                ...comb,
+                                                                statusEffects: (comb.statusEffects || []).filter(se => benefitIds.includes(se.id) || (se as any).category === 'benefit')
+                                                            };
+                                                        });
+                                                        setCombatants(updated);
+                                                        await syncState({ combatants: updated });
+                                                    }}
+                                                    className="px-2 py-1 rounded text-[9px] font-bold bg-red-900/20 border border-red-600/40 text-red-400 hover:bg-red-900/40 transition-all active:scale-95"
+                                                    title="Limpar Malefícios"
+                                                >
+                                                    🗑️ Malef.
+                                                </button>
+                                            )}
+                                            <button
+                                                onClick={async () => {
+                                                    const updated = combatants.map(comb => {
+                                                        if (comb.id !== c.id) return comb;
+                                                        return { ...comb, statusEffects: [] };
+                                                    });
+                                                    setCombatants(updated);
+                                                    await syncState({ combatants: updated });
+                                                }}
+                                                className="px-2 py-1 rounded text-[9px] font-bold bg-purple-900/20 border border-purple-600/40 text-purple-400 hover:bg-purple-900/40 transition-all active:scale-95"
+                                                title="Limpar Todos os Efeitos"
+                                            >
+                                                🗑️ Todos
+                                            </button>
+                                        </div>
                                     )}
 
                                     {/* Botões de Controle - Embaixo */}
