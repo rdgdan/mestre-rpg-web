@@ -20,6 +20,7 @@ import {
 import { Weapon, OtherEquipmentItem, dndWeapons, dndEquipments, parseDamageString } from '@/lib/items-data';
 import { dndClasses, dndRaces } from '@/lib/dnd-data';
 import SelectionModal from '@/components/ui/SelectionModal';
+import SubclassModal from '../../../components/ui/SubclassModal';
 import WeaponModal from '@/components/ui/WeaponModal';
 import EquipmentModal from '@/components/ui/EquipmentModal';
 import SpellModal from '@/components/ui/SpellModal';
@@ -36,6 +37,7 @@ import { SUBCLASSES, SUBCLASS_CHOICE_LEVELS } from '@/lib/class-features';
 import { StartingProficienciesModal } from '@/components/ui/StartingProficienciesModal';
 import { StartingEquipmentModal } from '@/components/ui/StartingEquipmentModal';
 import { CLASS_PROFICIENCIES } from '@/lib/class-proficiencies';
+import Modal from '@/components/Modal';
 
 // --- Constantes de Ficha 2.0 ---
 import { COMMON_CONDITIONS, CLASS_EFFECTS, EFFECT_STYLES, getEffectStyle } from '@/lib/effects-conditions';
@@ -338,9 +340,7 @@ export default function CharacterSheetPage() {
     const [availableFeats, setAvailableFeats] = useState<any[]>([]);
     const [isFeatModalOpen, setIsFeatModalOpen] = useState(false);
     const [isSubclassModalOpen, setIsSubclassModalOpen] = useState(false);
-    const [isAIGenerating, setIsAIGenerating] = useState(false);
-    const [isScannerModalOpen, setIsScannerModalOpen] = useState(false);
-    const [isScanning, setIsScanning] = useState(false);
+
 
     // Automação: Proficiências
     const [isProficiencyModalOpen, setIsProficiencyModalOpen] = useState(false);
@@ -374,13 +374,21 @@ export default function CharacterSheetPage() {
     const lastLevelRef = useRef<number | null>(null);
     const [isCleaningDuplicates, setIsCleaningDuplicates] = useState(false);
 
+    // Modals de Confirmação
+    const [confirmCleanDuplicatesModal, setConfirmCleanDuplicatesModal] = useState(false);
+
+    const [confirmRemoveFeatureModal, setConfirmRemoveFeatureModal] = useState<{ open: boolean; featureName: string | null }>({ open: false, featureName: null });
+
     const dataFetchInitiated = useRef(false);
 
     // Função para limpar duplicatas do Firestore
     const handleCleanDuplicates = async () => {
-        if (!confirm('Isso vai remover itens duplicados do banco de dados. Continuar?')) return;
+        setConfirmCleanDuplicatesModal(true);
+    };
 
+    const executeCleanDuplicates = async () => {
         setIsCleaningDuplicates(true);
+        setConfirmCleanDuplicatesModal(false);
         try {
             const { cleanAllGameData } = await import('@/lib/xp-progression');
             await cleanAllGameData();
@@ -433,95 +441,17 @@ export default function CharacterSheetPage() {
         setIsSubclassModalOpen(false);
     };
 
-    const handleAISubclassGenerate = async () => {
-        if (!character) return;
-        const subName = prompt("Qual o nome da Subclasse que deseja que a I.A. gere?");
-        if (!subName) return;
 
-        const apiKey = localStorage.getItem('gemini_api_key');
-        if (!apiKey) {
-            const key = prompt("API Key do Gemini não encontrada. Cole sua chave para continuar:");
-            if (key) {
-                localStorage.setItem('gemini_api_key', key);
-            } else {
-                return;
-            }
-        }
 
-        setIsAIGenerating(true);
-        try {
-            const { AIWeaver } = await import('@/lib/ai-weaver');
-            const data = await AIWeaver.generateSubclass(character.class, subName);
-
-            // Salvar no banco global para a comunidade
-            await saveGeneratedSubclassToFirestore(character.class, subName, data);
-
-            updateCharacter(prev => {
-                const newFeatures = [...(prev.features || [])];
-                const level = prev.level || 1;
-
-                // Injetar habilidades geradas até o nível atual
-                Object.entries(data).forEach(([lvl, prog]) => {
-                    if (parseInt(lvl) <= level) {
-                        prog.features.forEach(feat => {
-                            if (!newFeatures.some(f => f.name === feat.name)) {
-                                newFeatures.push({ ...feat, type: 'class' });
-                            }
-                        });
-                    }
-                });
-
-                return {
-                    ...prev,
-                    subclass: subName,
-                    features: newFeatures
-                };
-            });
-
-            setIsSubclassModalOpen(false);
-            alert(`Sucesso! A I.A. teceu as regras para "${subName}" e as salvou no repositório global.`);
-        } catch (err: any) {
-            console.error("AI Generation Error:", err);
-            alert(`Erro ao tecer conteúdo: ${err.message}`);
-        } finally {
-            setIsAIGenerating(false);
-        }
-    };
-
-    const handleScanText = async (text: string) => {
-        if (!text.trim()) return;
-
-        const apiKey = localStorage.getItem('gemini_api_key');
-        if (!apiKey) {
-            const key = prompt("API Key do Gemini não encontrada. Cole sua chave para continuar:");
-            if (key) localStorage.setItem('gemini_api_key', key);
-            else return;
-        }
-
-        setIsScanning(true);
-        try {
-            const { AIWeaver } = await import('@/lib/ai-weaver');
-            const extracted = await AIWeaver.scanText(text);
-
-            if (extracted.length === 0) {
-                alert("A I.A. não encontrou habilidades ou itens claros no texto.");
-                return;
-            }
-
-            // Confirmar inserção
-            const names = extracted.map(e => e.name).join(", ");
-            if (confirm(`A I.A. detectou: ${names}. Deseja adicionar à ficha?`)) {
-                updateCharacter(prev => ({
-                    ...prev,
-                    features: [...(prev.features || []), ...extracted.map(f => ({ ...f, type: 'feat' as const }))]
-                }));
-                setIsScannerModalOpen(false);
-            }
-        } catch (err: any) {
-            console.error("Scan Error:", err);
-            alert(`Erro ao escanear: ${err.message}`);
-        } finally {
-            setIsScanning(false);
+    const executeRemoveFeature = () => {
+        const featureName = (window as any).__featureToRemove;
+        if (featureName) {
+            updateCharacter(prev => ({
+                ...prev,
+                features: prev.features.filter(f => f.name !== featureName)
+            }));
+            setConfirmRemoveFeatureModal({ open: false, featureName: null });
+            delete (window as any).__featureToRemove;
         }
     };
 
@@ -1909,12 +1839,8 @@ export default function CharacterSheetPage() {
                                                                         {!isReadOnly && (
                                                                             <button
                                                                                 onClick={() => {
-                                                                                    if (confirm(`Remover talento "${feat.name}"?`)) {
-                                                                                        updateCharacter(prev => ({
-                                                                                            ...prev,
-                                                                                            features: prev.features.filter(f => f.name !== feat.name)
-                                                                                        }));
-                                                                                    }
+                                                                                    setConfirmRemoveFeatureModal({ open: true, featureName: feat.name });
+                                                                                    (window as any).__featureToRemove = feat.name;
                                                                                 }}
                                                                                 className="text-white/20 hover:text-red-400 transition-colors p-1"
                                                                             >
@@ -1935,17 +1861,10 @@ export default function CharacterSheetPage() {
                                             <div className="flex gap-4 mt-6">
                                                 <button
                                                     onClick={() => setIsFeatModalOpen(true)}
-                                                    className="flex-grow py-6 bg-purple-600/10 border-2 border-purple-500/30 rounded-lg text-purple-200 hover:bg-purple-600/20 hover:border-purple-500/50 transition-all font-bold uppercase tracking-widest text-xs flex flex-col items-center gap-2 group shadow-lg"
+                                                    className="w-full py-6 bg-purple-600/10 border-2 border-purple-500/30 rounded-lg text-purple-200 hover:bg-purple-600/20 hover:border-purple-500/50 transition-all font-bold uppercase tracking-widest text-xs flex flex-col items-center gap-2 group shadow-lg"
                                                 >
                                                     <span className="text-2xl transition-transform group-hover:scale-125">✨</span>
                                                     Escolher Talento da Biblioteca
-                                                </button>
-                                                <button
-                                                    onClick={() => setIsScannerModalOpen(true)}
-                                                    className="w-1/4 py-6 bg-purple-900/40 border border-purple-500/30 rounded-lg text-purple-300 hover:bg-purple-900/60 transition-all font-bold uppercase tracking-widest text-[10px] flex flex-col items-center gap-2 group"
-                                                >
-                                                    <span className="text-xl transition-transform group-hover:rotate-12">🧠</span>
-                                                    Scanner I.A.
                                                 </button>
                                                 <button
                                                     onClick={() => {
@@ -2248,13 +2167,11 @@ export default function CharacterSheetPage() {
                 <EquipmentModal isOpen={isEquipmentModalOpen} onClose={() => setEquipmentModalOpen(false)} onSave={handleSaveEquipment} allEquipment={allEquipment} onAddNewGlobalItem={handleAddNewGlobalItem} itemToEdit={equipmentToEdit} />
                 <SpellSelectModal isOpen={isSpellSelectOpen} onClose={() => setSpellSelectOpen(false)} onSelect={handleSaveSpell} onCreate={() => { setSpellSelectOpen(false); setSpellToEdit(null); setSpellModalOpen(true); }} />
                 <SpellModal isOpen={isSpellModalOpen} onClose={() => { setSpellModalOpen(false); setSpellToEdit(null); }} onSave={handleSaveSpell} spellToEdit={spellToEdit} />
-                <SubclassModal
+                 <SubclassModal
                     isOpen={isSubclassModalOpen}
                     onClose={() => setIsSubclassModalOpen(false)}
                     character={character}
                     onSelect={handleSelectSubclass}
-                    onGenerateAI={handleAISubclassGenerate}
-                    isGenerating={isAIGenerating}
                 />
                 <LevelUpModal
                     isOpen={isLevelUpModalOpen}
@@ -2266,12 +2183,34 @@ export default function CharacterSheetPage() {
                     currentSpells={character.spells}
                     currentAttributes={character.attributes}
                 />
-                <TextScannerModal
-                    isOpen={isScannerModalOpen}
-                    onClose={() => setIsScannerModalOpen(false)}
-                    onScan={handleScanText}
-                    isScanning={isScanning}
-                />
+
+                {/* CLEAN DUPLICATES MODAL */}
+                <Modal
+                    isOpen={confirmCleanDuplicatesModal}
+                    onClose={() => setConfirmCleanDuplicatesModal(false)}
+                    title="⚠️ Limpar Duplicatas"
+                >
+                    <div className="text-center">
+                        <p className="text-rpg-parchment mb-6">Isso vai remover itens duplicados do banco de dados. Esta ação é irreversível.</p>
+                        <div className="flex gap-4 justify-center">
+                            <button
+                                onClick={() => setConfirmCleanDuplicatesModal(false)}
+                                className="bg-rpg-slate hover:bg-rpg-slate/80 text-rpg-parchment border border-rpg-gold/30 font-bold py-2 px-6 rounded transition-all"
+                            >
+                                Cancelar
+                            </button>
+                            <button
+                                onClick={executeCleanDuplicates}
+                                disabled={isCleaningDuplicates}
+                                className="bg-orange-600 hover:bg-orange-700 text-white font-bold py-2 px-6 rounded transition-all disabled:opacity-50"
+                            >
+                                {isCleaningDuplicates ? 'Limpando...' : 'Limpar Agora'}
+                            </button>
+                        </div>
+                    </div>
+                </Modal>
+
+
                 <StartingProficienciesModal
                     isOpen={isProficiencyModalOpen}
                     onClose={() => setIsProficiencyModalOpen(false)}
@@ -2294,7 +2233,8 @@ export default function CharacterSheetPage() {
                 <StartingEquipmentModal
                     isOpen={isEquipmentStartModalOpen}
                     onClose={() => setIsEquipmentStartModalOpen(false)}
-                    className={selectedClassForProficiency}
+                    className={character?.class || ''}
+                    background={character?.background || ''}
                     onConfirm={(newItems) => {
                         updateCharacter(char => {
                             const currentInv = { ...char.inventory };
@@ -2308,8 +2248,8 @@ export default function CharacterSheetPage() {
                                         name: item.name,
                                         quantity: item.quantity,
                                         isEquipped: false,
-                                        weight: 0, // Poderia buscar do DB
-                                        damage: '1d6', // Placeholder, ideal buscar
+                                        weight: 0,
+                                        damage: '1d6',
                                         damageType: 'cortante',
                                         properties: []
                                     } as any);
@@ -2335,6 +2275,7 @@ export default function CharacterSheetPage() {
                                 }
                             };
                         });
+                        setIsEquipmentStartModalOpen(false);
                     }}
                 />
             </div>
@@ -2344,82 +2285,6 @@ export default function CharacterSheetPage() {
 
 // --- Sub-componentes do Modal ---
 
-interface SubclassModalProps {
-    isOpen: boolean;
-    onClose: () => void;
-    character: Character;
-    onSelect: (subclassName: string | null) => void;
-    onGenerateAI: () => void;
-    isGenerating: boolean;
-}
-
-function SubclassModal({ isOpen, onClose, character, onSelect, onGenerateAI, isGenerating }: SubclassModalProps) {
-    if (!isOpen) return null;
-
-    return (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
-            <div className="bg-rpg-panel border-2 border-purple-500/30 rounded-lg max-w-2xl w-full max-h-[80vh] flex flex-col overflow-hidden shadow-[0_0_50px_-10px_rgba(168,85,247,0.4)]">
-                <div className="p-6 border-b border-purple-500/20 bg-purple-900/10 flex justify-between items-center">
-                    <div>
-                        <h3 className="text-xl font-bold font-cinzel text-purple-200 uppercase tracking-widest">Especialização: {character.class}</h3>
-                        <p className="text-[10px] text-purple-400 uppercase font-black">Escolha seu caminho heróico</p>
-                    </div>
-                    <button onClick={onClose} className="text-purple-400 hover:text-white transition-colors text-2xl">×</button>
-                </div>
-                <div className="p-6 overflow-y-auto space-y-4 custom-scrollbar bg-rpg-dark/50">
-                    {Object.keys(SUBCLASSES[character.class] || {}).length === 0 ? (
-                        <div className="text-center py-6 text-rpg-grey italic">Sem arquétipos pré-definidos para esta classe.</div>
-                    ) : (
-                        Object.entries(SUBCLASSES[character.class] as Record<string, any>).map(([name, data]) => (
-                            <button
-                                key={name}
-                                onClick={() => onSelect(name)}
-                                className="w-full text-left p-4 rounded-lg border border-rpg-gold/5 bg-rpg-panel hover:border-purple-500/40 hover:bg-purple-900/5 transition-all group/sub-row"
-                            >
-                                <h4 className="font-bold text-rpg-parchment group-hover/sub-row:text-purple-200 transition-colors uppercase text-sm tracking-wider">{name}</h4>
-                                <div className="mt-2 space-y-1">
-                                    {(Object.entries(data as Record<number, any>)).map(([lvl, prog]) => (
-                                        <div key={lvl} className="text-[10px] text-rpg-grey">
-                                            <span className="text-purple-400 font-bold">Nível {lvl}:</span> {(prog.features as any[]).map(f => f.name).join(', ')}
-                                        </div>
-                                    ))}
-                                </div>
-                            </button>
-                        ))
-                    )}
-
-                    <div className="border-t border-purple-500/10 pt-4 mt-2 flex gap-2">
-                        <button
-                            onClick={() => {
-                                const sub = prompt("Digite o nome da sua Subclasse personalizada:");
-                                if (sub) onSelect(sub);
-                            }}
-                            className="flex-grow py-3 border border-dashed border-rpg-gold/20 rounded-lg text-rpg-grey hover:text-rpg-gold hover:border-rpg-gold/40 transition-all font-bold uppercase tracking-widest text-[9px]"
-                        >
-                            + Manual
-                        </button>
-                        <button
-                            disabled={isGenerating}
-                            onClick={onGenerateAI}
-                            className={`flex-grow py-3 border border-purple-500/30 rounded-lg text-purple-300 transition-all font-bold uppercase tracking-widest text-[9px] flex items-center justify-center gap-2 ${isGenerating ? 'opacity-50 cursor-wait bg-purple-900/20' : 'hover:bg-purple-900/40 hover:border-purple-500 shadow-glow-purple/10'}`}
-                        >
-                            {isGenerating ? (
-                                <>
-                                    <span className="w-3 h-3 border-2 border-purple-300 border-t-transparent rounded-full animate-spin"></span>
-                                    Tecendo Regras...
-                                </>
-                            ) : (
-                                <>
-                                    <span className="text-xs">🧠</span> Gerar via I.A.
-                                </>
-                            )}
-                        </button>
-                    </div>
-                </div>
-            </div>
-        </div>
-    );
-}
 // --- Text Scanner Modal ---
 interface TextScannerModalProps {
     isOpen: boolean;

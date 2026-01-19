@@ -8,11 +8,13 @@ import { db } from '@/lib/firebase';
 import { doc, getDoc, updateDoc, collection, query, where, onSnapshot } from 'firebase/firestore';
 import { Campaign } from '@/types/campaign';
 import { Character } from '@/lib/character-data';
-import CampaignOracle from '@/components/CampaignOracle';
 import MapGenerator from '@/components/MapGenerator';
 import DMIntelligence from '@/components/DMIntelligence';
+import Modal from '@/components/Modal';
+import { EditableField } from '@/components/EditableField';
 
-type Tab = 'overview' | 'characters' | 'oracle' | 'maps' | 'mestre';
+
+type Tab = 'overview' | 'characters' | 'maps' | 'mestre';
 
 export default function CampaignDetailsPage() {
     const { id } = useParams();
@@ -24,6 +26,7 @@ export default function CampaignDetailsPage() {
     const searchParams = useSearchParams();
     const initialTab = (searchParams.get('tab') as Tab) || 'overview';
     const [activeTab, setActiveTab] = useState<Tab>(initialTab);
+    const [confirmUnlinkModal, setConfirmUnlinkModal] = useState<{ open: boolean; characterId: string | null; characterName: string | null }>({ open: false, characterId: null, characterName: null });
 
     useEffect(() => {
         if (!id) return;
@@ -96,14 +99,40 @@ export default function CampaignDetailsPage() {
         alert("Link de convite copiado! 🔗\nEnvie para seus jogadores.");
     };
 
-    const handleUnlinkCharacter = async (charId: string, charName: string) => {
-        if (!confirm(`Tem certeza que deseja remover o herói "${charName}" desta campanha?\n\nA ficha do jogador NÃO será apagada, apenas desvinculada desta mesa.`)) {
-            return;
+    const handleUpdateCampaign = async (field: keyof Campaign, value: any) => {
+        if (!campaign || !id) return;
+        try {
+            await updateDoc(doc(db, 'campanhas', id as string), {
+                [field]: value
+            });
+            // Atualiza estado local imediatamente
+            setCampaign(prev => prev ? { ...prev, [field]: value } : null);
+        } catch (error) {
+            console.error("Erro ao atualizar campanha:", error);
         }
+    };
+
+    const handleUpdateCharacter = async (charId: string, field: keyof Character, value: any) => {
         try {
             await updateDoc(doc(db, 'personagens', charId), {
+                [field]: value
+            });
+        } catch (error) {
+            console.error("Erro ao atualizar personagem:", error);
+        }
+    };
+
+    const handleUnlinkCharacter = async (charId: string, charName: string) => {
+        setConfirmUnlinkModal({ open: true, characterId: charId, characterName: charName });
+    };
+
+    const executeUnlinkCharacter = async () => {
+        if (!confirmUnlinkModal.characterId) return;
+        try {
+            await updateDoc(doc(db, 'personagens', confirmUnlinkModal.characterId), {
                 campaignId: null
             });
+            setConfirmUnlinkModal({ open: false, characterId: null, characterName: null });
         } catch (error) {
             console.error("Erro ao remover:", error);
             alert("Erro ao remover personagem.");
@@ -134,9 +163,14 @@ export default function CampaignDetailsPage() {
                         <Link href="/" className="text-rpg-grey hover:text-rpg-gold transition-colors font-cinzel text-sm">
                             &larr; Voltar
                         </Link>
-                        <h1 className="text-lg sm:text-xl font-bold font-cinzel text-rpg-gold truncate max-w-[200px] sm:max-w-md uppercase tracking-wider">
-                            {campaign.name}
-                        </h1>
+                        <div className="max-w-[200px] sm:max-w-md">
+                            <EditableField
+                                initialValue={campaign.name}
+                                onSave={(val) => handleUpdateCampaign('name', val)}
+                                valueClassName="text-lg sm:text-xl font-bold font-cinzel text-rpg-gold uppercase tracking-wider"
+                                editClassName="font-cinzel font-bold text-lg"
+                            />
+                        </div>
                     </div>
 
                 </div>
@@ -154,15 +188,6 @@ export default function CampaignDetailsPage() {
                             }`}
                     >
                         Visão Geral
-                    </button>
-                    <button
-                        onClick={() => setActiveTab('oracle')}
-                        className={`px-4 py-2 sm:px-6 sm:py-3 font-cinzel font-bold transition-all text-sm flex items-center gap-2 whitespace-nowrap ${activeTab === 'oracle'
-                            ? 'text-purple-400 border-b-2 border-purple-400 bg-purple-900/10'
-                            : 'text-rpg-grey hover:text-purple-300 hover:bg-purple-900/5'
-                            }`}
-                    >
-                        <span>🔮</span> Oráculo I.A.
                     </button>
                     <button
                         onClick={() => setActiveTab('maps')}
@@ -200,9 +225,13 @@ export default function CampaignDetailsPage() {
                         <div className="space-y-6 max-w-4xl mx-auto">
                             <div className="bg-rpg-panel border border-rpg-gold/10 rounded-lg p-6 shadow-lg">
                                 <h2 className="text-2xl font-cinzel text-rpg-gold mb-4 border-b border-rpg-gold/10 pb-2">Sinopse</h2>
-                                <p className="font-medieval text-lg leading-relaxed text-rpg-parchment/90 whitespace-pre-wrap">
-                                    {campaign.description || "O mestre ainda não escreveu os desígnios desta aventura..."}
-                                </p>
+                                <EditableField
+                                    initialValue={campaign.description || ''}
+                                    onSave={(val) => handleUpdateCampaign('description', val)}
+                                    isTextarea={true}
+                                    valueClassName="font-medieval text-lg leading-relaxed text-rpg-parchment/90 whitespace-pre-wrap"
+                                    editClassName="font-medieval text-lg"
+                                />
                             </div>
 
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -259,12 +288,6 @@ export default function CampaignDetailsPage() {
                                     </button>
                                 </div>
                             </div>
-                        </div>
-                    )}
-
-                    {activeTab === 'oracle' && (
-                        <div className="h-full">
-                            <CampaignOracle campaign={campaign} />
                         </div>
                     )}
 
@@ -331,17 +354,36 @@ export default function CampaignDetailsPage() {
                                             </div>
 
                                             <div className="grid grid-cols-3 gap-2 text-center text-sm py-2">
-                                                <div className="bg-black/20 rounded p-1">
+                                                <div className="bg-black/20 rounded p-1 flex flex-col items-center justify-center">
                                                     <span className="block text-rpg-grey text-xs">HP</span>
-                                                    <span className="font-bold text-green-400">{char.currentHp}/{char.maxHp}</span>
+                                                    <div className="flex items-center gap-1 justify-center w-full">
+                                                        <EditableField
+                                                            initialValue={char.currentHp}
+                                                            onSave={(val) => handleUpdateCharacter(char.id, 'currentHp', Number(val))}
+                                                            valueClassName="font-bold text-green-400"
+                                                            editClassName="w-full text-center text-xs p-0 bg-transparent border-b border-green-400 focus:outline-none text-green-400 font-bold h-5"
+                                                        />
+                                                        <span className="text-rpg-grey/50 text-[10px]">/</span>
+                                                        <span className="font-bold text-rpg-grey text-xs">{char.maxHp}</span>
+                                                    </div>
                                                 </div>
-                                                <div className="bg-black/20 rounded p-1">
+                                                <div className="bg-black/20 rounded p-1 flex flex-col items-center justify-center">
                                                     <span className="block text-rpg-grey text-xs">CA</span>
-                                                    <span className="font-bold text-blue-300">{char.armorClass}</span>
+                                                    <EditableField
+                                                        initialValue={char.armorClass}
+                                                        onSave={(val) => handleUpdateCharacter(char.id, 'armorClass', Number(val))}
+                                                        valueClassName="font-bold text-blue-300"
+                                                        editClassName="w-full text-center text-xs p-0 bg-transparent border-b border-blue-300 focus:outline-none text-blue-300 font-bold h-5"
+                                                    />
                                                 </div>
-                                                <div className="bg-black/20 rounded p-1">
+                                                <div className="bg-black/20 rounded p-1 flex flex-col items-center justify-center">
                                                     <span className="block text-rpg-grey text-xs">Inic.</span>
-                                                    <span className="font-bold text-yellow-500">+{char.initiative}</span>
+                                                    <EditableField
+                                                        initialValue={char.initiative}
+                                                        onSave={(val) => handleUpdateCharacter(char.id, 'initiative', Number(val))}
+                                                        valueClassName="font-bold text-yellow-500"
+                                                        editClassName="w-full text-center text-xs p-0 bg-transparent border-b border-yellow-500 focus:outline-none text-yellow-500 font-bold h-5"
+                                                    />
                                                 </div>
                                             </div>
 
@@ -363,6 +405,32 @@ export default function CampaignDetailsPage() {
 
                 </div>
             </main>
+
+            {/* UNLINK CHARACTER MODAL */}
+            <Modal
+                isOpen={confirmUnlinkModal.open}
+                onClose={() => setConfirmUnlinkModal({ open: false, characterId: null, characterName: null })}
+                title="⚠️ Remover Herói da Campanha"
+            >
+                <div className="text-center">
+                    <p className="text-rpg-parchment mb-4">Tem certeza que deseja remover o herói <strong className="text-rpg-gold">"{confirmUnlinkModal.characterName}"</strong> desta campanha?</p>
+                    <p className="text-rpg-grey text-sm mb-6">A ficha do jogador NÃO será apagada, apenas desvinculada desta mesa.</p>
+                    <div className="flex gap-4 justify-center">
+                        <button
+                            onClick={() => setConfirmUnlinkModal({ open: false, characterId: null, characterName: null })}
+                            className="bg-rpg-slate hover:bg-rpg-slate/80 text-rpg-parchment border border-rpg-gold/30 font-bold py-2 px-6 rounded transition-all"
+                        >
+                            Cancelar
+                        </button>
+                        <button
+                            onClick={executeUnlinkCharacter}
+                            className="bg-rpg-red hover:bg-rpg-red/80 text-white font-bold py-2 px-6 rounded transition-all"
+                        >
+                            Remover Herói
+                        </button>
+                    </div>
+                </div>
+            </Modal>
         </div>
     );
 }

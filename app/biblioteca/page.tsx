@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
+import Modal from '@/components/Modal';
 import { searchSpells, Spell, fetchGlobalSpells } from '@/lib/spells-data';
 import { searchMonsters, getMonsterTypes, MonsterDataExtended } from '@/lib/monsters-search';
 import { dndWeapons } from '@/lib/items-data';
@@ -22,7 +23,6 @@ import {
 import { searchNpcs, npcTemplates, NPCTemplate } from '@/lib/npc-combatants-data';
 import { ArchiveStorage } from '@/lib/archive-storage';
 import { ParsedMechanic } from '@/lib/dnd-parser';
-import { AIWeaver } from '@/lib/ai-weaver';
 
 type TabType = 'grimorio' | 'bestiario' | 'itens' | 'regras' | 'notas' | 'npcs' | 'arquivista';
 
@@ -62,6 +62,11 @@ function GrimorioTab({ searchQuery, onAddSpell }: { searchQuery: string; onAddSp
     const [customSubclasses, setCustomSubclasses] = useState<string[]>([]);
     const [newClassName, setNewClassName] = useState('');
     const [newMetadataName, setNewMetadataName] = useState('');
+
+    // Modal States
+    const [confirmOverwriteSpellModal, setConfirmOverwriteSpellModal] = useState<{ open: boolean; spellName: string | null; spellData?: Spell }>({ open: false, spellName: null });
+    const [confirmDeleteSpellModal, setConfirmDeleteSpellModal] = useState<{ open: boolean; spellId: string | null }>({ open: false, spellId: null });
+    const [spellToDelete, setSpellToDelete] = useState<string | null>(null);
 
     const loadCustomSpells = useCallback(async () => {
         if (!user) return;
@@ -152,11 +157,8 @@ function GrimorioTab({ searchQuery, onAddSpell }: { searchQuery: string; onAddSp
             );
 
             if (existingIndex !== -1) {
-                if (!confirm(`A magia "${newSpell.name}" já existe no seu grimório. Deseja sobrescrevê-la?`)) {
-                    return;
-                }
-                updatedSpells = [...customSpells];
-                updatedSpells[existingIndex] = { ...updatedSpells[existingIndex], ...spell };
+                setConfirmOverwriteSpellModal({ open: true, spellName: newSpell.name });
+                return;
             } else {
                 // Check Global Spells DB before creating new
                 const globalDocRef = doc(db, 'magias', spell.id);
@@ -180,14 +182,52 @@ function GrimorioTab({ searchQuery, onAddSpell }: { searchQuery: string; onAddSp
     };
 
     const deleteCustomSpell = async (spellId: string) => {
-        if (!user || !confirm('Tem certeza que deseja excluir esta magia?')) return;
+        setConfirmDeleteSpellModal({ open: true, spellId });
+        setSpellToDelete(spellId);
+    };
+
+    const executeDeleteSpell = async () => {
+        if (!user || !spellToDelete) return;
         try {
-            const updatedSpells = customSpells.filter(s => s.id !== spellId);
+            const updatedSpells = customSpells.filter(s => s.id !== spellToDelete);
             await setDoc(doc(db, 'custom_spells', user.uid), { spells: updatedSpells });
             setCustomSpells(updatedSpells);
-            if (selectedSpell?.id === spellId) setSelectedSpell(null);
+            if (selectedSpell?.id === spellToDelete) setSelectedSpell(null);
+            setConfirmDeleteSpellModal({ open: false, spellId: null });
+            setSpellToDelete(null);
         } catch (error) {
             console.error('Erro ao excluir magia:', error);
+        }
+    };
+
+    const executeOverwriteSpell = async () => {
+        if (!user || !newSpell.name) return;
+        try {
+            const normalizedName = normalizeName(newSpell.name);
+            const spellId = (newSpell as any).id || `custom-${Date.now()}`;
+
+            const spell: Spell = {
+                ...newSpell,
+                name: normalizedName,
+                id: spellId,
+                concentration: (newSpell as any).concentration || false
+            };
+
+            const existingIndex = customSpells.findIndex(s =>
+                (s.id === spellId) || (normalizeName(s.name) === normalizedName)
+            );
+
+            let updatedSpells: Spell[] = [...customSpells];
+            updatedSpells[existingIndex] = { ...updatedSpells[existingIndex], ...spell };
+
+            await setDoc(doc(db, 'custom_spells', user.uid), { spells: updatedSpells });
+            setCustomSpells(updatedSpells);
+            setIsAddModalOpen(false);
+            setNewSpell({ name: '', level: 0, school: 'Evocação', castingTime: '1 ação', range: '', components: '', duration: '', description: '', classes: [] });
+            if (selectedSpell?.name === normalizedName || selectedSpell?.id === spellId) setSelectedSpell(spell);
+            setConfirmOverwriteSpellModal({ open: false, spellName: null });
+        } catch (error) {
+            console.error('Erro ao sobrescrever magia:', error);
         }
     };
 
@@ -568,6 +608,51 @@ function GrimorioTab({ searchQuery, onAddSpell }: { searchQuery: string; onAddSp
                     </div>
                 </div>
             </div>
+
+            {/* MODALS - GRIMÓRIO */}
+            <Modal
+                isOpen={confirmOverwriteSpellModal.open}
+                onClose={() => setConfirmOverwriteSpellModal({ open: false, spellName: null })}
+                title="Sobrescrever Magia?"
+            >
+                <p className="mb-4">A magia "<strong>{confirmOverwriteSpellModal.spellName}</strong>" já existe no seu grimório. Deseja sobrescrevê-la?</p>
+                <div className="flex gap-2 justify-end">
+                    <button
+                        onClick={() => setConfirmOverwriteSpellModal({ open: false, spellName: null })}
+                        className="px-4 py-2 bg-rpg-grey text-rpg-dark rounded font-bold hover:bg-rpg-gold/50 transition-all"
+                    >
+                        Cancelar
+                    </button>
+                    <button
+                        onClick={executeOverwriteSpell}
+                        className="px-4 py-2 bg-rpg-gold text-rpg-dark rounded font-bold hover:bg-rpg-gold/70 transition-all"
+                    >
+                        Sobrescrever
+                    </button>
+                </div>
+            </Modal>
+
+            <Modal
+                isOpen={confirmDeleteSpellModal.open}
+                onClose={() => setConfirmDeleteSpellModal({ open: false, spellId: null })}
+                title="Excluir Magia?"
+            >
+                <p className="mb-4">Tem certeza que deseja excluir esta magia? Esta ação não pode ser desfeita.</p>
+                <div className="flex gap-2 justify-end">
+                    <button
+                        onClick={() => setConfirmDeleteSpellModal({ open: false, spellId: null })}
+                        className="px-4 py-2 bg-rpg-grey text-rpg-dark rounded font-bold hover:bg-rpg-gold/50 transition-all"
+                    >
+                        Cancelar
+                    </button>
+                    <button
+                        onClick={executeDeleteSpell}
+                        className="px-4 py-2 bg-red-600 text-white rounded font-bold hover:bg-red-700 transition-all"
+                    >
+                        Excluir
+                    </button>
+                </div>
+            </Modal>
         </div>
     );
 }
@@ -596,6 +681,11 @@ function BestiarioTab({ searchQuery }: { searchQuery: string }) {
     const [customSubtypes, setCustomSubtypes] = useState<string[]>([]);
     const [newMetadataName, setNewMetadataName] = useState('');
 
+    // Modal States
+    const [confirmOverwriteMonsterModal, setConfirmOverwriteMonsterModal] = useState<{ open: boolean; monsterName: string | null }>({ open: false, monsterName: null });
+    const [confirmDeleteMonsterModal, setConfirmDeleteMonsterModal] = useState<{ open: boolean; monsterName: string | null }>({ open: false, monsterName: null });
+    const [monsterToDelete, setMonsterToDelete] = useState<string | null>(null);
+    
     const loadMetadata = useCallback(async () => {
         if (!user) return;
         try {
@@ -670,11 +760,8 @@ function BestiarioTab({ searchQuery }: { searchQuery: string }) {
             const existingIndex = customMonsters.findIndex(m => normalizeName(m.name) === normalizedName);
 
             if (existingIndex !== -1) {
-                if (!confirm(`A criatura "${newMonster.name}" já existe no seu bestiário. Deseja sobrescrevê-la?`)) {
-                    return;
-                }
-                updatedMonsters = [...customMonsters];
-                updatedMonsters[existingIndex] = { ...updatedMonsters[existingIndex], ...monster };
+                setConfirmOverwriteMonsterModal({ open: true, monsterName: newMonster.name });
+                return;
             } else {
                 // Check Global Monsters DB before creating new
                 const globalDocRef = doc(db, 'monsters', normalizedName);
@@ -699,14 +786,45 @@ function BestiarioTab({ searchQuery }: { searchQuery: string }) {
     };
 
     const deleteCustomMonster = async (monsterName: string) => {
-        if (!user || !confirm('Tem certeza que deseja excluir esta criatura?')) return;
+        setConfirmDeleteMonsterModal({ open: true, monsterName });
+        setMonsterToDelete(monsterName);
+    };
+
+    const executeDeleteMonster = async () => {
+        if (!user || !monsterToDelete) return;
         try {
-            const updatedMonsters = customMonsters.filter(m => m.name !== monsterName);
+            const updatedMonsters = customMonsters.filter(m => m.name !== monsterToDelete);
             await setDoc(doc(db, 'custom_monsters', user.uid), { monsters: updatedMonsters });
             setCustomMonsters(updatedMonsters);
-            if (selectedMonster?.name === monsterName) setSelectedMonster(null);
+            if (selectedMonster?.name === monsterToDelete) setSelectedMonster(null);
+            setConfirmDeleteMonsterModal({ open: false, monsterName: null });
+            setMonsterToDelete(null);
         } catch (error) {
             console.error('Erro ao excluir monstro:', error);
+        }
+    };
+
+    const executeOverwriteMonster = async () => {
+        if (!user || !newMonster.name) return;
+        try {
+            const normalizedName = normalizeName(newMonster.name);
+            const monster: MonsterDataExtended = {
+                ...(newMonster as MonsterDataExtended),
+                name: normalizedName
+            };
+
+            const existingIndex = customMonsters.findIndex(m => normalizeName(m.name) === normalizedName);
+            let updatedMonsters: MonsterDataExtended[] = [...customMonsters];
+            updatedMonsters[existingIndex] = { ...updatedMonsters[existingIndex], ...monster };
+
+            await setDoc(doc(db, 'custom_monsters', user.uid), { monsters: updatedMonsters });
+            setCustomMonsters(updatedMonsters);
+            setIsAddModalOpen(false);
+            setNewMonster({ name: '', type: 'Humanoide', ac: 10, hp: 10, challenge: '1/4', xp: 50, description: '', classes: [], subclass: '' });
+            if (selectedMonster?.name === normalizedName) setSelectedMonster(monster);
+            setConfirmOverwriteMonsterModal({ open: false, monsterName: null });
+        } catch (error) {
+            console.error('Erro ao sobrescrever monstro:', error);
         }
     };
 
@@ -1043,6 +1161,51 @@ function BestiarioTab({ searchQuery }: { searchQuery: string }) {
                     </div>
                 </div>
             </div>
+
+            {/* MODALS - BESTIÁRIO */}
+            <Modal
+                isOpen={confirmOverwriteMonsterModal.open}
+                onClose={() => setConfirmOverwriteMonsterModal({ open: false, monsterName: null })}
+                title="Sobrescrever Criatura?"
+            >
+                <p className="mb-4">A criatura "<strong>{confirmOverwriteMonsterModal.monsterName}</strong>" já existe no seu bestiário. Deseja sobrescrevê-la?</p>
+                <div className="flex gap-2 justify-end">
+                    <button
+                        onClick={() => setConfirmOverwriteMonsterModal({ open: false, monsterName: null })}
+                        className="px-4 py-2 bg-rpg-grey text-rpg-dark rounded font-bold hover:bg-rpg-gold/50 transition-all"
+                    >
+                        Cancelar
+                    </button>
+                    <button
+                        onClick={executeOverwriteMonster}
+                        className="px-4 py-2 bg-rpg-gold text-rpg-dark rounded font-bold hover:bg-rpg-gold/70 transition-all"
+                    >
+                        Sobrescrever
+                    </button>
+                </div>
+            </Modal>
+
+            <Modal
+                isOpen={confirmDeleteMonsterModal.open}
+                onClose={() => setConfirmDeleteMonsterModal({ open: false, monsterName: null })}
+                title="Excluir Criatura?"
+            >
+                <p className="mb-4">Tem certeza que deseja excluir esta criatura? Esta ação não pode ser desfeita.</p>
+                <div className="flex gap-2 justify-end">
+                    <button
+                        onClick={() => setConfirmDeleteMonsterModal({ open: false, monsterName: null })}
+                        className="px-4 py-2 bg-rpg-grey text-rpg-dark rounded font-bold hover:bg-rpg-gold/50 transition-all"
+                    >
+                        Cancelar
+                    </button>
+                    <button
+                        onClick={executeDeleteMonster}
+                        className="px-4 py-2 bg-red-600 text-white rounded font-bold hover:bg-red-700 transition-all"
+                    >
+                        Excluir
+                    </button>
+                </div>
+            </Modal>
         </div>
     );
 }
@@ -1073,7 +1236,12 @@ function ItensTab({ searchQuery, onAddItem }: { searchQuery: string; onAddItem?:
     const [newMetadataName, setNewMetadataName] = useState('');
 
     const [categoryFilter, setCategoryFilter] = useState('all');
-
+    
+    // Modal States
+    const [confirmOverwriteItemModal, setConfirmOverwriteItemModal] = useState<{ open: boolean; itemName: string | null }>({ open: false, itemName: null });
+    const [confirmDeleteItemModal, setConfirmDeleteItemModal] = useState<{ open: boolean; itemId: string | null }>({ open: false, itemId: null });
+    const [itemToDelete, setItemToDelete] = useState<string | null>(null);
+    
     const loadMetadata = useCallback(async () => {
         if (!user) return;
         try {
@@ -1190,11 +1358,8 @@ function ItensTab({ searchQuery, onAddItem }: { searchQuery: string; onAddItem?:
             );
 
             if (existingIndex !== -1) {
-                if (!confirm(`O item "${newItem.name}" já existe na sua enciclopédia. Deseja sobrescrevê-lo?`)) {
-                    return;
-                }
-                updatedItems = [...customItems];
-                updatedItems[existingIndex] = { ...updatedItems[existingIndex], ...item };
+                setConfirmOverwriteItemModal({ open: true, itemName: newItem.name });
+                return;
             } else {
                 // Check Global Items DB before creating new
                 const globalDocRef = doc(db, 'itens', item.id);
@@ -1218,14 +1383,58 @@ function ItensTab({ searchQuery, onAddItem }: { searchQuery: string; onAddItem?:
     };
 
     const deleteCustomItem = async (itemId: string) => {
-        if (!user || !confirm('Tem certeza que deseja excluir este item?')) return;
+        setConfirmDeleteItemModal({ open: true, itemId });
+        setItemToDelete(itemId);
+    };
+
+    const executeDeleteItem = async () => {
+        if (!user || !itemToDelete) return;
         try {
-            const updatedItems = customItems.filter(i => i.id !== itemId);
+            const updatedItems = customItems.filter(i => i.id !== itemToDelete);
             await setDoc(doc(db, 'custom_items', user.uid), { items: updatedItems });
             setCustomItems(updatedItems);
-            if (selectedItem?.id === itemId) setSelectedItem(null);
+            if (selectedItem?.id === itemToDelete) setSelectedItem(null);
+            setConfirmDeleteItemModal({ open: false, itemId: null });
+            setItemToDelete(null);
         } catch (error) {
             console.error('Erro ao excluir item:', error);
+        }
+    };
+
+    const executeOverwriteItem = async () => {
+        if (!user || !newItem.name) return;
+        try {
+            const normalizedName = normalizeName(newItem.name);
+            const itemId = newItem.id || `custom-item-${Date.now()}`;
+
+            let finalDamage = newItem.damage;
+            if (!newItem.isCustomDamage && newItem.diceQty && newItem.diceType) {
+                const bonusStr = newItem.diceBonus ? ` + ${newItem.diceBonus}` : '';
+                finalDamage = `${newItem.diceQty}${newItem.diceType}${bonusStr}`;
+            }
+
+            const item = {
+                ...newItem,
+                name: normalizedName,
+                id: itemId,
+                damage: finalDamage
+            };
+
+            const existingIndex = customItems.findIndex(i =>
+                (i.id === itemId) || (normalizeName(i.name) === normalizedName)
+            );
+
+            let updatedItems: any[] = [...customItems];
+            updatedItems[existingIndex] = { ...updatedItems[existingIndex], ...item };
+
+            await setDoc(doc(db, 'custom_items', user.uid), { items: updatedItems });
+            setCustomItems(updatedItems);
+            setIsAddModalOpen(false);
+            setNewItem({ id: '', name: '', damage: '', diceQty: 1, diceType: 'd8', diceBonus: 0, isCustomDamage: false, damageType: '', properties: [], description: '', classes: [], subclass: '' });
+            if (selectedItem?.name === normalizedName || selectedItem?.id === itemId) setSelectedItem(item);
+            setConfirmOverwriteItemModal({ open: false, itemName: null });
+        } catch (error) {
+            console.error('Erro ao sobrescrever item:', error);
         }
     };
 
@@ -1670,6 +1879,51 @@ function ItensTab({ searchQuery, onAddItem }: { searchQuery: string; onAddItem?:
                     </div>
                 </div>
             </div>
+
+            {/* MODALS - ITENS */}
+            <Modal
+                isOpen={confirmOverwriteItemModal.open}
+                onClose={() => setConfirmOverwriteItemModal({ open: false, itemName: null })}
+                title="Sobrescrever Item?"
+            >
+                <p className="mb-4">O item "<strong>{confirmOverwriteItemModal.itemName}</strong>" já existe na sua enciclopédia. Deseja sobrescrevê-lo?</p>
+                <div className="flex gap-2 justify-end">
+                    <button
+                        onClick={() => setConfirmOverwriteItemModal({ open: false, itemName: null })}
+                        className="px-4 py-2 bg-rpg-grey text-rpg-dark rounded font-bold hover:bg-rpg-gold/50 transition-all"
+                    >
+                        Cancelar
+                    </button>
+                    <button
+                        onClick={executeOverwriteItem}
+                        className="px-4 py-2 bg-rpg-gold text-rpg-dark rounded font-bold hover:bg-rpg-gold/70 transition-all"
+                    >
+                        Sobrescrever
+                    </button>
+                </div>
+            </Modal>
+
+            <Modal
+                isOpen={confirmDeleteItemModal.open}
+                onClose={() => setConfirmDeleteItemModal({ open: false, itemId: null })}
+                title="Excluir Item?"
+            >
+                <p className="mb-4">Tem certeza que deseja excluir este item? Esta ação não pode ser desfeita.</p>
+                <div className="flex gap-2 justify-end">
+                    <button
+                        onClick={() => setConfirmDeleteItemModal({ open: false, itemId: null })}
+                        className="px-4 py-2 bg-rpg-grey text-rpg-dark rounded font-bold hover:bg-rpg-gold/50 transition-all"
+                    >
+                        Cancelar
+                    </button>
+                    <button
+                        onClick={executeDeleteItem}
+                        className="px-4 py-2 bg-red-600 text-white rounded font-bold hover:bg-red-700 transition-all"
+                    >
+                        Excluir
+                    </button>
+                </div>
+            </Modal>
         </div>
     );
 }
@@ -1682,6 +1936,12 @@ function RegrasTab({ searchQuery }: { searchQuery: string }) {
     const [selectedChapter, setSelectedChapter] = useState<any | null>(null);
     const [isAddModalOpen, setIsAddModalOpen] = useState(false);
     const [newRule, setNewRule] = useState({ id: '', title: '', content: '' });
+
+    // Modal States
+    const [confirmOverwriteRuleModal, setConfirmOverwriteRuleModal] = useState<{ open: boolean; ruleName: string | null }>({ open: false, ruleName: null });
+    const [confirmDeleteRuleModal, setConfirmDeleteRuleModal] = useState<{ open: boolean; ruleId: string | null }>({ open: false, ruleId: null });
+    const [confirmSyncRulesModal, setConfirmSyncRulesModal] = useState<{ open: boolean }>({ open: false });
+    const [ruleToDelete, setRuleToDelete] = useState<string | null>(null);
 
     const loadCustomRules = useCallback(async () => {
         if (!user) return;
@@ -1727,11 +1987,8 @@ function RegrasTab({ searchQuery }: { searchQuery: string }) {
             );
 
             if (existingIndex !== -1) {
-                if (!confirm(`A regra "${newRule.title}" já existe nas suas regras customizadas. Deseja sobrescrevê-la?`)) {
-                    return;
-                }
-                updatedRules = [...customRules];
-                updatedRules[existingIndex] = { ...updatedRules[existingIndex], ...rule };
+                setConfirmOverwriteRuleModal({ open: true, ruleName: newRule.title });
+                return;
             } else {
                 // Check Global SRD Rules
                 const globalRule = srdChapters.find(c => normalizeName(c.title) === normalizedTitle);
@@ -1755,14 +2012,65 @@ function RegrasTab({ searchQuery }: { searchQuery: string }) {
     };
 
     const deleteCustomRule = async (ruleId: string) => {
-        if (!user || !confirm('Tem certeza que deseja excluir esta regra?')) return;
+        setConfirmDeleteRuleModal({ open: true, ruleId });
+        setRuleToDelete(ruleId);
+    };
+
+    const executeDeleteRule = async () => {
+        if (!user || !ruleToDelete) return;
         try {
-            const updatedRules = customRules.filter(r => r.id !== ruleId);
+            const updatedRules = customRules.filter(r => r.id !== ruleToDelete);
             await setDoc(doc(db, 'custom_rules', user.uid), { rules: updatedRules });
             setCustomRules(updatedRules);
-            if (selectedChapter?.id === ruleId && srdChapters.length > 0) setSelectedChapter(srdChapters[0]);
+            if (selectedChapter?.id === ruleToDelete && srdChapters.length > 0) setSelectedChapter(srdChapters[0]);
+            setConfirmDeleteRuleModal({ open: false, ruleId: null });
+            setRuleToDelete(null);
         } catch (error) {
             console.error('Erro ao excluir regra:', error);
+        }
+    };
+
+    const executeOverwriteRule = async () => {
+        if (!user || !newRule.title) return;
+        try {
+            const normalizedTitle = normalizeName(newRule.title);
+            const ruleId = newRule.id || `custom-rule-${Date.now()}`;
+
+            const rule = {
+                ...newRule,
+                title: normalizedTitle,
+                id: ruleId
+            };
+
+            const existingIndex = customRules.findIndex(r =>
+                (r.id === ruleId) || (normalizeName(r.title) === normalizedTitle)
+            );
+
+            let updatedRules: any[] = [...customRules];
+            updatedRules[existingIndex] = { ...updatedRules[existingIndex], ...rule };
+
+            await setDoc(doc(db, 'custom_rules', user.uid), { rules: updatedRules });
+            setCustomRules(updatedRules);
+            setIsAddModalOpen(false);
+            setNewRule({ id: '', title: '', content: '' });
+            if (selectedChapter.id === ruleId || normalizeName(selectedChapter.title) === normalizedTitle) {
+                setSelectedChapter(rule);
+            }
+            setConfirmOverwriteRuleModal({ open: false, ruleName: null });
+        } catch (error) {
+            console.error('Erro ao sobrescrever regra:', error);
+        }
+    };
+
+    const executeSyncRules = async () => {
+        if (!user) return;
+        try {
+            await syncAllGameRulesToFirestore();
+            await loadSRD();
+            alert("✅ Sincronização concluída com sucesso!");
+            setConfirmSyncRulesModal({ open: false });
+        } catch (e) {
+            alert("❌ Erro ao sincronizar. Verifique o console.");
         }
     };
 
@@ -1783,17 +2091,7 @@ function RegrasTab({ searchQuery }: { searchQuery: string }) {
                 <h2 className="text-2xl font-bold font-cinzel text-rpg-gold">📕 System Reference Document 5.1</h2>
                 <div className="flex gap-2">
                     <button
-                        onClick={async () => {
-                            if (confirm("Deseja sincronizar todas as Habilidades, Raças e Talentos com o Banco de Dados Global?")) {
-                                try {
-                                    await syncAllGameRulesToFirestore();
-                                    await loadSRD();
-                                    alert("✅ Sincronização concluída com sucesso!");
-                                } catch (e) {
-                                    alert("❌ Erro ao sincronizar. Verifique o console.");
-                                }
-                            }
-                        }}
+                        onClick={() => setConfirmSyncRulesModal({ open: true })}
                         className="bg-purple-600/20 hover:bg-purple-600/40 text-purple-200 border border-purple-500/30 px-4 py-2 rounded font-bold transition-all text-sm flex items-center gap-2"
                     >
                         ✨ Sincronizar Regras Base
@@ -1921,6 +2219,10 @@ function NotasTab() {
     const [notes, setNotes] = useState<any[]>([]);
     const [selectedNote, setSelectedNote] = useState<any | null>(null);
     const [isSaving, setIsSaving] = useState(false);
+    
+    // Estados para Modals - Notas
+    const [confirmDeleteNoteModal, setConfirmDeleteNoteModal] = useState<{ open: boolean; noteId: string | null }>({ open: false, noteId: null });
+    const [noteToDelete, setNoteToDelete] = useState<string | null>(null);
 
     const loadNotes = useCallback(async () => {
         if (!user) return;
@@ -1977,12 +2279,19 @@ function NotasTab() {
     };
 
     const deleteNote = async (noteId: string) => {
-        if (!user || !confirm('Deseja excluir esta anotação?')) return;
+        setConfirmDeleteNoteModal({ open: true, noteId });
+        setNoteToDelete(noteId);
+    };
+
+    const executeDeleteNote = async () => {
+        if (!user || !noteToDelete) return;
         try {
-            const updatedNotes = notes.filter(n => n.id !== noteId);
+            const updatedNotes = notes.filter(n => n.id !== noteToDelete);
             await setDoc(doc(db, 'master_notes_list', user.uid), { notes: updatedNotes });
             setNotes(updatedNotes);
-            if (selectedNote?.id === noteId) setSelectedNote(null);
+            if (selectedNote?.id === noteToDelete) setSelectedNote(null);
+            setConfirmDeleteNoteModal({ open: false, noteId: null });
+            setNoteToDelete(null);
         } catch (error) {
             console.error('Erro ao excluir anotação:', error);
         }
@@ -2075,18 +2384,17 @@ function NotasTab() {
 }
 
 
-// Componente Arquivista (Processamento de PDFs)
+// Componente Arquivista (Livros PDF)
 function ArquivistaTab() {
     const [books, setBooks] = useState<string[]>([]);
     const [isScanning, setIsScanning] = useState(false);
     const [results, setResults] = useState<any>(null);
     const [isImportingAll, setIsImportingAll] = useState(false);
-    const [isCleaning, setIsCleaning] = useState(false);
-    const [isTranslatingDict, setIsTranslatingDict] = useState(false);
-    const [cleanupStatus, setCleanupStatus] = useState('');
     const [importProgress, setImportProgress] = useState({ current: 0, total: 0, success: 0, failed: 0 });
     const { user } = useAuth();
-
+    
+    // Estados para Modals - Arquivista
+    const [confirmImportAllModal, setConfirmImportAllModal] = useState<{ open: boolean }>({ open: false });
 
     useEffect(() => {
         const fetchBooks = async () => {
@@ -2124,7 +2432,7 @@ function ArquivistaTab() {
         }
     };
 
-    const importMechanic = async (mechanic: ParsedMechanic, silent = false) => {
+    const importMechanic = async (mechanic: any, silent = false) => {
         if (!user || !results) return false;
         try {
             const success = await ArchiveStorage.saveMechanic(user.uid, mechanic, results.info.title);
@@ -2145,7 +2453,11 @@ function ArquivistaTab() {
 
     const importAllMechanics = async () => {
         if (!user || !results || !results.mechanics) return;
-        if (!confirm(`Deseja importar todos os ${results.mechanics.length} registros? Duplicatas serão ignoradas.`)) return;
+        setConfirmImportAllModal({ open: true });
+    };
+
+    const executeImportAll = async () => {
+        if (!user || !results || !results.mechanics) return;
 
         setIsImportingAll(true);
         const total = results.mechanics.length;
@@ -2174,286 +2486,41 @@ function ArquivistaTab() {
 
         setIsImportingAll(false);
         alert(`✅ Importação finalizada!\n\nImportados: ${currentSuccess}\nDuplicados ou Falhas: ${currentFailed}`);
-    };
-
-    const performCleanup = async () => {
-        if (!user) return;
-        if (!confirm('Deseja iniciar a limpeza do banco de dados? Duplicatas serão removidas e registros antigos serão normalizados.')) return;
-
-        setIsCleaning(true);
-        try {
-            const result = await ArchiveStorage.cleanupDuplicates(user.uid, (msg) => setCleanupStatus(msg));
-            alert(`✅ Limpeza concluída!\n\nProcessados: ${result.processed}\nRemovidos: ${result.deleted}`);
-        } catch (error) {
-            console.error('Erro na limpeza:', error);
-            alert('Erro crítico durante a limpeza.');
-        } finally {
-            setIsCleaning(false);
-            setCleanupStatus('');
-        }
-    };
-
-    const performDictionaryTranslation = async () => {
-        if (!user) return;
-        if (!confirm('Deseja traduzir todos os itens usando o dicionário comunitário? Isso não gasta tokens de I.A.')) return;
-
-        setIsTranslatingDict(true);
-        try {
-            const result = await ArchiveStorage.bulkTranslateWithDictionary((curr, tot, msg) => {
-                setCleanupStatus(msg);
-            });
-            alert(`✅ Tradução via Dicionário concluída!\n\nItens traduzidos: ${result.translated}\nFalhas/Não encontrados: ${result.failed}`);
-        } catch (error) {
-            console.error('Erro na tradução via dicionário:', error);
-            alert('Erro durante o processamento do dicionário.');
-        } finally {
-            setIsTranslatingDict(false);
-            setCleanupStatus('');
-        }
-    };
-
-
-    const fetchFromAPI = async (type: string) => {
-        setIsScanning(true);
-        setResults(null);
-        try {
-            const [dataRes, dict] = await Promise.all([
-                fetch(`/api/dnd-api?type=${type}`),
-                ArchiveStorage.getTranslationDictionary(type)
-            ]);
-
-            const data = await dataRes.json();
-
-            if (dataRes.ok) {
-                const mechanics = data.items.map((item: any) => {
-                    const extractContent = (item: any): string => {
-                        if (item.entries) {
-                            const processEntries = (entries: any[]): string => {
-                                return entries.map(e => {
-                                    if (typeof e === 'string') return e;
-                                    if (e.entries) return processEntries(e.entries);
-                                    if (e.items) return e.items.map((it: any) => typeof it === 'string' ? it : it.name || '').join(', ');
-                                    return '';
-                                }).join(' ');
-                            };
-                            return processEntries(item.entries);
-                        }
-                        return item.desc?.join(' ') || item.description || '';
-                    };
-
-                    const content = extractContent(item);
-                    let m = {
-                        type: type === 'spells' ? 'spell' : type === 'monsters' ? 'monster' : type === 'rules' ? 'rule' : type === 'classes' ? 'class' : type === 'races' ? 'race' : 'item',
-                        name: item.name,
-                        originalName: item.name,
-                        content: content || 'Sem descrição disponível.',
-                        raw: JSON.stringify(item),
-                        metadata: item
-                    };
-
-                    // Aplicar tradução se existir no dicionário
-                    return ArchiveStorage.applyTranslation(m, dict);
-                });
-
-                setResults({
-                    count: mechanics.length,
-                    mechanics: mechanics,
-                    info: {
-                        title: `API D&D 5e - ${type}`,
-                        pages: Math.ceil(mechanics.length / 10)
-                    }
-                });
-            } else {
-                alert(`Erro: ${data.error || 'Falha ao buscar da API'}`);
-            }
-        } catch (error) {
-            console.error('Erro ao buscar da API:', error);
-            alert('Erro ao conectar com a API.');
-        } finally {
-            setIsScanning(false);
-        }
-    };
-
-    const fetchFrom5etools = async (type: string) => {
-        setIsScanning(true);
-        setResults(null);
-        try {
-            const [dataRes, dict] = await Promise.all([
-                fetch(`/api/fivetools?type=${type}`),
-                ArchiveStorage.getTranslationDictionary(type)
-            ]);
-
-            const data = await dataRes.json();
-
-            if (dataRes.ok) {
-                const mechanics = data.items.map((item: any) => {
-                    const extractContent = (item: any): string => {
-                        if (item.entries) {
-                            const processEntries = (entries: any[]): string => {
-                                return entries.map(e => {
-                                    if (typeof e === 'string') return e;
-                                    if (e.entries) return processEntries(e.entries);
-                                    if (e.items) return e.items.map((it: any) => typeof it === 'string' ? it : it.name || '').join(', ');
-                                    return '';
-                                }).join(' ');
-                            };
-                            return processEntries(item.entries);
-                        }
-                        return item.description || '';
-                    };
-
-                    const content = extractContent(item);
-                    let m = {
-                        type: type === 'spells' ? 'spell' : type === 'monsters' ? 'monster' : type === 'classes' ? 'class' : type === 'races' ? 'race' : type === 'rules' ? 'rule' : 'item',
-                        name: item.name,
-                        originalName: item.name,
-                        content: content || 'Sem descrição disponível.',
-                        raw: JSON.stringify(item),
-                        metadata: item
-                    };
-
-                    // Aplicar tradução se existir no dicionário
-                    return ArchiveStorage.applyTranslation(m, dict);
-                });
-
-                setResults({
-                    count: mechanics.length,
-                    mechanics: mechanics,
-                    info: {
-                        title: `5etools - ${type}`,
-                        pages: Math.ceil(mechanics.length / 10)
-                    }
-                });
-            } else {
-                alert(`Erro: ${data.error || 'Falha ao buscar do 5etools'}`);
-            }
-        } catch (error) {
-            console.error('Erro ao buscar do 5etools:', error);
-            alert('Erro ao conectar com o 5etools.');
-        } finally {
-            setIsScanning(false);
-        }
+        setConfirmImportAllModal({ open: false });
     };
 
     return (
         <div className="space-y-6">
             <div className="flex justify-between items-center">
-                <h2 className="text-2xl font-bold font-cinzel text-rpg-gold">🏛️ O Arquivista</h2>
+                <h2 className="text-2xl font-bold font-cinzel text-rpg-gold">📚 Seus Livros PDF</h2>
                 <p className="text-rpg-grey text-sm italic">Processar PDFs e extrair mecânicas...</p>
             </div>
 
             <div className="grid md:grid-cols-3 gap-6">
                 {/* Lista de Livros */}
                 <div className="bg-rpg-slate/50 p-4 rounded-lg border border-rpg-gold/10 h-fit space-y-4">
-                    <h3 className="text-lg font-bold font-cinzel text-rpg-gold mb-2">Importar da API Oficial</h3>
-                    <p className="text-xs text-rpg-grey mb-3">Buscar dados do SRD D&D 5e</p>
-
-                    <div className="space-y-2">
-                        <button
-                            onClick={() => fetchFromAPI('spells')}
-                            disabled={isScanning}
-                            className="w-full bg-blue-600/20 hover:bg-blue-600/40 text-blue-200 border border-blue-500/30 px-3 py-2 rounded text-xs font-bold transition-all disabled:opacity-50"
-                        >
-                            🔮 Magias SRD
-                        </button>
-                        <button
-                            onClick={() => fetchFromAPI('monsters')}
-                            disabled={isScanning}
-                            className="w-full bg-red-600/20 hover:bg-red-600/40 text-red-200 border border-red-500/30 px-3 py-2 rounded text-xs font-bold transition-all disabled:opacity-50"
-                        >
-                            👹 Monstros SRD
-                        </button>
-                        <button
-                            onClick={() => fetchFromAPI('equipment')}
-                            disabled={isScanning}
-                            className="w-full bg-purple-600/20 hover:bg-purple-600/40 text-purple-200 border border-purple-500/30 px-3 py-2 rounded text-xs font-bold transition-all disabled:opacity-50"
-                        >
-                            ⚔️ Equipamentos SRD
-                        </button>
-                    </div>
-
-                    <div className="border-t border-rpg-gold/10 pt-4 mt-4">
-                        <h3 className="text-lg font-bold font-cinzel text-rpg-gold mb-2">5etools (Mais Conteúdo)</h3>
-                        <p className="text-xs text-rpg-grey mb-3">Classes, raças e mais</p>
-                        <div className="space-y-2 mb-4">
-                            <button
-                                onClick={() => fetchFrom5etools('classes')}
-                                disabled={isScanning}
-                                className="w-full bg-green-600/20 hover:bg-green-600/40 text-green-200 border border-green-500/30 px-3 py-2 rounded text-xs font-bold transition-all disabled:opacity-50"
-                            >
-                                📚 Classes
-                            </button>
-                            <button
-                                onClick={() => fetchFrom5etools('races')}
-                                disabled={isScanning}
-                                className="w-full bg-yellow-600/20 hover:bg-yellow-600/40 text-yellow-200 border border-yellow-500/30 px-3 py-2 rounded text-xs font-bold transition-all disabled:opacity-50"
-                            >
-                                👥 Raças
-                            </button>
-                            <button
-                                onClick={() => fetchFrom5etools('items')}
-                                disabled={isScanning}
-                                className="w-full bg-purple-600/20 hover:bg-purple-600/40 text-purple-200 border border-purple-500/30 px-3 py-2 rounded text-xs font-bold transition-all disabled:opacity-50"
-                            >
-                                ⚔️ Equipamentos
-                            </button>
-                            <button
-                                onClick={() => fetchFrom5etools('rules')}
-                                disabled={isScanning}
-                                className="w-full bg-blue-600/20 hover:bg-blue-600/40 text-blue-200 border border-blue-500/30 px-3 py-2 rounded text-xs font-bold transition-all disabled:opacity-50"
-                            >
-                                📜 Regras Gerais
-                            </button>
+                    <h3 className="text-lg font-bold font-cinzel text-rpg-gold mb-4">Arquivos Disponíveis</h3>
+                    {books.length === 0 ? (
+                        <p className="text-xs text-rpg-grey italic">Nenhum PDF encontrado na pasta /books.</p>
+                    ) : (
+                        <div className="space-y-2">
+                            {books.map(book => (
+                                <div key={book} className="flex flex-col gap-2 p-3 bg-rpg-panel border border-white/5 rounded">
+                                    <span className="text-xs truncate font-medieval" title={book}>{book}</span>
+                                    <button
+                                        onClick={() => processBook(book)}
+                                        disabled={isScanning}
+                                        className="bg-purple-600/20 hover:bg-purple-600/40 text-purple-200 border border-purple-500/30 px-3 py-1 rounded text-[10px] font-bold transition-all disabled:opacity-50"
+                                    >
+                                        {isScanning ? '⏳ Processando...' : '🔍 Processar Livro'}
+                                    </button>
+                                </div>
+                            ))}
                         </div>
-                    </div>
-
-                    <div className="border-t border-rpg-gold/10 pt-4 mt-4">
-                        <h3 className="text-lg font-bold font-cinzel text-rpg-gold mb-2">Manutenção</h3>
-                        <p className="text-xs text-rpg-grey mb-3">Otimize seu banco de dados</p>
-                        <button
-                            onClick={performCleanup}
-                            disabled={isScanning || isCleaning}
-                            className="w-full bg-red-600/20 hover:bg-red-600/40 text-red-200 border border-red-500/30 px-3 py-2 rounded text-xs font-bold transition-all disabled:opacity-50 flex items-center justify-center gap-2"
-                        >
-                            {isCleaning ? '⏳ Limpando...' : '🧹 Limpar Duplicatas'}
-                        </button>
-                        {isCleaning && cleanupStatus && (
-                            <p className="text-[10px] text-rpg-gold mt-2 animate-pulse">{cleanupStatus}</p>
-                        )}
-
-                        <button
-                            onClick={performDictionaryTranslation}
-                            disabled={isScanning || isCleaning || isTranslatingDict}
-                            className="w-full mt-2 bg-green-600/20 hover:bg-green-600/40 text-green-200 border border-green-500/30 px-3 py-2 rounded text-xs font-bold transition-all disabled:opacity-50 flex items-center justify-center gap-2"
-                        >
-                            {isTranslatingDict ? '⏳ Sincronizando...' : '📚 Tradução via Dicionário'}
-                        </button>
-                        {isTranslatingDict && cleanupStatus && (
-                            <p className="text-[10px] text-rpg-gold mt-2 animate-pulse">{cleanupStatus}</p>
-                        )}
-                    </div>
-
-                    <div className="border-t border-rpg-gold/10 pt-4 mt-4">
-                        <h3 className="text-lg font-bold font-cinzel text-rpg-gold mb-4">Seus Livros (PDF)</h3>
-                        {books.length === 0 ? (
-                            <p className="text-xs text-rpg-grey italic">Nenhum PDF encontrado na pasta /books.</p>
-                        ) : (
-                            <div className="space-y-2">
-                                {books.map(book => (
-                                    <div key={book} className="flex flex-col gap-2 p-3 bg-rpg-panel border border-white/5 rounded">
-                                        <span className="text-xs truncate font-medieval" title={book}>{book}</span>
-                                        <button
-                                            onClick={() => processBook(book)}
-                                            disabled={isScanning}
-                                            className="bg-purple-600/20 hover:bg-purple-600/40 text-purple-200 border border-purple-500/30 px-3 py-1 rounded text-[10px] font-bold transition-all disabled:opacity-50"
-                                        >
-                                            {isScanning ? '⏳ Processando...' : '🔍 Processar Livro'}
-                                        </button>
-                                    </div>
-                                ))}
-                            </div>
-                        )}
-                    </div>
+                    )}
+                    <p className="text-[10px] text-rpg-grey mt-4">
+                        Adicione arquivos PDFs na pasta <code>public/books</code> do projeto para que apareçam aqui.
+                    </p>
                 </div>
 
                 {/* Resultados */}
@@ -2555,6 +2622,29 @@ function ArquivistaTab() {
                     )}
                 </div>
             </div>
+
+             {/* Modals */}
+             <Modal
+                isOpen={confirmImportAllModal.open}
+                onClose={() => setConfirmImportAllModal({ open: false })}
+                title="Importar Registros?"
+            >
+                <p className="mb-4">Deseja importar todos os {results?.mechanics?.length || 0} registros? Duplicatas serão ignoradas.</p>
+                <div className="flex gap-2 justify-end">
+                    <button
+                        onClick={() => setConfirmImportAllModal({ open: false })}
+                        className="px-4 py-2 bg-rpg-grey text-rpg-dark rounded font-bold hover:bg-rpg-gold/50 transition-all"
+                    >
+                        Cancelar
+                    </button>
+                    <button
+                        onClick={executeImportAll}
+                        className="px-4 py-2 bg-green-600 text-white rounded font-bold hover:bg-green-700 transition-all"
+                    >
+                        Importar
+                    </button>
+                </div>
+            </Modal>
         </div>
     );
 }
@@ -2575,6 +2665,11 @@ function NpcTab({ searchQuery }: { searchQuery: string }) {
         role: 'civilian',
         race: 'Humano'
     });
+    
+    // Estados para Modals - NPCs
+    const [confirmOverwriteNpcModal, setConfirmOverwriteNpcModal] = useState<{ open: boolean; npcName: string | null }>({ open: false, npcName: null });
+    const [confirmDeleteNpcModal, setConfirmDeleteNpcModal] = useState<{ open: boolean; npcName: string | null }>({ open: false, npcName: null });
+    const [npcToDelete, setNpcToDelete] = useState<string | null>(null);
 
     const loadCustomNpcs = useCallback(async () => {
         if (!user) return;
@@ -2605,11 +2700,8 @@ function NpcTab({ searchQuery }: { searchQuery: string }) {
             const existingIndex = customNpcs.findIndex(n => n.name === npc.name);
 
             if (existingIndex !== -1) {
-                if (!confirm(`O NPC "${npc.name}" já existe na sua galeria. Deseja sobrescrevê-lo?`)) {
-                    return;
-                }
-                updatedNpcs = [...customNpcs];
-                updatedNpcs[existingIndex] = npc;
+                setConfirmOverwriteNpcModal({ open: true, npcName: npc.name });
+                return;
             } else {
                 // Check Global NPCs (Templates)
                 const globalParams = searchNpcs(npc.name);
@@ -2632,14 +2724,44 @@ function NpcTab({ searchQuery }: { searchQuery: string }) {
     };
 
     const deleteCustomNpc = async (npcName: string) => {
-        if (!user || !confirm('Tem certeza que deseja excluir este NPC?')) return;
+        setConfirmDeleteNpcModal({ open: true, npcName });
+        setNpcToDelete(npcName);
+    };
+
+    const executeDeleteNpc = async () => {
+        if (!user || !npcToDelete) return;
         try {
-            const updatedNpcs = customNpcs.filter(n => n.name !== npcName);
+            const updatedNpcs = customNpcs.filter(n => n.name !== npcToDelete);
             await setDoc(doc(db, 'custom_npcs', user.uid), { npcs: updatedNpcs });
             setCustomNpcs(updatedNpcs);
-            if (selectedNpc?.name === npcName) setSelectedNpc(null);
+            if (selectedNpc?.name === npcToDelete) setSelectedNpc(null);
+            setConfirmDeleteNpcModal({ open: false, npcName: null });
+            setNpcToDelete(null);
         } catch (error) {
             console.error('Erro ao excluir NPC:', error);
+        }
+    };
+
+    const executeOverwriteNpc = async () => {
+        if (!user || !newNpc.name) return;
+        try {
+            const npc: NPCTemplate = {
+                ...(newNpc as NPCTemplate),
+                name: newNpc.name.trim()
+            };
+
+            const existingIndex = customNpcs.findIndex(n => n.name === npc.name);
+            let updatedNpcs: NPCTemplate[] = [...customNpcs];
+            updatedNpcs[existingIndex] = npc;
+
+            await setDoc(doc(db, 'custom_npcs', user.uid), { npcs: updatedNpcs });
+            setCustomNpcs(updatedNpcs);
+            setIsAddModalOpen(false);
+            setNewNpc({ name: '', hp: 10, ac: 10, challenge: '1/4', xp: 50, description: '', role: 'civilian', race: 'Humano' });
+            if (selectedNpc?.name === npc.name) setSelectedNpc(npc);
+            setConfirmOverwriteNpcModal({ open: false, npcName: null });
+        } catch (error) {
+            console.error('Erro ao sobrescrever NPC:', error);
         }
     };
 
@@ -2850,6 +2972,41 @@ export default function BibliotecaPage() {
     const [activeCharacterId, setActiveCharacterId] = useState<string | null>(null);
     const [activeCharacterName, setActiveCharacterName] = useState<string | null>(null);
 
+    // States para Modals - Grimório
+    const [confirmOverwriteSpellModal, setConfirmOverwriteSpellModal] = useState<{ open: boolean; spellName: string | null; spellData?: Spell }>({ open: false, spellName: null });
+    const [confirmDeleteSpellModal, setConfirmDeleteSpellModal] = useState<{ open: boolean; spellId: string | null }>({ open: false, spellId: null });
+    const [spellToDelete, setSpellToDelete] = useState<string | null>(null);
+
+    // States para Modals - Bestiário
+    const [confirmOverwriteMonsterModal, setConfirmOverwriteMonsterModal] = useState<{ open: boolean; monsterName: string | null }>({ open: false, monsterName: null });
+    const [confirmDeleteMonsterModal, setConfirmDeleteMonsterModal] = useState<{ open: boolean; monsterName: string | null }>({ open: false, monsterName: null });
+    const [monsterToDelete, setMonsterToDelete] = useState<string | null>(null);
+
+    // States para Modals - Itens
+    const [confirmOverwriteItemModal, setConfirmOverwriteItemModal] = useState<{ open: boolean; itemName: string | null }>({ open: false, itemName: null });
+    const [confirmDeleteItemModal, setConfirmDeleteItemModal] = useState<{ open: boolean; itemId: string | null }>({ open: false, itemId: null });
+    const [itemToDelete, setItemToDelete] = useState<string | null>(null);
+
+    // States para Modals - Regras
+    const [confirmOverwriteRuleModal, setConfirmOverwriteRuleModal] = useState<{ open: boolean; ruleName: string | null }>({ open: false, ruleName: null });
+    const [confirmDeleteRuleModal, setConfirmDeleteRuleModal] = useState<{ open: boolean; ruleId: string | null }>({ open: false, ruleId: null });
+    const [confirmSyncRulesModal, setConfirmSyncRulesModal] = useState<{ open: boolean }>({ open: false });
+    const [ruleToDelete, setRuleToDelete] = useState<string | null>(null);
+
+    // States para Modals - Notas
+    const [confirmDeleteNoteModal, setConfirmDeleteNoteModal] = useState<{ open: boolean; noteId: string | null }>({ open: false, noteId: null });
+    const [noteToDelete, setNoteToDelete] = useState<string | null>(null);
+
+    // States para Modals - Arquivista
+    const [confirmImportAllModal, setConfirmImportAllModal] = useState<{ open: boolean }>({ open: false });
+    const [confirmCleanupModal, setConfirmCleanupModal] = useState<{ open: boolean }>({ open: false });
+    const [confirmTranslationModal, setConfirmTranslationModal] = useState<{ open: boolean }>({ open: false });
+
+    // States para Modals - NPCs
+    const [confirmOverwriteNpcModal, setConfirmOverwriteNpcModal] = useState<{ open: boolean; npcName: string | null }>({ open: false, npcName: null });
+    const [confirmDeleteNpcModal, setConfirmDeleteNpcModal] = useState<{ open: boolean; npcName: string | null }>({ open: false, npcName: null });
+    const [npcToDelete, setNpcToDelete] = useState<string | null>(null);
+
     useEffect(() => {
         setActiveCharacterId(localStorage.getItem('activeCharacterId'));
         setActiveCharacterName(localStorage.getItem('activeCharacterName'));
@@ -2941,7 +3098,7 @@ export default function BibliotecaPage() {
                         { id: 'npcs' as TabType, label: '👥 NPCs', icon: '👤' },
                         { id: 'regras' as TabType, label: '📕 Regras', icon: '⚖️' },
                         { id: 'notas' as TabType, label: '📜 Anotações', icon: '🖋️' },
-                        { id: 'arquivista' as TabType, label: '🏛️ Arquivista', icon: '📜' }
+                        { id: 'arquivista' as TabType, label: '📚 Livros PDF', icon: '📜' }
                     ].map(tab => (
                         <button
                             key={tab.id}
@@ -2998,6 +3155,8 @@ export default function BibliotecaPage() {
 
                     {activeTab === 'arquivista' && <ArquivistaTab />}
                 </div>
+
+
             </section>
         </div>
     );

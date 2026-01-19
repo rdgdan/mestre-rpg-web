@@ -38,6 +38,8 @@ export default function HomePage() {
   const [isCampaignModalOpen, setIsCampaignModalOpen] = useState(false);
   const [isNpcModalOpen, setIsNpcModalOpen] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [confirmDeleteCampaignModal, setConfirmDeleteCampaignModal] = useState<{ open: boolean; campaignId: string | null; campaignName: string | null }>({ open: false, campaignId: null, campaignName: null });
+  const [confirmSyncTraitsModal, setConfirmSyncTraitsModal] = useState(false);
 
   // States para Formulário de Campanha (Criação e Edição)
   const [campaignName, setCampaignName] = useState('');
@@ -209,13 +211,14 @@ export default function HomePage() {
   const handleDeleteCampaign = async (campaignId: string, campaignName: string, e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
+    setConfirmDeleteCampaignModal({ open: true, campaignId, campaignName });
+  };
 
-    if (!confirm(`Tem certeza que deseja apagar a campanha "${campaignName}"? Esta ação não pode ser desfeita.`)) {
-      return;
-    }
-
+  const executeDeleteCampaign = async () => {
+    if (!confirmDeleteCampaignModal.campaignId) return;
     try {
-      await deleteDoc(doc(db, 'campaigns', campaignId));
+      await deleteDoc(doc(db, 'campaigns', confirmDeleteCampaignModal.campaignId));
+      setConfirmDeleteCampaignModal({ open: false, campaignId: null, campaignName: null });
     } catch (error) {
       console.error("Erro ao excluir campanha:", error);
       alert("Erro ao excluir campanha.");
@@ -244,11 +247,15 @@ export default function HomePage() {
   }
 
   const handleSyncTraits = async () => {
-    if (!confirm('Deseja sincronizar as listas de traços (Profissões, Aparências, etc.) com o banco de dados? Isso buscará as versões mais recentes sem duplicar.')) return;
+    setConfirmSyncTraitsModal(true);
+  };
+
+  const executeSyncTraits = async () => {
     setIsSyncing(true);
     try {
       const traits = await syncNpcTraitsToFirestore();
       setNpcTraits(traits);
+      setConfirmSyncTraitsModal(false);
       alert('Sincronização concluída com sucesso!');
     } catch (error) {
       console.error("Erro ao sincronizar:", error);
@@ -538,6 +545,57 @@ export default function HomePage() {
             ))}
           </div>
         )}
+      </Modal>
+
+      {/* DELETE CAMPAIGN MODAL */}
+      <Modal
+        isOpen={confirmDeleteCampaignModal.open}
+        onClose={() => setConfirmDeleteCampaignModal({ open: false, campaignId: null, campaignName: null })}
+        title="⚠️ Apagar Campanha"
+      >
+        <div className="text-center">
+          <p className="text-rpg-parchment mb-6">Tem certeza que deseja apagar a campanha <strong className="text-rpg-gold">"{confirmDeleteCampaignModal.campaignName}"</strong>? Esta ação não pode ser desfeita.</p>
+          <div className="flex gap-4 justify-center">
+            <button
+              onClick={() => setConfirmDeleteCampaignModal({ open: false, campaignId: null, campaignName: null })}
+              className="bg-rpg-slate hover:bg-rpg-slate/80 text-rpg-parchment border border-rpg-gold/30 font-bold py-2 px-6 rounded transition-all"
+            >
+              Cancelar
+            </button>
+            <button
+              onClick={executeDeleteCampaign}
+              className="bg-rpg-red hover:bg-rpg-red/80 text-white font-bold py-2 px-6 rounded transition-all"
+            >
+              Apagar Campanha
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* SYNC TRAITS MODAL */}
+      <Modal
+        isOpen={confirmSyncTraitsModal}
+        onClose={() => setConfirmSyncTraitsModal(false)}
+        title="🔄 Sincronizar Traços"
+      >
+        <div className="text-center">
+          <p className="text-rpg-parchment mb-6">Deseja sincronizar as listas de traços <strong className="text-rpg-gold">(Profissões, Aparências, Personalidades e Raças)</strong> com o banco de dados? Isso buscará as versões mais recentes sem duplicar.</p>
+          <div className="flex gap-4 justify-center">
+            <button
+              onClick={() => setConfirmSyncTraitsModal(false)}
+              className="bg-rpg-slate hover:bg-rpg-slate/80 text-rpg-parchment border border-rpg-gold/30 font-bold py-2 px-6 rounded transition-all"
+            >
+              Cancelar
+            </button>
+            <button
+              onClick={executeSyncTraits}
+              disabled={isSyncing}
+              className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded transition-all disabled:opacity-50"
+            >
+              {isSyncing ? 'Sincronizando...' : 'Sincronizar Agora'}
+            </button>
+          </div>
+        </div>
       </Modal>
     </>
   );

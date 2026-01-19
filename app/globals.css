@@ -2,6 +2,14 @@
 @tailwind components;
 @tailwind utilities;
 
+/* FORÇA CORES DOS BOTÕES - MÁXIMA PRIORIDADE */
+@layer components {
+  button[style*="backgroundColor"] {
+    background-color: var(--btn-bg) !important;
+    border-color: var(--btn-border) !important;
+  }
+}
+
 /* Animação para efeitos únicos/especiais */
 @keyframes shimmer-effect {
   0% {
@@ -47,7 +55,7 @@
   animation: active-turn-glow 2s ease-in-out infinite;
 }
 
-/* Animação para HP zero (piscante cinza) */
+/* Animação para HP zero (piscante cinza) - aplica nos filhos, não no overlay */
 @keyframes defeated-pulse {
   0%, 100% {
     filter: grayscale(100%) brightness(0.6);
@@ -57,8 +65,41 @@
   }
 }
 
-.defeated-animation {
+.defeated-animation > *:not(.overlay-colorido) {
   animation: defeated-pulse 1.5s ease-in-out infinite;
+}
+
+/* Remove todas as outras animações quando derrotado */
+.defeated-animation .effect-unique,
+.defeated-animation .active-turn-animation,
+.defeated-animation [class*="animate-"] {
+  animation: defeated-pulse 1.5s ease-in-out infinite !important;
+}
+
+/* Força cores dos botões dentro do overlay - cancela grayscale do card pai */
+.defeated-animation button {
+  filter: grayscale(0%) !important;
+}
+
+/* Botões de ação no overlay de combatente caído */
+.btn-curar {
+  background-color: #16a34a !important;
+  border-color: #4ade80 !important;
+  color: white !important;
+}
+
+.btn-curar:hover {
+  background-color: #15803d !important;
+}
+
+.btn-matar {
+  background-color: #991b1b !important;
+  border-color: #dc2626 !important;
+  color: white !important;
+}
+
+.btn-matar:hover {
+  background-color: #7f1d1d !important;
 }
 
 :root {

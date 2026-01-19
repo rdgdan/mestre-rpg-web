@@ -5,10 +5,11 @@ interface StartingEquipmentModalProps {
     isOpen: boolean;
     onClose: () => void;
     className: string;
+    background: string | null;
     onConfirm: (selectedItems: any[]) => void;
 }
 
-export const StartingEquipmentModal: React.FC<StartingEquipmentModalProps> = ({ isOpen, onClose, className, onConfirm }) => {
+export const StartingEquipmentModal: React.FC<StartingEquipmentModalProps> = ({ isOpen, onClose, className, background, onConfirm }) => {
     const [selections, setSelections] = useState<Record<number, number>>({}); // Index da Opção -> Index da Escolha dentro da opção
 
     if (!isOpen) return null;

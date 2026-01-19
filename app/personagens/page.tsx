@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import { db } from '@/lib/firebase';
 import { logger } from '@/lib/logger';
+import Modal from '@/components/Modal';
 import {
   collection,
   addDoc,
@@ -35,6 +36,7 @@ export default function CharacterListPage() {
   const [characters, setCharacters] = useState<Character[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [confirmDeleteModal, setConfirmDeleteModal] = useState<{ open: boolean; characterId: string | null; characterName: string | null }>({ open: false, characterId: null, characterName: null });
 
   useEffect(() => {
     if (user) {
@@ -111,14 +113,17 @@ export default function CharacterListPage() {
     router.push(`/personagem/novo`);
   };
 
-  const handleDeleteCharacter = async (e: React.MouseEvent<HTMLButtonElement>, id: string) => {
-    e.preventDefault(); // Previne o clique no link do card
-    e.stopPropagation(); // Para a propagação do evento
-    if (!confirm("Tem certeza que deseja apagar esta ficha de personagem? Esta ação é irreversível.")) {
-      return;
-    }
+  const handleDeleteCharacter = async (e: React.MouseEvent<HTMLButtonElement>, id: string, name: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setConfirmDeleteModal({ open: true, characterId: id, characterName: name });
+  };
+
+  const executeDeleteCharacter = async () => {
+    if (!confirmDeleteModal.characterId) return;
     try {
-      await deleteDoc(doc(db, 'personagens', id));
+      await deleteDoc(doc(db, 'personagens', confirmDeleteModal.characterId));
+      setConfirmDeleteModal({ open: false, characterId: null, characterName: null });
     } catch (error) {
       logger.error('Erro ao deletar personagem', error);
       alert("Não foi possível apagar o personagem. Tente novamente.");
@@ -194,7 +199,7 @@ export default function CharacterListPage() {
 
                   <div className="flex justify-end gap-2 mt-auto pt-4 relative">
                     <button
-                      onClick={(e) => handleDeleteCharacter(e, char.id)}
+                      onClick={(e) => handleDeleteCharacter(e, char.id, char.name)}
                       className="bg-rpg-red/80 hover:bg-rpg-red text-white font-bold py-2 px-4 rounded border border-rpg-red/50 text-xs transition-all md:opacity-0 md:group-hover:opacity-100 md:transform md:translate-y-2 md:group-hover:translate-y-0 font-cinzel shadow-md hover:shadow-glow-red"
                       title="Apagar Herói Permanentemente"
                     >
@@ -213,6 +218,30 @@ export default function CharacterListPage() {
           )}
         </div>
       </div>
+
+      <Modal
+        isOpen={confirmDeleteModal.open}
+        title="Exilar Herói"
+        onClose={() => setConfirmDeleteModal({ open: false, characterId: null, characterName: null })}
+      >
+        <div className="text-center">
+          <p className="text-rpg-parchment mb-6">Tem certeza que deseja exilar permanentemente <strong className="text-rpg-red">{confirmDeleteModal.characterName}</strong>? Esta ação não pode ser desfeita.</p>
+          <div className="flex gap-4 justify-center">
+            <button
+              onClick={() => setConfirmDeleteModal({ open: false, characterId: null, characterName: null })}
+              className="bg-rpg-slate hover:bg-rpg-slate/80 text-rpg-parchment border border-rpg-gold/30 font-bold py-2 px-6 rounded transition-all"
+            >
+              Cancelar
+            </button>
+            <button
+              onClick={executeDeleteCharacter}
+              className="bg-rpg-red hover:bg-rpg-red/80 text-white font-bold py-2 px-6 rounded transition-all"
+            >
+              Confirmar Exílio
+            </button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }

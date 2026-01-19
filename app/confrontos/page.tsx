@@ -35,6 +35,7 @@ export default function ConfrontosLobbyPage() {
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
     const [newEncounterTitle, setNewEncounterTitle] = useState('');
     const [isCreating, setIsCreating] = useState(false);
+    const [confirmDeleteModal, setConfirmDeleteModal] = useState<{ open: boolean; encounterId: string | null; encounterTitle: string | null }>({ open: false, encounterId: null, encounterTitle: null });
 
     // Proteção de rota
     useEffect(() => {
@@ -93,16 +94,18 @@ export default function ConfrontosLobbyPage() {
         }
     };
 
-    const handleDeleteEncounter = async (id: string, e: React.MouseEvent) => {
+    const handleDeleteEncounter = async (id: string, title: string, e: React.MouseEvent) => {
         e.stopPropagation();
         e.preventDefault();
+        setConfirmDeleteModal({ open: true, encounterId: id, encounterTitle: title });
+    };
 
-        if (!confirm("Tem certeza que deseja excluir este confronto permanentemente?")) return;
-
+    const executeDeleteEncounter = async () => {
+        if (!confirmDeleteModal.encounterId) return;
         try {
-            await deleteDoc(doc(db, 'encounters', id));
-            // Também apaga a arena online se existir
-            await deleteDoc(doc(db, 'arenas_online', id));
+            await deleteDoc(doc(db, 'encounters', confirmDeleteModal.encounterId));
+            await deleteDoc(doc(db, 'arenas_online', confirmDeleteModal.encounterId));
+            setConfirmDeleteModal({ open: false, encounterId: null, encounterTitle: null });
         } catch (err) {
             console.error("Erro ao deletar:", err);
             alert("Erro ao excluir encontro.");
@@ -177,7 +180,7 @@ export default function ConfrontosLobbyPage() {
                                         <span className="text-2xl">⚔️</span>
                                     </div>
                                     <button
-                                        onClick={(e) => handleDeleteEncounter(enc.id, e)}
+                                        onClick={(e) => handleDeleteEncounter(enc.id, enc.title, e)}
                                         className="text-red-500/50 hover:text-red-500 p-2 transition-all"
                                         title="Excluir Confronto"
                                     >
@@ -235,6 +238,33 @@ export default function ConfrontosLobbyPage() {
                         </button>
                     </div>
                 </form>
+            </Modal>
+
+            {/* DELETE MODAL */}
+            <Modal
+                isOpen={confirmDeleteModal.open}
+                onClose={() => setConfirmDeleteModal({ open: false, encounterId: null, encounterTitle: null })}
+                title="⚠️ Excluir Confronto"
+            >
+                <div className="p-6 text-center">
+                    <p className="text-lg text-rpg-parchment mb-6">
+                        Deseja excluir permanentemente o confronto <span className="font-bold text-rpg-gold">"{confirmDeleteModal.encounterTitle}"</span>? Esta ação não pode ser desfeita.
+                    </p>
+                    <div className="flex gap-4 justify-center">
+                        <button
+                            onClick={executeDeleteEncounter}
+                            className="px-6 py-3 bg-red-600 hover:bg-red-500 text-white font-bold rounded-lg transition-colors"
+                        >
+                            ✓ Excluir
+                        </button>
+                        <button
+                            onClick={() => setConfirmDeleteModal({ open: false, encounterId: null, encounterTitle: null })}
+                            className="px-6 py-3 bg-gray-600 hover:bg-gray-500 text-white font-bold rounded-lg transition-colors"
+                        >
+                            ✗ Cancelar
+                        </button>
+                    </div>
+                </div>
             </Modal>
         </div>
     );

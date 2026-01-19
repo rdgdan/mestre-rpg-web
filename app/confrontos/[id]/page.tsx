@@ -84,12 +84,12 @@ export default function ConfrontoDetalhesPage() {
     const params = useParams();
     const id = params.id as string;
 
-    // Garantir unicidade por `externalId` (preferência) ou `id`
+    // Garantir unicidade por `id` interno (permite múltiplas instâncias do mesmo personagem)
     const dedupeCombatants = (arr: Combatant[]) => {
         const map = new Map<string, Combatant>();
         for (const c of arr || []) {
-            const key = String(c.externalId || c.id);
-            // o último vence (dados mais recentes)
+            // Usa apenas o id interno para garantir que cada combatente seja único
+            const key = String(c.id);
             map.set(key, c);
         }
         return Array.from(map.values());
@@ -150,6 +150,12 @@ export default function ConfrontoDetalhesPage() {
     const [effectTab, setEffectTab] = useState<'all' | 'benefits' | 'debuffs'>('all');
     // Busca de efeitos
     const [effectSearchQuery, setEffectSearchQuery] = useState('');
+    // Modal de confirmação CURAR
+    const [confirmCureModal, setConfirmCureModal] = useState<{ open: boolean; combatant: Combatant | null }>({ open: false, combatant: null });
+    // Modal de confirmação REMOVER COMBATENTE
+    const [confirmRemoveModal, setConfirmRemoveModal] = useState<{ open: boolean; combatantId: string | null; combatantName: string | null }>({ open: false, combatantId: null, combatantName: null });
+    // Modal de confirmação RESETAR COMBATE
+    const [confirmResetModal, setConfirmResetModal] = useState(false);
 
     // Usar efeitos compartilhados do arquivo centralizado
     const CLASS_EFFECTS = SHARED_CLASS_EFFECTS;
@@ -625,11 +631,23 @@ export default function ConfrontoDetalhesPage() {
         setMonsterSearch('');
     };
 
+    // Limpar efeitos da ficha quando personagem morre
+    const clearCharacterEffects = async (combatant: Combatant) => {
+        if (combatant.type === 'player' && combatant.externalId) {
+            try {
+                await updateDoc(doc(db, 'personagens', combatant.externalId), {
+                    activeEffects: []
+                });
+                console.log(`Efeitos removidos da ficha de ${combatant.name}`);
+            } catch (error) {
+                console.error(`Erro ao limpar efeitos de ${combatant.name}:`, error);
+            }
+        }
+    };
+
     const removeCombatant = async (cid: string) => {
-        if (!confirm("Remover este combatente?")) return;
-        const updated = combatants.filter(c => c.id !== cid);
-        setCombatants(updated);
-        await syncState({ combatants: updated });
+        const combatant = combatants.find(c => c.id === cid);
+        setConfirmRemoveModal({ open: true, combatantId: cid, combatantName: combatant?.name || 'Combatente' });
     };
 
     const updateHP = async (cid: string, amount: number) => {
@@ -686,11 +704,7 @@ export default function ConfrontoDetalhesPage() {
     };
 
     const resetCombat = async () => {
-        if (!confirm("Resetar o combate? Isso voltará para fase de preparação.")) return;
-        setPhase('preparation');
-        setRound(1);
-        setTurnIndex(0);
-        await syncState({ phase: 'preparation', round: 1, turnIndex: 0 });
+        setConfirmResetModal(true);
     };
 
     const finishCombat = () => {
@@ -937,14 +951,16 @@ export default function ConfrontoDetalhesPage() {
                         // Detectar se combatente está caído
                         const isFallen = c.statusEffects.some(se => se.id === 'caido');
                         const isDefeated = c.hp === 0;
+                        const isDead = c.status === 'dead';
                         
                         return (
                         <div
-                            key={String(c.externalId || c.id)}
+                            key={c.id}
+                            style={isDead ? { opacity: 0.5, pointerEvents: 'none' } : {}}
                             className={`
                                 relative p-3 sm:p-5 rounded-xl transition-all duration-300
-                                ${hasBothEffects ? 'border-l-[6px] border-l-green-500 border-r-[6px] border-r-red-500 border-t-2 border-b-2 border-t-purple-500/50 border-b-purple-500/50' : 'border-2'}
-                                ${hasUniqueEffects && !hasOnlyGlobalConditions ? 'effect-unique' : ''}
+                                ${isDefeated ? 'border-2' : hasBothEffects ? 'border-l-[6px] border-l-green-500 border-r-[6px] border-r-red-500 border-t-2 border-b-2 border-t-purple-500/50 border-b-purple-500/50' : 'border-2'}
+                                ${isDefeated ? '' : hasUniqueEffects && !hasOnlyGlobalConditions ? 'effect-unique' : ''}
                                 ${phase === 'combat' && turnIndex === index && !isDefeated ? 'active-turn-animation bg-rpg-gold/15 border-rpg-gold scale-[1.01] z-10' : 
                                   isDefeated ? 'bg-rpg-dark/80 border-gray-600/40 defeated-animation' :
                                   hasBothEffects ? 'bg-gradient-to-r from-green-950/20 via-rpg-dark/50 to-red-950/20 shadow-lg' :
@@ -955,9 +971,20 @@ export default function ConfrontoDetalhesPage() {
                                   'bg-red-950/20 border-red-600/30 shadow-lg shadow-red-900/10'}
                             `}
                         >
+                            {/* Faixa MORTO quando status = dead */}
+                            {isDead && (
+                                <div className="absolute inset-0 flex items-center justify-center z-50 bg-black/60 rounded-xl">
+                                    <div className="transform -rotate-12">
+                                        <div className="bg-red-900 text-red-100 px-16 py-4 font-cinzel font-bold text-4xl tracking-widest border-4 border-red-700 shadow-2xl rounded-xl">
+                                            ☠️ MORTO ☠️
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+                            
                             {/* Overlay Centralizado quando HP = 0 */}
-                            {isDefeated && (
-                                <div className="absolute inset-0 flex flex-col items-center justify-center z-50 bg-black/30 backdrop-blur-[2px] rounded-xl">
+                            {isDefeated && !isDead && (
+                                <div className="overlay-colorido absolute inset-0 flex flex-col items-center justify-center z-50 bg-black/20 rounded-xl">
                                     <div className="flex flex-col items-center gap-4">
                                         {/* Badge CAÍDO/MORTO */}
                                         <div className="bg-red-900 text-red-100 px-8 py-3 rounded-full font-cinzel font-bold text-2xl tracking-wide border-4 border-red-700 shadow-2xl">
@@ -969,22 +996,23 @@ export default function ConfrontoDetalhesPage() {
                                             <div className="flex gap-3">
                                                 {/* Botão CURAR */}
                                                 <button
-                                                    onClick={async () => {
-                                                        const actionText = c.type === 'player' ? 'Curar' : 'Levantar';
-                                                        if (confirm(`Deseja ${actionText.toLowerCase()} ${c.name} com 1 HP para ele retornar ao combate?`)) {
-                                                            const updated = combatants.map(comb => {
-                                                                if (comb.id !== c.id) return comb;
-                                                                return {
-                                                                    ...comb,
-                                                                    hp: Math.max(1, comb.hp),
-                                                                    statusEffects: (comb.statusEffects || []).filter(se => se.id !== 'caido')
-                                                                };
-                                                            });
-                                                            setCombatants(updated);
-                                                            await syncState({ combatants: updated });
-                                                        }
-                                                    }}
-                                                    className="px-8 py-4 rounded-xl text-lg font-bold !bg-green-600 !border-green-400 border-4 text-white hover:!bg-green-500 hover:scale-105 transition-all active:scale-95 shadow-2xl animate-pulse"
+                                                    onClick={() => setConfirmCureModal({ open: true, combatant: c })}
+                                                    style={{
+                                                        background: '#22c55e',
+                                                        border: '4px solid #86efac',
+                                                        color: '#ffffff',
+                                                        padding: '1rem 2rem',
+                                                        borderRadius: '0.75rem',
+                                                        fontSize: '1.125rem',
+                                                        fontWeight: '700',
+                                                        cursor: 'pointer',
+                                                        boxShadow: '0 0 30px rgba(34, 197, 94, 0.6), 0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+                                                        transition: 'transform 0.2s',
+                                                        animation: 'pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+                                                        filter: 'none'
+                                                    } as React.CSSProperties}
+                                                    onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.05)'}
+                                                    onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
                                                     title={c.type === 'player' ? 'Curar com 1 HP' : 'Levantar com 1 HP'}
                                                 >
                                                     ❤️ {c.type === 'player' ? 'CURAR' : 'LEVANTAR'}
@@ -993,16 +1021,38 @@ export default function ConfrontoDetalhesPage() {
                                                 {/* Botão MATAR */}
                                                 <button
                                                     onClick={async () => {
-                                                        if (confirm(`⚠️ CONFIRMA MORTE PERMANENTE de ${c.name}? Esta ação não pode ser desfeita!`)) {
+                                                        try {
+                                                            console.log('MATAR clicked for:', c.name, c.id);
                                                             const updated = combatants.map(comb => {
                                                                 if (comb.id !== c.id) return comb;
+                                                                console.log('Marking as dead:', comb.name);
                                                                 return { ...comb, status: 'dead' as const, hp: 0 };
                                                             });
+                                                            console.log('Updated combatants:', updated);
                                                             setCombatants(updated);
                                                             await syncState({ combatants: updated });
+                                                            // Limpar efeitos da ficha quando morre
+                                                            await clearCharacterEffects(c);
+                                                            console.log('State synced');
+                                                        } catch (error) {
+                                                            console.error('Error in MATAR button:', error);
                                                         }
                                                     }}
-                                                    className="px-8 py-4 rounded-xl text-lg font-bold !bg-red-800 !border-red-600 border-4 text-white hover:!bg-red-700 hover:scale-105 transition-all active:scale-95 shadow-2xl"
+                                                    style={{
+                                                        background: '#dc2626',
+                                                        border: '4px solid #f87171',
+                                                        color: '#ffffff',
+                                                        padding: '1rem 2rem',
+                                                        borderRadius: '0.75rem',
+                                                        fontSize: '1.125rem',
+                                                        fontWeight: '700',
+                                                        cursor: 'pointer',
+                                                        boxShadow: '0 0 30px rgba(220, 38, 38, 0.6), 0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+                                                        transition: 'transform 0.2s',
+                                                        filter: 'none'
+                                                    } as React.CSSProperties}
+                                                    onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.05)'}
+                                                    onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
                                                     title="Matar permanentemente"
                                                 >
                                                     ☠️ MATAR
@@ -1827,6 +1877,112 @@ export default function ConfrontoDetalhesPage() {
                             </>
                         );
                     })()}
+                </div>
+            </Modal>
+
+            {/* Modal de Confirmação CURAR */}
+            <Modal 
+                isOpen={confirmCureModal.open} 
+                onClose={() => setConfirmCureModal({ open: false, combatant: null })}
+                title={confirmCureModal.combatant?.type === 'player' ? '❤️ Curar Personagem' : '❤️ Levantar Combatente'}
+            >
+                <div className="p-6 text-center">
+                    <p className="text-lg text-rpg-parchment mb-6">
+                        Deseja {confirmCureModal.combatant?.type === 'player' ? 'curar' : 'levantar'} <span className="font-bold text-rpg-gold">{confirmCureModal.combatant?.name}</span> com 1 HP para retornar ao combate?
+                    </p>
+                    <div className="flex gap-4 justify-center">
+                        <button
+                            onClick={async () => {
+                                if (!confirmCureModal.combatant) return;
+                                const updated = combatants.map(comb => {
+                                    if (comb.id !== confirmCureModal.combatant!.id) return comb;
+                                    return {
+                                        ...comb,
+                                        hp: Math.max(1, comb.hp),
+                                        statusEffects: (comb.statusEffects || []).filter(se => se.id !== 'caido')
+                                    };
+                                });
+                                setCombatants(updated);
+                                await syncState({ combatants: updated });
+                                setConfirmCureModal({ open: false, combatant: null });
+                            }}
+                            className="px-6 py-3 bg-green-600 hover:bg-green-500 text-white font-bold rounded-lg transition-colors"
+                        >
+                            ✓ Confirmar
+                        </button>
+                        <button
+                            onClick={() => setConfirmCureModal({ open: false, combatant: null })}
+                            className="px-6 py-3 bg-gray-600 hover:bg-gray-500 text-white font-bold rounded-lg transition-colors"
+                        >
+                            ✗ Cancelar
+                        </button>
+                    </div>
+                </div>
+            </Modal>
+
+            {/* Modal de Confirmação REMOVER COMBATENTE */}
+            <Modal 
+                isOpen={confirmRemoveModal.open} 
+                onClose={() => setConfirmRemoveModal({ open: false, combatantId: null, combatantName: null })}
+                title="⚠️ Remover Combatente"
+            >
+                <div className="p-6 text-center">
+                    <p className="text-lg text-rpg-parchment mb-6">
+                        Deseja remover <span className="font-bold text-rpg-gold">{confirmRemoveModal.combatantName}</span> do combate?
+                    </p>
+                    <div className="flex gap-4 justify-center">
+                        <button
+                            onClick={async () => {
+                                if (!confirmRemoveModal.combatantId) return;
+                                const updated = combatants.filter(c => c.id !== confirmRemoveModal.combatantId);
+                                setCombatants(updated);
+                                await syncState({ combatants: updated });
+                                setConfirmRemoveModal({ open: false, combatantId: null, combatantName: null });
+                            }}
+                            className="px-6 py-3 bg-red-600 hover:bg-red-500 text-white font-bold rounded-lg transition-colors"
+                        >
+                            ✓ Remover
+                        </button>
+                        <button
+                            onClick={() => setConfirmRemoveModal({ open: false, combatantId: null, combatantName: null })}
+                            className="px-6 py-3 bg-gray-600 hover:bg-gray-500 text-white font-bold rounded-lg transition-colors"
+                        >
+                            ✗ Cancelar
+                        </button>
+                    </div>
+                </div>
+            </Modal>
+
+            {/* Modal de Confirmação RESETAR COMBATE */}
+            <Modal 
+                isOpen={confirmResetModal} 
+                onClose={() => setConfirmResetModal(false)}
+                title="⚠️ Resetar Combate"
+            >
+                <div className="p-6 text-center">
+                    <p className="text-lg text-rpg-parchment mb-6">
+                        Deseja resetar o combate? Isso voltará para a <span className="font-bold text-rpg-gold">fase de preparação</span>.
+                    </p>
+                    <div className="flex gap-4 justify-center">
+                        <button
+                            onClick={async () => {
+                                setPhase('preparation');
+                                setRound(1);
+                                setTurnIndex(0);
+                                await syncState({ phase: 'preparation', round: 1, turnIndex: 0 });
+                                setConfirmResetModal(false);
+                            }}
+                            className="px-6 py-3 bg-yellow-600 hover:bg-yellow-500 text-white font-bold rounded-lg transition-colors"
+                        >
+                            ✓ Resetar
+                        </button>
+                        <button
+                            onClick={() => setConfirmResetModal(false)}
+                            className="px-6 py-3 bg-gray-600 hover:bg-gray-500 text-white font-bold rounded-lg transition-colors"
+                        >
+                            ✗ Cancelar
+                        </button>
+                    </div>
                 </div>
             </Modal>
         </div>
