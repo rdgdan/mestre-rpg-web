@@ -344,6 +344,7 @@ export default function CharacterSheetPage() {
 
     // Automação: Proficiências
     const [isProficiencyModalOpen, setIsProficiencyModalOpen] = useState(false);
+    const [casterAlertModal, setCasterAlertModal] = useState(false);
     const [isEquipmentStartModalOpen, setIsEquipmentStartModalOpen] = useState(false);
     const [selectedClassForProficiency, setSelectedClassForProficiency] = useState<string>('');
 
@@ -372,34 +373,11 @@ export default function CharacterSheetPage() {
     const [isLevelUpModalOpen, setLevelUpModalOpen] = useState(false);
     const [classProgression, setClassProgression] = useState<any>(null);
     const lastLevelRef = useRef<number | null>(null);
-    const [isCleaningDuplicates, setIsCleaningDuplicates] = useState(false);
 
     // Modals de Confirmação
-    const [confirmCleanDuplicatesModal, setConfirmCleanDuplicatesModal] = useState(false);
-
     const [confirmRemoveFeatureModal, setConfirmRemoveFeatureModal] = useState<{ open: boolean; featureName: string | null }>({ open: false, featureName: null });
 
     const dataFetchInitiated = useRef(false);
-
-    // Função para limpar duplicatas do Firestore
-    const handleCleanDuplicates = async () => {
-        setConfirmCleanDuplicatesModal(true);
-    };
-
-    const executeCleanDuplicates = async () => {
-        setIsCleaningDuplicates(true);
-        setConfirmCleanDuplicatesModal(false);
-        try {
-            const { cleanAllGameData } = await import('@/lib/xp-progression');
-            await cleanAllGameData();
-            alert('✅ Duplicatas removidas com sucesso! Verifique o console para detalhes.');
-        } catch (error) {
-            console.error('Erro ao limpar duplicatas:', error);
-            alert('❌ Erro ao limpar duplicatas. Verifique o console.');
-        } finally {
-            setIsCleaningDuplicates(false);
-        }
-    };
 
     const handleSelectSubclass = (subclassName: string | null) => {
         if (!subclassName) {
@@ -1173,8 +1151,8 @@ export default function CharacterSheetPage() {
                     // Abre o modal de Level Up em modo de "Ajuste Inicial" para escolher magias
                     // Delay aumentado para garantir sequencia com modal de skills se necessário
                     setTimeout(() => {
-                        alert("Como conjurador, você deve escolher suas magias iniciais!");
-                        setLevelUpModalOpen(true);
+                        setCasterAlertModal(true);
+                        // setLevelUpModalOpen(true); // Moved to Modal confirmation
                     }, 1500);
                 }
 
@@ -1278,81 +1256,85 @@ export default function CharacterSheetPage() {
         <div className="min-h-screen p-4 text-rpg-parchment md:p-8 bg-dnd-gradient font-sans selection:bg-rpg-gold/30 selection:text-rpg-gold">
             <div className="max-w-7xl mx-auto">
                 {/* Header e Navigation */}
-                <div className="mb-6 flex justify-between items-center">
-                    <Link
-                        href={character.campaignId ? `/campanha/${character.campaignId}?tab=characters` : "/personagens"}
-                        className="px-4 py-2 text-sm font-bold rounded-md bg-rpg-panel border border-rpg-gold/20 text-rpg-grey hover:text-rpg-gold hover:border-rpg-gold shadow-lg hover:shadow-glow-gold transition-all"
-                    >
-                        &larr; {character.campaignId ? "Voltar à Campanha" : "Voltar ao Salão"}
-                    </Link>
-                    {isReadOnly && (
-                        <div className="px-4 py-2 bg-rpg-gold/20 border border-rpg-gold text-rpg-gold rounded font-bold font-cinzel flex items-center gap-2 animate-pulse">
-                            <span>👁️</span> Modo Espectador (Mestre)
-                        </div>
-                    )}
-                    {!isReadOnly && (
-                        <button
-                            onClick={handleCleanDuplicates}
-                            disabled={isCleaningDuplicates}
-                            className="bg-purple-900/20 border border-purple-500/30 text-purple-400 px-3 py-1.5 rounded hover:bg-purple-900/40 transition-all text-xs font-bold disabled:opacity-50 disabled:cursor-not-allowed"
-                            title="Remover itens duplicados do banco de dados"
+                <div className="mb-6 flex flex-col gap-4 md:flex-row md:justify-between md:items-center">
+                    <div className="w-full md:w-auto">
+                        <Link
+                            href={character.campaignId ? `/campanha/${character.campaignId}?tab=characters` : "/personagens"}
+                            className="block w-full text-center md:inline-block md:w-auto px-4 py-2 text-sm font-bold rounded-md bg-rpg-panel border border-rpg-gold/20 text-rpg-grey hover:text-rpg-gold hover:border-rpg-gold shadow-lg hover:shadow-glow-gold transition-all"
                         >
-                            {isCleaningDuplicates ? '🧹 Limpando...' : '🧹 Limpar Duplicatas'}
-                        </button>
-                    )}
-                    {!isReadOnly && (
-                        <button
-                            onClick={handleLongRest}
-                            className="bg-indigo-900/20 border border-indigo-500/30 text-indigo-400 px-3 py-1.5 rounded hover:bg-indigo-900/40 transition-all text-xs font-bold flex items-center gap-2"
-                            title="Restaurar PV e Slots de Magia"
-                        >
-                            <span>⛺</span> Descanso Longo
-                        </button>
-                    )}
-                    {id === 'novo' && (<button onClick={() => { }} className="px-6 py-2 font-bold rounded-md bg-gradient-to-r from-rpg-gold to-yellow-600 text-rpg-dark hover:from-yellow-400 hover:to-rpg-gold shadow-lg transform hover:scale-105 transition-all">Salvar Novo Personagem</button>)}
+                            &larr; {character.campaignId ? "Voltar à Campanha" : "Voltar ao Salão"}
+                        </Link>
+                    </div>
+
+                    <div className="flex flex-wrap gap-2 justify-center md:justify-end w-full md:w-auto">
+                        {isReadOnly && (
+                            <div className="px-4 py-2 bg-rpg-gold/20 border border-rpg-gold text-rpg-gold rounded font-bold font-cinzel flex items-center gap-2 animate-pulse text-xs md:text-sm">
+                                <span>👁️</span> <span className="hidden sm:inline">Modo Espectador (Mestre)</span><span className="sm:hidden">Espectador</span>
+                            </div>
+                        )}
+                        
+                        {!isReadOnly && id !== 'novo' && (
+                            <button
+                                onClick={handleLongRest}
+                                className="flex-grow md:flex-grow-0 bg-indigo-900/20 border border-indigo-500/30 text-indigo-400 px-3 py-2 rounded hover:bg-indigo-900/40 transition-all text-xs font-bold flex items-center justify-center gap-2"
+                                title="Restaurar PV e Slots de Magia"
+                            >
+                                <span>⛺</span> Descanso Longo
+                            </button>
+                        )}
+                        
+                        {id === 'novo' && (
+                            <button 
+                                onClick={() => { /* Logic is handled by auto-save or context, but usually this button is ceremonial or triggers a specific save if manual */ }} 
+                                className="w-full md:w-auto px-6 py-2 font-bold rounded-md bg-gradient-to-r from-rpg-gold to-yellow-600 text-rpg-dark hover:from-yellow-400 hover:to-rpg-gold shadow-lg transform hover:scale-105 transition-all"
+                            >
+                                Salvar Novo Personagem
+                            </button>
+                        )}
+                    </div>
                 </div>
 
-                <header className="flex flex-col md:flex-row justify-between md:items-end mb-8 gap-6 p-6 bg-rpg-panel/50 rounded-xl border border-rpg-gold/10 shadow-2xl backdrop-blur-md">
-                    <div className="flex-grow">
+                <header className="flex flex-col md:flex-row justify-between md:items-end mb-8 gap-6 p-4 md:p-6 bg-rpg-panel/50 rounded-xl border border-rpg-gold/10 shadow-2xl backdrop-blur-md overflow-hidden">
+                    <div className="flex-grow w-full">
                         <input
                             type="text"
                             disabled={isReadOnly}
                             value={character.name}
                             onChange={e => handleFieldChange('name', e.target.value)}
-                            className="w-full text-5xl font-extrabold bg-transparent border-b-2 border-rpg-gold/30 font-cinzel text-rpg-gold focus:outline-none focus:border-rpg-gold transition-all placeholder-rpg-grey/30"
+                            className="w-full text-2xl sm:text-3xl md:text-5xl font-extrabold bg-transparent border-b-2 border-rpg-gold/30 font-cinzel text-rpg-gold focus:outline-none focus:border-rpg-gold transition-all placeholder-rpg-grey/30 truncate"
                             placeholder="Nome do Personagem"
                         />
-                        <div className="flex items-center gap-3 mt-2">
-                            <p className="text-rpg-grey uppercase font-bold tracking-[0.3em] text-[10px]">
+                        <div className="flex items-center gap-3 mt-2 flex-wrap">
+                            <p className="text-rpg-grey uppercase font-bold tracking-[0.2em] text-[10px] break-all">
                                 {character.race} • {character.class}{character.subclass ? ` (${character.subclass})` : ''}
                             </p>
                             {!character.subclass && character.level >= (SUBCLASS_CHOICE_LEVELS[character.class] || 3) && (
                                 <button
                                     onClick={() => setIsSubclassModalOpen(true)}
-                                    className="text-[9px] bg-purple-900/40 text-purple-300 border border-purple-500/30 px-2 py-0.5 rounded-full hover:bg-purple-500 hover:text-white transition-all animate-pulse flex items-center gap-1 shadow-glow-purple/20"
+                                    className="text-[9px] bg-purple-900/40 text-purple-300 border border-purple-500/30 px-2 py-0.5 rounded-full hover:bg-purple-500 hover:text-white transition-all animate-pulse flex items-center gap-1 shadow-glow-purple/20 whitespace-nowrap"
                                 >
-                                    <span className="text-xs">✨</span> Escolher Subclasse
+                                    <span className="text-xs">✨</span> Subclasse
                                 </button>
                             )}
                         </div>
                     </div>
                     <div className="flex flex-wrap items-end gap-3 w-full md:w-auto">
-                        <div className="w-full sm:w-40"><label className="block text-[10px] font-bold text-rpg-gold uppercase tracking-wider mb-1 font-cinzel text-center sm:text-left">Classe</label><button disabled={isReadOnly} onClick={() => openSelectionModal('class')} className={`w-full bg-rpg-slate border border-rpg-gold/20 rounded-md px-3 py-2 text-left hover:border-rpg-gold/50 font-medieval text-sm ${isReadOnly ? 'opacity-70 cursor-not-allowed' : ''}`}>{character.class || 'Selecione...'}</button></div>
-                        <div className="w-24 text-center group">
+                        <div className="w-full sm:w-40"><label className="block text-[10px] font-bold text-rpg-gold uppercase tracking-wider mb-1 font-cinzel">Classe</label><button disabled={isReadOnly} onClick={() => openSelectionModal('class')} className={`w-full bg-rpg-slate border border-rpg-gold/20 rounded-md px-3 py-2 text-left hover:border-rpg-gold/50 font-medieval text-sm ${isReadOnly ? 'opacity-70 cursor-not-allowed' : ''}`}>{character.class || 'Selecione...'}</button></div>
+                        <div className="w-20 text-center group">
                             <label className="block text-[10px] font-bold text-rpg-gold uppercase tracking-wider mb-1 font-cinzel transition-colors group-hover:text-yellow-400">Nível</label>
                             <div className="relative flex items-center justify-between bg-rpg-slate border-2 border-rpg-gold/30 rounded-lg p-1 shadow-lg shadow-black/40 group-hover:border-rpg-gold transition-all h-[38px]">
                                 <button
                                     onClick={() => handleFieldChange('level', Math.max(1, (character.level || 1) - 1))}
                                     disabled={isReadOnly}
-                                    className={`w-8 h-8 flex items-center justify-center bg-rpg-dark/50 hover:bg-rpg-red/20 text-rpg-grey hover:text-rpg-red rounded transition-all font-bold z-10 ${isReadOnly ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                    className={`w-6 h-full flex items-center justify-center bg-rpg-dark/50 hover:bg-rpg-red/20 text-rpg-grey hover:text-rpg-red rounded transition-all font-bold z-10 ${isReadOnly ? 'opacity-50 cursor-not-allowed' : ''}`}
                                 >-</button>
 
-                                <span className="text-3xl font-black text-rpg-gold font-medieval drop-shadow-glow-gold px-2">{character.level || 1}</span>
+                                <span className="text-2xl font-black text-rpg-gold font-medieval drop-shadow-glow-gold px-1">{character.level || 1}</span>
 
                                 <button
                                     onClick={() => handleFieldChange('level', Math.min(20, (character.level || 1) + 1))}
                                     disabled={isReadOnly}
-                                    className={`w-8 h-8 flex items-center justify-center bg-rpg-dark/50 hover:bg-green-900/20 text-rpg-grey hover:text-green-500 rounded transition-all font-bold z-10 ${isReadOnly ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                    className={`w-6 h-full flex items-center justify-center bg-rpg-dark/50 hover:bg-green-900/20 text-rpg-grey hover:text-green-500 rounded transition-all font-bold z-10 ${isReadOnly ? 'opacity-50 cursor-not-allowed' : ''}`}
                                 >+</button>
                             </div>
                         </div>
@@ -1361,12 +1343,13 @@ export default function CharacterSheetPage() {
                             <div className="bg-rpg-slate border border-rpg-gold/20 rounded-md p-2">
                                 {/* XP Info */}
                                 <div className="flex justify-between items-center mb-1">
-                                    <span className="text-xs text-rpg-grey font-cinzel">
+                                    <span className="text-[10px] text-rpg-grey font-cinzel truncate">
                                         {(() => {
-                                            const { getXPForNextLevel, getXPForCurrentLevel } = require('@/lib/xp-progression');
-                                            const nextXP = getXPForNextLevel(character.level);
-                                            const currentXP = getXPForCurrentLevel(character.level);
-                                            return character.level >= 20 ? 'Nível Máximo' : `${character.experience} / ${nextXP} XP`;
+                                           try {
+                                                const { getXPForNextLevel } = require('@/lib/xp-progression');
+                                                const nextXP = getXPForNextLevel(character.level);
+                                                return character.level >= 20 ? 'Max' : `${character.experience} / ${nextXP} XP`;
+                                           } catch (e) { return `${character.experience} XP`; }
                                         })()}
                                     </span>
                                     {!isReadOnly && (
@@ -1377,7 +1360,7 @@ export default function CharacterSheetPage() {
                                                     handleFieldChange('experience', (character.experience || 0) + Number(amount));
                                                 }
                                             }}
-                                            className="text-[10px] bg-rpg-gold/20 hover:bg-rpg-gold/30 text-rpg-gold px-2 py-0.5 rounded font-bold transition-all"
+                                            className="text-[9px] bg-rpg-gold/20 hover:bg-rpg-gold/30 text-rpg-gold px-2 py-0.5 rounded font-bold transition-all whitespace-nowrap"
                                         >
                                             + XP
                                         </button>
@@ -1385,13 +1368,15 @@ export default function CharacterSheetPage() {
                                 </div>
                                 {/* Progress Bar */}
                                 {character.level < 20 && (
-                                    <div className="h-2 bg-black/40 rounded-full border border-white/5 overflow-hidden">
+                                    <div className="h-1.5 bg-black/40 rounded-full border border-white/5 overflow-hidden">
                                         <div
                                             className="h-full bg-gradient-to-r from-rpg-gold/60 to-rpg-gold transition-all duration-500"
                                             style={{
                                                 width: `${(() => {
-                                                    const { getXPProgress } = require('@/lib/xp-progression');
-                                                    return getXPProgress(character.level, character.experience);
+                                                    try {
+                                                        const { getXPProgress } = require('@/lib/xp-progression');
+                                                        return getXPProgress(character.level, character.experience);
+                                                    } catch (e) { return 0; }
                                                 })()}%`
                                             }}
                                         />
@@ -1399,7 +1384,7 @@ export default function CharacterSheetPage() {
                                 )}
                             </div>
                         </div>
-                        <div className="w-full sm:w-40"><label className="block text-[10px] font-bold text-rpg-gold uppercase tracking-wider mb-1 font-cinzel text-center sm:text-left">Raça</label><button disabled={isReadOnly} onClick={() => openSelectionModal('race')} className={`w-full bg-rpg-slate border border-rpg-gold/20 rounded-md px-3 py-2 text-left hover:border-rpg-gold/50 font-medieval text-sm ${isReadOnly ? 'opacity-70 cursor-not-allowed' : ''}`}>{character.race || 'Selecione...'}</button></div>
+                        <div className="w-full sm:w-40"><label className="block text-[10px] font-bold text-rpg-gold uppercase tracking-wider mb-1 font-cinzel text-left">Raça</label><button disabled={isReadOnly} onClick={() => openSelectionModal('race')} className={`w-full bg-rpg-slate border border-rpg-gold/20 rounded-md px-3 py-2 text-left hover:border-rpg-gold/50 font-medieval text-sm ${isReadOnly ? 'opacity-70 cursor-not-allowed' : ''}`}>{character.race || 'Selecione...'}</button></div>
                     </div>
                 </header>
 
@@ -2184,29 +2169,31 @@ export default function CharacterSheetPage() {
                     currentAttributes={character.attributes}
                 />
 
-                {/* CLEAN DUPLICATES MODAL */}
+                {/* CASTER ALERT MODAL */}
                 <Modal
-                    isOpen={confirmCleanDuplicatesModal}
-                    onClose={() => setConfirmCleanDuplicatesModal(false)}
-                    title="⚠️ Limpar Duplicatas"
+                    isOpen={casterAlertModal}
+                    onClose={() => {
+                        setCasterAlertModal(false);
+                        setLevelUpModalOpen(true);
+                    }}
+                    title="✨ Caminho da Magia"
                 >
-                    <div className="text-center">
-                        <p className="text-rpg-parchment mb-6">Isso vai remover itens duplicados do banco de dados. Esta ação é irreversível.</p>
-                        <div className="flex gap-4 justify-center">
-                            <button
-                                onClick={() => setConfirmCleanDuplicatesModal(false)}
-                                className="bg-rpg-slate hover:bg-rpg-slate/80 text-rpg-parchment border border-rpg-gold/30 font-bold py-2 px-6 rounded transition-all"
-                            >
-                                Cancelar
-                            </button>
-                            <button
-                                onClick={executeCleanDuplicates}
-                                disabled={isCleaningDuplicates}
-                                className="bg-orange-600 hover:bg-orange-700 text-white font-bold py-2 px-6 rounded transition-all disabled:opacity-50"
-                            >
-                                {isCleaningDuplicates ? 'Limpando...' : 'Limpar Agora'}
-                            </button>
-                        </div>
+                    <div className="text-center p-4">
+                        <div className="text-5xl mb-4">🔮</div>
+                        <h3 className="text-xl font-cinzel text-rpg-gold mb-2">Poder Arcano Detectado</h3>
+                        <p className="text-rpg-parchment mb-6 leading-relaxed">
+                            Como <strong className="text-purple-300">{character?.class}</strong>, você possui o dom da magia. 
+                            Agora você deve escolher seus truques e magias iniciais para completar seu grimório.
+                        </p>
+                        <button
+                            onClick={() => {
+                                setCasterAlertModal(false);
+                                setLevelUpModalOpen(true);
+                            }}
+                            className="bg-purple-600 hover:bg-purple-500 text-white font-bold py-3 px-8 rounded-lg shadow-glow-purple/50 transition-all transform hover:scale-105 font-cinzel tracking-wider border border-white/20"
+                        >
+                            Abrir Grimório
+                        </button>
                     </div>
                 </Modal>
 
