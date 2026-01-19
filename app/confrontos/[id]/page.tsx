@@ -41,6 +41,7 @@ interface Combatant {
     cr?: string | number;
     xp?: number;
     statusEffects: StatusEffect[];
+    deathSaves?: { successes: number; failures: number };
 }
 
 // --- Mapeamento de IDs para Nomes Exibidos ---
@@ -933,6 +934,8 @@ export default function ConfrontoDetalhesPage() {
                         // Detectar se tem efeitos únicos (de classe) vs condições globais
                         const hasUniqueEffects = hasEffects && c.statusEffects.some(se => !commonConditionIds.includes(se.id));
                         const hasOnlyGlobalConditions = hasEffects && c.statusEffects.every(se => commonConditionIds.includes(se.id));
+                        // Detectar se combatente está caído
+                        const isFallen = c.statusEffects.some(se => se.id === 'caido');
                         
                         return (
                         <div
@@ -941,6 +944,7 @@ export default function ConfrontoDetalhesPage() {
                                 relative p-3 sm:p-5 rounded-xl transition-all duration-300
                                 ${hasBothEffects ? 'border-l-[6px] border-l-green-500 border-r-[6px] border-r-red-500 border-t-2 border-b-2 border-t-purple-500/50 border-b-purple-500/50' : 'border-2'}
                                 ${hasUniqueEffects && !hasOnlyGlobalConditions ? 'effect-unique' : ''}
+                                ${isFallen ? 'fallen-animation' : ''}
                                 ${phase === 'combat' && turnIndex === index ? 'bg-rpg-gold/15 border-rpg-gold shadow-glow-gold/20 scale-[1.01] z-10' : 
                                   hasBothEffects ? 'bg-gradient-to-r from-green-950/20 via-rpg-dark/50 to-red-950/20 shadow-lg' :
                                   hasOnlyBenefits ? 'bg-green-950/20 border-green-500/50 shadow-lg shadow-green-900/20' :
@@ -1125,6 +1129,38 @@ export default function ConfrontoDetalhesPage() {
                                             >
                                                 🗑️ Todos
                                             </button>
+                                            
+                                            {/* Botão de Testes de Morte para Caído */}
+                                            {isFallen && c.type === 'player' && (
+                                                <button
+                                                    onClick={async () => {
+                                                        // Fazer 3 testes de morte automáticos
+                                                        const tests = [Math.random() > 0.5, Math.random() > 0.5, Math.random() > 0.5];
+                                                        const successes = tests.filter(t => t).length;
+                                                        
+                                                        if (successes >= 2) {
+                                                            // Passou! Remove "caído" e adiciona cura
+                                                            const updated = combatants.map(comb => {
+                                                                if (comb.id !== c.id) return comb;
+                                                                return {
+                                                                    ...comb,
+                                                                    hp: Math.max(1, comb.hp),
+                                                                    statusEffects: (comb.statusEffects || []).filter(se => se.id !== 'caido')
+                                                                };
+                                                            });
+                                                            setCombatants(updated);
+                                                            await syncState({ combatants: updated });
+                                                        } else {
+                                                            // Falhou, mantém caído
+                                                            alert(`Testes de Morte: ${successes}/3 sucessos. Ainda está caído.`);
+                                                        }
+                                                    }}
+                                                    className="px-4 py-2.5 rounded-lg text-[11px] font-bold bg-blue-900/30 border border-blue-500/40 text-blue-300 hover:bg-blue-900/50 transition-all active:scale-95 shadow-sm animate-pulse"
+                                                    title="Fazer Testes de Morte (3 automáticos)"
+                                                >
+                                                    💊 Testes Morte
+                                                </button>
+                                            )}
                                         </div>
                                     )}
 

@@ -33,6 +33,30 @@
   position: relative;
 }
 
+/* Animação para combatente caído */
+@keyframes fallen-shake {
+  0%, 100% {
+    transform: rotate(0deg);
+    filter: drop-shadow(0 0 5px rgba(239, 68, 68, 0.5));
+  }
+  25% {
+    transform: rotate(-1deg);
+    filter: drop-shadow(0 0 10px rgba(239, 68, 68, 0.8));
+  }
+  50% {
+    transform: rotate(1deg);
+    filter: drop-shadow(0 0 15px rgba(239, 68, 68, 1));
+  }
+  75% {
+    transform: rotate(-1deg);
+    filter: drop-shadow(0 0 10px rgba(239, 68, 68, 0.8));
+  }
+}
+
+.fallen-animation {
+  animation: fallen-shake 2s ease-in-out infinite;
+}
+
 :root {
   --background-start-rgb: 18, 18, 18;
   /* Dark Charcoal */
