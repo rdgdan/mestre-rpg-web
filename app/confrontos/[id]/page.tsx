@@ -964,29 +964,50 @@ export default function ConfrontoDetalhesPage() {
                                             {c.type === 'monster' ? '💀 MORTO' : '⚰️ CAÍDO'}
                                         </div>
                                         
-                                        {/* Botão de Cura (apenas jogadores e NPCs) */}
+                                        {/* Botões de Ação (apenas jogadores e NPCs) */}
                                         {(c.type === 'player' || c.type === 'npc') && (
-                                            <button
-                                                onClick={async () => {
-                                                    const actionText = c.type === 'player' ? 'Curar' : 'Levantar';
-                                                    if (confirm(`Deseja ${actionText.toLowerCase()} ${c.name} com 1 HP para ele retornar ao combate?`)) {
-                                                        const updated = combatants.map(comb => {
-                                                            if (comb.id !== c.id) return comb;
-                                                            return {
-                                                                ...comb,
-                                                                hp: Math.max(1, comb.hp),
-                                                                statusEffects: (comb.statusEffects || []).filter(se => se.id !== 'caido')
-                                                            };
-                                                        });
-                                                        setCombatants(updated);
-                                                        await syncState({ combatants: updated });
-                                                    }
-                                                }}
-                                                className="px-8 py-4 rounded-xl text-lg font-bold bg-green-600 border-4 border-green-400 text-white hover:bg-green-500 hover:scale-105 transition-all active:scale-95 shadow-2xl"
-                                                title={c.type === 'player' ? 'Curar com 1 HP' : 'Levantar com 1 HP'}
-                                            >
-                                                ❤️ {c.type === 'player' ? 'CURAR' : 'LEVANTAR'} 1 DE HP
-                                            </button>
+                                            <div className="flex gap-3">
+                                                {/* Botão CURAR */}
+                                                <button
+                                                    onClick={async () => {
+                                                        const actionText = c.type === 'player' ? 'Curar' : 'Levantar';
+                                                        if (confirm(`Deseja ${actionText.toLowerCase()} ${c.name} com 1 HP para ele retornar ao combate?`)) {
+                                                            const updated = combatants.map(comb => {
+                                                                if (comb.id !== c.id) return comb;
+                                                                return {
+                                                                    ...comb,
+                                                                    hp: Math.max(1, comb.hp),
+                                                                    statusEffects: (comb.statusEffects || []).filter(se => se.id !== 'caido')
+                                                                };
+                                                            });
+                                                            setCombatants(updated);
+                                                            await syncState({ combatants: updated });
+                                                        }
+                                                    }}
+                                                    className="px-8 py-4 rounded-xl text-lg font-bold !bg-green-600 !border-green-400 border-4 text-white hover:!bg-green-500 hover:scale-105 transition-all active:scale-95 shadow-2xl animate-pulse"
+                                                    title={c.type === 'player' ? 'Curar com 1 HP' : 'Levantar com 1 HP'}
+                                                >
+                                                    ❤️ {c.type === 'player' ? 'CURAR' : 'LEVANTAR'}
+                                                </button>
+                                                
+                                                {/* Botão MATAR */}
+                                                <button
+                                                    onClick={async () => {
+                                                        if (confirm(`⚠️ CONFIRMA MORTE PERMANENTE de ${c.name}? Esta ação não pode ser desfeita!`)) {
+                                                            const updated = combatants.map(comb => {
+                                                                if (comb.id !== c.id) return comb;
+                                                                return { ...comb, status: 'dead' as const, hp: 0 };
+                                                            });
+                                                            setCombatants(updated);
+                                                            await syncState({ combatants: updated });
+                                                        }
+                                                    }}
+                                                    className="px-8 py-4 rounded-xl text-lg font-bold !bg-red-800 !border-red-600 border-4 text-white hover:!bg-red-700 hover:scale-105 transition-all active:scale-95 shadow-2xl"
+                                                    title="Matar permanentemente"
+                                                >
+                                                    ☠️ MATAR
+                                                </button>
+                                            </div>
                                         )}
                                     </div>
                                 </div>
