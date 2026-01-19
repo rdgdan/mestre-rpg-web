@@ -198,129 +198,234 @@ const ConditionManager = ({ character, onToggleCondition, onToggleEffect }: {
     onToggleCondition: (id: string) => void;
     onToggleEffect: (id: string) => void;
 }) => {
+    // --- Estados do Modal Unificado ---
+    const [isEffectModalOpen, setIsEffectModalOpen] = useState(false);
+    const [effectTab, setEffectTab] = useState<'all' | 'benefits' | 'debuffs'>('all');
+    const [effectSearchQuery, setEffectSearchQuery] = useState('');
+
     const isBarbarian = character.class?.toLowerCase().includes('bárbaro') || character.class?.toLowerCase().includes('barbarian');
     const activeConditions = character.conditions || [];
     const activeEffects = character.activeEffects || [];
 
-    // Separar efeitos ativos em benefícios e malefícios
-    const benefitIds = ['rage', 'bless', 'inspiration', 'concentrating', 'reckless', 'counter-charm', 'sanctuary', 'shield-faith', 'wild-shape', 'barkskin', 'action-surge', 'second-wind', 'indomitable', 'evasion', 'uncanny-dodge', 'sneak-attack', 'flurry', 'patient-defense', 'lay-hands', 'divine-smite', 'aura-protection'];
-    
-    const activeEffectObjects = ACTIVE_EFFECTS.filter(e => activeEffects.includes(e.id));
-    const activeBenefits = activeEffectObjects.filter(e => benefitIds.includes(e.id));
-    const activeDebuffs = activeEffectObjects.filter(e => !benefitIds.includes(e.id));
+    // --- Dados Sincronizados (Mesma lógica de Confrontos) ---
+    // Preparar lista unificada de efeitos disponíveis
+    const availableEffects = useMemo(() => {
+        // 1. Efeitos de Classe (Do arquivo compartilhado)
+        const charClass = character.class || 'Guerreiro'; 
+        
+        // Mapear efeitos da classe com icons
+        let classFx: any[] = (CLASS_EFFECTS[charClass] || []).map(fx => {
+            let icon = '⚔️';
+            if (fx.category === 'benefit') icon = '✨';
+            if (fx.id === 'rage') icon = '🔥';
+            if (fx.id === 'wild-shape') icon = '🐻';
+            if (fx.id === 'bardic-inspiration') icon = '🎵';
+            return { ...fx, icon, type: 'class' };
+        });
+
+        // 2. Condições Globais (COMMON_CONDITIONS)
+        const globalConditions = COMMON_CONDITIONS.map(cond => {
+            const isBenefit = ['invisivel', 'abençoado', 'inspirado', 'velocidade'].includes(cond.id); 
+            return {
+                id: cond.id,
+                name: cond.name,
+                icon: cond.icon,
+                category: isBenefit ? 'benefit' : 'debuff',
+                type: 'global'
+            };
+        });
+
+        // 3. Efeitos Extras
+        const extraGlobals = [
+            { id: 'bless', name: 'Bênção', icon: '✨', category: 'benefit', type: 'global' },
+            { id: 'inspiration', name: 'Inspiração', icon: '🎵', category: 'benefit', type: 'global' },
+            { id: 'haste', name: 'Velocidade', icon: '⚡', category: 'benefit', type: 'global' },
+            { id: 'shield-faith', name: 'Escudo da Fé', icon: '🛡️', category: 'benefit', type: 'global' },
+            { id: 'mage-armor', name: 'Armadura Arcana', icon: '🧥', category: 'benefit', type: 'global' },
+        ];
+
+        // Combinar tudo
+        const allEffects = [
+            ...classFx,
+            ...globalConditions,
+            ...extraGlobals.filter(e => !globalConditions.some(g => g.id === e.id) && !classFx.some(c => c.id === e.id))
+        ];
+
+        return allEffects;
+    }, [character.class]);
+
+    // Combinar IDs ativos de ambas as fontes
+    const combinedActiveIds = [...activeConditions, ...activeEffects];
+
+    const activeBenefits = availableEffects.filter(e => combinedActiveIds.includes(e.id) && e.category === 'benefit');
+    const activeDebuffs = availableEffects.filter(e => combinedActiveIds.includes(e.id) && e.category !== 'benefit');
+
+    const handleToggle = (id: string) => {
+         const effect = availableEffects.find(e => e.id === id);
+         // Se for condição global padrão, usa onToggleCondition
+         if (effect && effect.type === 'global' && COMMON_CONDITIONS.some(c => c.id === id)) {
+             onToggleCondition(id);
+         } else {
+             onToggleEffect(id);
+         }
+    };
+
+    // Filtragem para o Modal
+    const filteredModalEffects = useMemo(() => {
+        const normalize = (s: string) => s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+        const query = normalize(effectSearchQuery);
+        
+        return availableEffects.filter(fx => {
+            const matchesSearch = normalize(fx.name).includes(query);
+            const matchesTab = effectTab === 'all' || 
+                             (effectTab === 'benefits' && fx.category === 'benefit') || 
+                             (effectTab === 'debuffs' && fx.category !== 'benefit');
+            return matchesSearch && matchesTab;
+        });
+    }, [availableEffects, effectSearchQuery, effectTab]);
 
     return (
         <div className="space-y-4 mb-6">
-            {/* Efeitos Ativos - Benefícios e Malefícios Lado a Lado */}
+            <Modal isOpen={isEffectModalOpen} onClose={() => setIsEffectModalOpen(false)} title={`Efeitos • ${character.name}`}>
+                <div className="space-y-4">
+                    {/* Barra de Busca */}
+                    <div className="relative">
+                        <input
+                            type="text"
+                            placeholder="🔍 Buscar efeito..."
+                            value={effectSearchQuery}
+                            onChange={(e) => setEffectSearchQuery(e.target.value)}
+                            className="w-full bg-rpg-dark border border-rpg-gold/30 rounded-lg p-3 pl-10 text-rpg-parchment outline-none focus:border-rpg-gold focus:ring-1 focus:ring-rpg-gold/30 transition-all text-sm font-medieval"
+                            autoFocus
+                        />
+                        <span className="absolute left-3 top-3 text-rpg-gold/50">✨</span>
+                    </div>
+
+                    {/* Sistema de Abas */}
+                    <div className="flex gap-2 border-b border-white/10 pb-1">
+                        <button
+                            onClick={() => setEffectTab('all')}
+                            className={`flex-1 px-3 py-2 text-[10px] font-cinzel tracking-wider uppercase transition-all rounded-t-lg ${
+                                effectTab === 'all'
+                                    ? 'bg-rpg-gold/10 text-rpg-gold border-b-2 border-rpg-gold'
+                                    : 'text-rpg-grey hover:text-rpg-parchment hover:bg-white/5'
+                            }`}
+                        >
+                            Todos
+                        </button>
+                        <button
+                            onClick={() => setEffectTab('benefits')}
+                            className={`flex-1 px-3 py-2 text-[10px] font-cinzel tracking-wider uppercase transition-all rounded-t-lg ${
+                                effectTab === 'benefits'
+                                    ? 'bg-green-900/20 text-green-400 border-b-2 border-green-500'
+                                    : 'text-rpg-grey hover:text-rpg-parchment hover:bg-white/5'
+                            }`}
+                        >
+                            Benefícios
+                        </button>
+                        <button
+                            onClick={() => setEffectTab('debuffs')}
+                            className={`flex-1 px-3 py-2 text-[10px] font-cinzel tracking-wider uppercase transition-all rounded-t-lg ${
+                                effectTab === 'debuffs'
+                                    ? 'bg-red-900/20 text-red-400 border-b-2 border-red-500'
+                                    : 'text-rpg-grey hover:text-rpg-parchment hover:bg-white/5'
+                            }`}
+                        >
+                            Malefícios
+                        </button>
+                    </div>
+
+                    {/* Grid de Efeitos */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-[50vh] overflow-y-auto custom-scrollbar pr-2">
+                        {filteredModalEffects.length === 0 ? (
+                            <div className="col-span-full text-center py-8 text-rpg-grey italic border border-dashed border-white/10 rounded-lg">
+                                Nenhum efeito encontrado.
+                            </div>
+                        ) : (
+                            filteredModalEffects.map(fx => {
+                                const isActive = combinedActiveIds.includes(fx.id);
+                                const isBenefit = fx.category === 'benefit';
+                                
+                                const cardClasses = isBenefit 
+                                    ? 'bg-gradient-to-br from-green-900/20 to-green-900/5 border-green-600/30 hover:border-green-500 hover:from-green-900/40' 
+                                    : 'bg-gradient-to-br from-red-900/20 to-red-900/5 border-red-600/30 hover:border-red-500 hover:from-red-900/40';
+
+                                return (
+                                    <button
+                                        key={fx.id}
+                                        onClick={() => { handleToggle(fx.id); setIsEffectModalOpen(false); }}
+                                        disabled={isActive}
+                                        className={`p-3 rounded-lg border transition-all text-left flex items-center gap-3 group relative overflow-hidden ${cardClasses} ${isActive ? 'opacity-50 cursor-not-allowed grayscale' : 'shadow-lg'}`}
+                                    >
+                                        <span className="text-2xl filter drop-shadow-md group-hover:scale-110 transition-transform">{fx.icon}</span>
+                                        <div className="flex-1 min-w-0">
+                                            <div className={`font-cinzel text-xs font-bold truncate ${isBenefit ? 'text-green-100 group-hover:text-white' : 'text-red-100 group-hover:text-white'}`}>
+                                                {fx.name}
+                                            </div>
+                                            <div className="text-[9px] opacity-60 uppercase tracking-widest mt-0.5">
+                                                {fx.type === 'class' ? character.class : 'Global'}
+                                            </div>
+                                        </div>
+                                        {isActive && <div className="absolute right-2 top-2 text-xs font-bold">✔</div>}
+                                    </button>
+                                );
+                            })
+                        )}
+                    </div>
+                </div>
+            </Modal>
+
+            {/* Dashboards Visuais na Ficha */}
             <div className="grid grid-cols-2 gap-4">
                 {/* Coluna de Benefícios */}
                 <div className="space-y-2">
-                    {activeBenefits.length > 0 && (
-                        <>
-                            <div className="text-xs text-green-400 font-bold uppercase tracking-widest">✦ Benefícios</div>
-                            <div className="space-y-1.5">
-                                {activeBenefits.map(effect => {
-                                    if (effect.classReq && !isBarbarian) return null;
-                                    return (
-                                        <button
-                                            key={effect.id}
-                                            onClick={() => onToggleEffect(effect.id)}
-                                            className="w-full px-3 py-2 rounded-lg flex items-center gap-2 text-xs font-bold border transition-all bg-gradient-to-r from-green-900/40 to-green-900/20 border-green-600/50 text-green-300 hover:border-green-500 hover:from-green-900/60 shadow-lg shadow-green-900/20"
-                                        >
-                                            <span className="text-lg">{effect.icon}</span>
-                                            <span className="truncate">{effect.name}</span>
-                                        </button>
-                                    );
-                                })}
-                            </div>
-                        </>
-                    )}
-                    
-                    {/* Botão para adicionar benefícios */}
-                    {ACTIVE_EFFECTS.filter(e => (e.classReq === undefined || (e.classReq && isBarbarian)) && benefitIds.includes(e.id) && !activeEffects.includes(e.id)).length > 0 && (
-                        <div className="pt-2">
-                            <div className="text-[9px] text-rpg-gold/50 font-bold uppercase opacity-70 mb-1">Adicionar:</div>
-                            <div className="space-y-1 max-h-32 overflow-y-auto">
-                                {ACTIVE_EFFECTS.filter(e => (e.classReq === undefined || (e.classReq && isBarbarian)) && benefitIds.includes(e.id) && !activeEffects.includes(e.id)).map(effect => (
-                                    <button
-                                        key={effect.id}
-                                        onClick={() => onToggleEffect(effect.id)}
-                                        className="w-full px-3 py-3 rounded text-sm md:text-sm font-bold border transition-all bg-green-950/30 border-green-700/30 text-green-400 hover:bg-green-900/40 hover:border-green-600 mb-2 truncate"
-                                    >
-                                        + {effect.name}
-                                    </button>
-                                ))}
-                            </div>
-                        </div>
-                    )}
+                    <div className="text-xs text-green-400 font-bold uppercase tracking-widest flex justify-between items-center border-b border-green-900/50 pb-1">
+                        <span>✦ Benefícios</span>
+                        {activeBenefits.length > 0 && <span className="text-[9px] bg-green-900/60 px-1.5 py-0.5 rounded text-white">{activeBenefits.length}</span>}
+                    </div>
+
+                    <div className="space-y-2 min-h-[50px]">
+                        {activeBenefits.map(effect => (
+                            <button
+                                key={effect.id}
+                                onClick={() => onToggleEffect(effect.id)}
+                                className="w-full px-3 py-2.5 rounded-lg flex items-center gap-3 text-xs font-bold border transition-all bg-gradient-to-r from-green-900/40 to-green-900/20 border-green-600/50 text-green-100 hover:border-red-500 hover:bg-red-900/30 group relative overflow-hidden shadow-sm"
+                            >
+                                <span className="text-lg">{effect.icon}</span>
+                                <span className="truncate flex-grow text-left group-hover:text-red-200 transition-colors">{effect.name}</span>
+                                <span className="text-[10px] opacity-0 group-hover:opacity-100 text-red-400 font-black transition-all transform translate-x-2 group-hover:translate-x-0">REMOVER</span>
+                            </button>
+                        ))}
+                        
+                        <button
+                            onClick={() => { setEffectTab('all'); setIsEffectModalOpen(true); }}
+                            className="w-full py-2 border border-dashed border-green-800/40 text-green-600/70 rounded-lg text-[10px] hover:border-green-500 hover:text-green-400 hover:bg-green-900/10 transition-all font-bold uppercase tracking-widest flex items-center justify-center gap-2 group"
+                        >
+                            <span className="group-hover:scale-125 transition-transform text-sm">+</span> Adicionar Efeito
+                        </button>
+                    </div>
                 </div>
 
                 {/* Coluna de Malefícios */}
                 <div className="space-y-2">
-                    {activeDebuffs.length > 0 && (
-                        <>
-                            <div className="text-xs text-red-400 font-bold uppercase tracking-widest">⚠ Malefícios</div>
-                            <div className="space-y-1.5">
-                                {activeDebuffs.map(effect => {
-                                    if (effect.classReq && !isBarbarian) return null;
-                                    return (
-                                        <button
-                                            key={effect.id}
-                                            onClick={() => onToggleEffect(effect.id)}
-                                            className="w-full px-3 py-2 rounded-lg flex items-center gap-2 text-xs font-bold border transition-all bg-gradient-to-r from-red-900/40 to-red-900/20 border-red-600/50 text-red-300 hover:border-red-500 hover:from-red-900/60 shadow-lg shadow-red-900/20"
-                                        >
-                                            <span className="text-lg">{effect.icon}</span>
-                                            <span className="truncate">{effect.name}</span>
-                                        </button>
-                                    );
-                                })}
-                            </div>
-                        </>
-                    )}
+                     <div className="text-xs text-red-400 font-bold uppercase tracking-widest flex justify-between items-center border-b border-red-900/50 pb-1">
+                        <span>⚠ Malefícios</span>
+                        {activeDebuffs.length > 0 && <span className="text-[9px] bg-red-900/60 px-1.5 py-0.5 rounded text-white">{activeDebuffs.length}</span>}
+                    </div>
 
-                    {/* Botão para adicionar malefícios */}
-                    {ACTIVE_EFFECTS.filter(e => (e.classReq === undefined || (e.classReq && isBarbarian)) && !benefitIds.includes(e.id) && !activeEffects.includes(e.id)).length > 0 && (
-                        <div className="pt-2">
-                            <div className="text-[9px] text-rpg-gold/50 font-bold uppercase opacity-70 mb-1">Adicionar:</div>
-                            <div className="space-y-1 max-h-32 overflow-y-auto">
-                                {ACTIVE_EFFECTS.filter(e => (e.classReq === undefined || (e.classReq && isBarbarian)) && !benefitIds.includes(e.id) && !activeEffects.includes(e.id)).map(effect => (
-                                    <button
-                                        key={effect.id}
-                                        onClick={() => onToggleEffect(effect.id)}
-                                        className="w-full px-3 py-3 rounded text-sm md:text-sm font-bold border transition-all bg-red-950/30 border-red-700/30 text-red-400 hover:bg-red-900/40 hover:border-red-600 mb-2 truncate"
-                                    >
-                                        + {effect.name}
-                                    </button>
-                                ))}
-                            </div>
-                        </div>
-                    )}
-                </div>
-            </div>
-
-            {/* Condições Globais */}
-            <div className="pt-4 border-t border-white/10">
-                <div className="text-xs text-rpg-gold font-bold uppercase tracking-widest mb-2">Condições</div>
-                <div className="flex flex-wrap gap-2">
-                    {COMMON_CONDITIONS.map(cond => {
-                        const isActive = activeConditions.includes(cond.id);
-                        const isBenefit = cond.id === 'invisivel';
-                        return (
+                    <div className="space-y-2 min-h-[50px]">
+                        {activeDebuffs.map(effect => (
                             <button
-                                key={cond.id}
-                                onClick={() => onToggleCondition(cond.id)}
-                                className={`px-3 py-1.5 rounded-lg flex items-center gap-2 text-[10px] font-bold border transition-all ${isActive
-                                    ? isBenefit 
-                                        ? 'bg-gradient-to-r from-green-900/40 to-green-900/20 border-green-600/50 text-green-300'
-                                        : 'bg-gradient-to-r from-red-900/40 to-red-900/20 border-red-600/50 text-red-300'
-                                    : 'bg-rpg-panel border-white/5 text-rpg-grey/60 hover:text-rpg-grey hover:border-rpg-gold/20'
-                                }`}
+                                key={effect.id}
+                                onClick={() => onToggleEffect(effect.id)}
+                                className="w-full px-3 py-2.5 rounded-lg flex items-center gap-3 text-xs font-bold border transition-all bg-gradient-to-r from-red-900/40 to-red-900/20 border-red-600/50 text-red-100 hover:border-red-500 hover:bg-red-900/40 group relative overflow-hidden shadow-sm"
                             >
-                                <span>{cond.icon}</span>
-                                <span className="truncate">{cond.name}</span>
+                                <span className="text-lg">{effect.icon}</span>
+                                <span className="truncate flex-grow text-left group-hover:text-white transition-colors">{effect.name}</span>
+                                <span className="text-[10px] opacity-0 group-hover:opacity-100 text-white font-black transition-all transform translate-x-2 group-hover:translate-x-0">REMOVER</span>
                             </button>
-                        );
-                    })}
+                        ))}
+                    </div>
                 </div>
             </div>
         </div>
