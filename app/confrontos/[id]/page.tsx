@@ -945,9 +945,8 @@ export default function ConfrontoDetalhesPage() {
                                 relative p-3 sm:p-5 rounded-xl transition-all duration-300
                                 ${hasBothEffects ? 'border-l-[6px] border-l-green-500 border-r-[6px] border-r-red-500 border-t-2 border-b-2 border-t-purple-500/50 border-b-purple-500/50' : 'border-2'}
                                 ${hasUniqueEffects && !hasOnlyGlobalConditions ? 'effect-unique' : ''}
-                                ${isDefeated ? 'defeated-animation' : ''}
                                 ${phase === 'combat' && turnIndex === index && !isDefeated ? 'active-turn-animation bg-rpg-gold/15 border-rpg-gold scale-[1.01] z-10' : 
-                                  isDefeated ? 'bg-rpg-dark/80 border-gray-600/40' :
+                                  isDefeated ? 'bg-rpg-dark/80 border-gray-600/40 defeated-animation' :
                                   hasBothEffects ? 'bg-gradient-to-r from-green-950/20 via-rpg-dark/50 to-red-950/20 shadow-lg' :
                                   hasOnlyBenefits ? 'bg-green-950/20 border-green-500/50 shadow-lg shadow-green-900/20' :
                                   hasOnlyDebuffs ? 'bg-orange-950/20 border-orange-500/50 shadow-lg shadow-orange-900/20' :
@@ -956,10 +955,40 @@ export default function ConfrontoDetalhesPage() {
                                   'bg-red-950/20 border-red-600/30 shadow-lg shadow-red-900/10'}
                             `}
                         >
-                            {/* Badge de Status quando HP = 0 */}
+                            {/* Overlay Centralizado quando HP = 0 */}
                             {isDefeated && (
-                                <div className="absolute -top-2 -left-2 bg-red-900 text-red-100 px-6 py-2 rounded-full font-cinzel font-bold text-lg tracking-wide border-2 border-red-700 shadow-lg z-20">
-                                    {c.type === 'monster' ? '💀 MORTO' : '⚰️ CAÍDO'}
+                                <div className="absolute inset-0 flex flex-col items-center justify-center z-50 bg-black/30 backdrop-blur-[2px] rounded-xl">
+                                    <div className="flex flex-col items-center gap-4">
+                                        {/* Badge CAÍDO/MORTO */}
+                                        <div className="bg-red-900 text-red-100 px-8 py-3 rounded-full font-cinzel font-bold text-2xl tracking-wide border-4 border-red-700 shadow-2xl">
+                                            {c.type === 'monster' ? '💀 MORTO' : '⚰️ CAÍDO'}
+                                        </div>
+                                        
+                                        {/* Botão de Cura (apenas jogadores e NPCs) */}
+                                        {(c.type === 'player' || c.type === 'npc') && (
+                                            <button
+                                                onClick={async () => {
+                                                    const actionText = c.type === 'player' ? 'Curar' : 'Levantar';
+                                                    if (confirm(`Deseja ${actionText.toLowerCase()} ${c.name} com 1 HP para ele retornar ao combate?`)) {
+                                                        const updated = combatants.map(comb => {
+                                                            if (comb.id !== c.id) return comb;
+                                                            return {
+                                                                ...comb,
+                                                                hp: Math.max(1, comb.hp),
+                                                                statusEffects: (comb.statusEffects || []).filter(se => se.id !== 'caido')
+                                                            };
+                                                        });
+                                                        setCombatants(updated);
+                                                        await syncState({ combatants: updated });
+                                                    }
+                                                }}
+                                                className="px-8 py-4 rounded-xl text-lg font-bold bg-emerald-600 border-4 border-emerald-400 text-white hover:bg-emerald-500 hover:scale-105 transition-all active:scale-95 shadow-2xl"
+                                                title={c.type === 'player' ? 'Curar com 1 HP' : 'Levantar com 1 HP'}
+                                            >
+                                                ❤️ {c.type === 'player' ? 'CURAR' : 'LEVANTAR'} 1 DE HP
+                                            </button>
+                                        )}
+                                    </div>
                                 </div>
                             )}
                             
@@ -1137,31 +1166,6 @@ export default function ConfrontoDetalhesPage() {
                                             >
                                                 🗑️ Todos
                                             </button>
-                                            
-                                            {/* Botão de Curar Jogador Caído (apenas quando HP = 0) */}
-                                            {isDefeated && (c.type === 'player' || c.type === 'npc') && (
-                                                <button
-                                                    onClick={async () => {
-                                                        const actionText = c.type === 'player' ? 'Curar' : 'Levantar';
-                                                        if (confirm(`Deseja ${actionText.toLowerCase()} ${c.name} com 1 HP para ele retornar ao combate?`)) {
-                                                            const updated = combatants.map(comb => {
-                                                                if (comb.id !== c.id) return comb;
-                                                                return {
-                                                                    ...comb,
-                                                                    hp: Math.max(1, comb.hp),
-                                                                    statusEffects: (comb.statusEffects || []).filter(se => se.id !== 'caido')
-                                                                };
-                                                            });
-                                                            setCombatants(updated);
-                                                            await syncState({ combatants: updated });
-                                                        }
-                                                    }}
-                                                    className="w-full mt-3 px-4 py-3 rounded-lg text-sm font-bold bg-emerald-900/40 border-2 border-emerald-500/60 text-emerald-300 hover:bg-emerald-900/60 transition-all active:scale-95 shadow-lg"
-                                                    title={c.type === 'player' ? 'Curar com 1 HP' : 'Levantar com 1 HP'}
-                                                >
-                                                    ❤️ {c.type === 'player' ? 'CURAR' : 'LEVANTAR'} 1 DE HP
-                                                </button>
-                                            )}
                                         </div>
                                     )}
 
