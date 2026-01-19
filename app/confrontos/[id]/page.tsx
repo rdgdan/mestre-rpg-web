@@ -17,6 +17,7 @@ import Modal from '@/components/Modal';
 import { translateMonster } from '@/lib/monster-translator';
 import { dndMonsters, MonsterData } from '@/lib/monsters-data';
 import { npcTemplates } from '@/lib/npc-combatants-data';
+import { CLASS_EFFECTS as SHARED_CLASS_EFFECTS, COMMON_CONDITIONS as SHARED_CONDITIONS, getCategorizedGlobalConditions } from '@/lib/effects-conditions';
 
 // --- Interfaces ---
 interface StatusEffect {
@@ -41,6 +42,40 @@ interface Combatant {
     xp?: number;
     statusEffects: StatusEffect[];
 }
+
+// --- Mapeamento de IDs para Nomes Exibidos ---
+const EFFECT_NAMES_MAP: Record<string, string> = {
+    'rage': 'Fúria',
+    'reckless': 'Ataque Temerário',
+    'inspiration': 'Inspiração Bárdica',
+    'counter-charm': 'Contra-encanto',
+    'bless': 'Bênção',
+    'sanctuary': 'Santuário',
+    'shield-faith': 'Escudo da Fé',
+    'wild-shape': 'Forma Selvagem',
+    'barkskin': 'Pele de Árvore',
+    'action-surge': 'Surto de Ação',
+    'second-wind': 'Retomada de Fôlego',
+    'indomitable': 'Indomável',
+    'evasion': 'Evasão',
+    'uncanny-dodge': 'Esquiva Sobrenatural',
+    'sneak-attack': 'Ataque Furtivo',
+    'flurry': 'Rajada de Golpes',
+    'patient-defense': 'Defesa Paciente',
+    'stunning-strike': 'Ataque Atordoante',
+    'paralyzed-ki': 'Ki Bloqueado',
+    'lay-hands': 'Mãos Curadoras',
+    'divine-smite': 'Destruição Divina',
+    'aura-protection': 'Aura de Proteção',
+    'wrathful-smite': 'Golpe de Ira Divina',
+    'entangle': 'Enredar',
+    'knocked-down': 'Derribado',
+    'enfeiticado': 'Enfeitiçado',
+};
+
+const getEffectDisplayName = (id: string, fallback: string = id): string => {
+    return EFFECT_NAMES_MAP[id] || fallback;
+};
 
 export default function ConfrontoDetalhesPage() {
     const { user, loading: authLoading } = useAuth();
@@ -74,6 +109,7 @@ export default function ConfrontoDetalhesPage() {
     const [classFxTarget, setClassFxTarget] = useState<Combatant | null>(null);
     const [characterInfo, setCharacterInfo] = useState<Record<string, { class: string; level: number }>>({});
     const [hpAdjustmentValues, sethpAdjustmentValues] = useState<Record<string, string>>({});
+    const [healAdjustmentValues, setHealAdjustmentValues] = useState<Record<string, string>>({});
 
     // --- Novo Combatente Form ---
     const [newCombatant, setNewCombatant] = useState({
@@ -83,6 +119,8 @@ export default function ConfrontoDetalhesPage() {
         type: 'monster' as 'monster' | 'npc' | 'player',
         ac: '' as any,
         cr: '0',
+        xp: '' as any,
+        quantity: 1,
         externalId: '',
         ownerId: '',
         ownerName: ''
@@ -91,81 +129,29 @@ export default function ConfrontoDetalhesPage() {
     const [isOnline, setIsOnline] = useState(false);
     const [myCharacters, setMyCharacters] = useState<any[]>([]);
     const [customNpcs, setCustomNpcs] = useState<any[]>([]);
-    const [charactersLoading, setCharactersLoading] = useState(false);
-
-    // --- Estados de Busca de Monstro ---
-    const [monsterSearch, setMonsterSearch] = useState('');
-    const [showMonsterResults, setShowMonsterResults] = useState(false);
-    const searchRef = useRef<HTMLDivElement>(null);
-    const inputRef = useRef<HTMLInputElement>(null);
-
-    useEffect(() => {
-        if (isAddModalOpen) {
-            setTimeout(() => {
-                inputRef.current?.focus();
-            }, 100);
-        }
-    }, [isAddModalOpen]);
 
     // --- NEW: Carregar monstros do Firestore ---
     const [dbMonsters, setDbMonsters] = useState<any[]>([]);
     const [dbStandardNpcs, setDbStandardNpcs] = useState<any[]>([]);
 
-    // Efeitos específicos por classe D&D
-    const CLASS_EFFECTS: Record<string, StatusEffect[]> = {
-        'Bárbaro': [
-            { id: 'rage', name: 'Fúria', duration: 10 },
-            { id: 'reckless', name: 'Ataque Temerário', duration: 1 },
-        ],
-        'Bardo': [
-            { id: 'inspiration', name: 'Inspiração Bárdica', duration: 10 },
-            { id: 'counter-charm', name: 'Contra-encanto', duration: 1 },
-        ],
-        'Clérigo': [
-            { id: 'bless', name: 'Bênção', duration: 10 },
-            { id: 'sanctuary', name: 'Santuário', duration: 1 },
-            { id: 'shield-faith', name: 'Escudo da Fé', duration: 10 },
-        ],
-        'Druida': [
-            { id: 'wild-shape', name: 'Forma Selvagem', duration: 10 },
-            { id: 'barkskin', name: 'Pele de Árvore', duration: 10 },
-        ],
-        'Guerreiro': [
-            { id: 'action-surge', name: 'Surto de Ação', duration: 1 },
-            { id: 'second-wind', name: 'Retomada de Fôlego', duration: 1 },
-            { id: 'indomitable', name: 'Indomável', duration: 1 },
-        ],
-        'Ladino': [
-            { id: 'evasion', name: 'Evasão', duration: 1 },
-            { id: 'uncanny-dodge', name: 'Esquiva Sobrenatural', duration: 1 },
-        ],
-        'Monge': [
-            { id: 'flurry', name: 'Rajada de Golpes', duration: 1 },
-            { id: 'patient-defense', name: 'Defesa Paciente', duration: 1 },
-            { id: 'stunning-strike', name: 'Ataque Atordoante', duration: 1 },
-        ],
-        'Paladino': [
-            { id: 'lay-hands', name: 'Mãos Curadoras', duration: 1 },
-            { id: 'divine-smite', name: 'Destruição Divina', duration: 1 },
-            { id: 'aura-protection', name: 'Aura de Proteção', duration: 10 },
-        ],
-        'Patrulheiro': [
-            { id: 'hunters-mark', name: 'Marca do Caçador', duration: 10 },
-            { id: 'favored-foe', name: 'Inimigo Favorito', duration: 10 },
-        ],
-        'Feiticeiro': [
-            { id: 'metamagic', name: 'Metamagia', duration: 1 },
-            { id: 'tides-chaos', name: 'Marés do Caos', duration: 1 },
-        ],
-        'Bruxo': [
-            { id: 'hex', name: 'Maldição', duration: 10 },
-            { id: 'invocation', name: 'Invocação Mística', duration: 10 },
-        ],
-        'Mago': [
-            { id: 'arcane-recovery', name: 'Recuperação Arcana', duration: 1 },
-            { id: 'spell-mastery', name: 'Mestria em Magia', duration: 1 },
-        ],
-    };
+    // Busca de monstros/NPCs
+    const [monsterSearch, setMonsterSearch] = useState('');
+    const [showMonsterResults, setShowMonsterResults] = useState(false);
+    const inputRef = useRef<HTMLInputElement | null>(null);
+    const searchRef = useRef<HTMLDivElement | null>(null);
+
+    // Carregamento de personagens do jogador
+    const [charactersLoading, setCharactersLoading] = useState(false);
+
+    // Novo efeito customizado
+    const [newEffect, setNewEffect] = useState({ name: '', duration: '', category: 'benefit' as 'benefit' | 'debuff' });
+    // Aba ativa do modal de efeitos
+    const [effectTab, setEffectTab] = useState<'all' | 'benefits' | 'debuffs'>('all');
+    // Busca de efeitos
+    const [effectSearchQuery, setEffectSearchQuery] = useState('');
+
+    // Usar efeitos compartilhados do arquivo centralizado
+    const CLASS_EFFECTS = SHARED_CLASS_EFFECTS;
 
     useEffect(() => {
         // 1. Monstros
@@ -188,8 +174,14 @@ export default function ConfrontoDetalhesPage() {
         };
     }, []);
 
+    const normalizeText = (s?: unknown) => String(s ?? '')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+        .trim();
+
     const filteredMonsters = useMemo(() => {
-        const search = (monsterSearch || '').toLowerCase().trim();
+        const search = normalizeText(monsterSearch);
         if (!search) return [];
 
         if (newCombatant.type === 'npc') {
@@ -228,23 +220,45 @@ export default function ConfrontoDetalhesPage() {
 
         return combinedMonsters.filter(m => {
             if (!m || !m.name) return false;
-            const mName = String(m.name).toLowerCase();
-            const mType = String(m.type || '').toLowerCase();
-            return mName.includes(search) || mType.includes(search);
+
+            const translated = translateMonster({
+                name: m.name,
+                type: typeof m.type === 'string' ? m.type : (m.type?.type || m.type),
+            });
+
+            const namePT = translated?.name || m.name;
+            const typeRaw = (m && typeof m.type === 'object' && m.type !== null)
+                ? (m.type.type || Object.values(m.type).join(', '))
+                : m.type;
+            const typePT = translated?.type || typeRaw;
+
+            const nameHit = normalizeText(m.name).includes(search) || normalizeText(namePT).includes(search);
+            const typeHit = normalizeText(typeRaw).includes(search) || normalizeText(typePT).includes(search);
+
+            return nameHit || typeHit;
         }).slice(0, 5);
     }, [monsterSearch, newCombatant.type, customNpcs, dbMonsters]);
 
     const handleSelectMonster = (monster: any) => {
+        const translated = translateMonster({
+            name: monster.name,
+            type: typeof monster.type === 'string' ? monster.type : (monster.type?.type || monster.type),
+        });
+
+        const displayName = translated?.name || monster.name;
+
         setNewCombatant({
             ...newCombatant,
-            name: monster.name,
+            name: displayName,
             hp: monster.hp,
             ac: monster.ac,
             cr: monster.challenge || monster.cr,
+            xp: monster.xp ?? '',
             // Mantém o tipo atual (monster ou npc)
-            type: newCombatant.type
+            type: newCombatant.type,
+            externalId: monster.id || '',
         });
-        setMonsterSearch(monster.name);
+        setMonsterSearch(displayName);
         setShowMonsterResults(false);
     };
 
@@ -425,22 +439,81 @@ export default function ConfrontoDetalhesPage() {
         fetchCharacterData();
     }, [combatants, loading, characterInfo]);
 
+    // --- Listener para Sincronizar Efeitos de Personagens ---
+    useEffect(() => {
+        if (loading || combatants.length === 0) return;
+
+        const unsubscribers: Array<() => void> = [];
+
+        // Para cada personagem jogador no combate
+        combatants.filter(c => c.type === 'player' && c.externalId).forEach(combatant => {
+            try {
+                const charRef = doc(db, 'personagens', combatant.externalId!);
+                const unsubscribe = onSnapshot(charRef, (snapshot) => {
+                    if (snapshot.exists()) {
+                        const charData = snapshot.data();
+                        const activeEffects = charData.activeEffects || [];
+
+                        // Sincronizar efeitos da ficha para o combate
+                        setCombatants(prev => {
+                            return prev.map(c => {
+                                if (c.externalId === combatant.externalId) {
+                                    // Converter activeEffects (IDs) em StatusEffects
+                                    const statusEffects: StatusEffect[] = activeEffects.map((effectId: string) => ({
+                                        id: effectId,
+                                        name: effectId,
+                                        duration: 10
+                                    }));
+                                    return { ...c, statusEffects };
+                                }
+                                return c;
+                            });
+                        });
+                    }
+                });
+                unsubscribers.push(unsubscribe);
+            } catch (err) {
+                console.error('[SYNC] Erro ao ouvir mudanças da ficha:', err);
+            }
+        });
+
+        return () => unsubscribers.forEach(unsub => unsub());
+    }, [combatants.filter(c => c.type === 'player' && c.externalId).map(c => c.externalId).join(','), loading]);
+
     // --- Sincronização Automática ---
     const syncState = useCallback(async (updates: any) => {
         if (!id) return;
         try {
-            // Sanitiza o objeto updates para remover campos undefined
-            const sanitizedUpdates = { ...updates };
-            Object.keys(sanitizedUpdates).forEach(key => {
-                if (sanitizedUpdates[key] === undefined) {
-                    delete sanitizedUpdates[key];
+            // Função recursiva para sanitizar objetos profundos
+            const deepSanitize = (obj: any): any => {
+                if (obj === null || obj === undefined) return null;
+                
+                if (Array.isArray(obj)) {
+                    return obj.map(item => deepSanitize(item));
                 }
-            });
+                
+                if (typeof obj === 'object') {
+                    const sanitized: any = {};
+                    Object.keys(obj).forEach(key => {
+                        const value = obj[key];
+                        if (value !== undefined) {
+                            sanitized[key] = deepSanitize(value);
+                        }
+                    });
+                    return sanitized;
+                }
+                
+                return obj;
+            };
+
+            // Sanitiza o objeto updates completamente
+            const sanitizedUpdates = deepSanitize(updates);
 
             // Dedupe antes de salvar
             if (sanitizedUpdates.combatants) {
-                sanitizedUpdates.combatants = dedupeCombatants(sanitizedUpdates.combatants);
+                sanitizedUpdates.combatants = dedupeCombatants(sanitizedUpdates.combatants).map(c => deepSanitize(c));
             }
+
             await updateDoc(doc(db, 'encounters', id), sanitizedUpdates);
 
             // Se a arena estiver online, sincroniza com a coleção de sessões compartilhadas
@@ -504,25 +577,34 @@ export default function ConfrontoDetalhesPage() {
     // --- Ações de Combate ---
     const handleAddCombatant = async (e: React.FormEvent) => {
         e.preventDefault();
-        const newEntry: Combatant = {
-            id: Math.random().toString(36).substr(2, 9),
-            name: translateMonster(newCombatant.name),
-            type: newCombatant.type,
-            hp: Number(newCombatant.hp) || 1,
-            maxHp: Number(newCombatant.hp) || 1,
-            initiative: Number(newCombatant.initiative) || 0,
-            ac: Number(newCombatant.ac) || 10,
-            cr: newCombatant.cr || '0',
-            status: 'active',
-            statusEffects: []
-        };
+        const qty = Math.min(Math.max(Number(newCombatant.quantity) || 1, 1), 20);
+        const baseName = translateMonster(newCombatant.name) || 'Combatente';
+        const entries: Combatant[] = [];
 
-        // Adiciona apenas campos opcionais se tiverem valores
-        if (newCombatant.externalId) newEntry.externalId = newCombatant.externalId;
-        if (newCombatant.ownerId) newEntry.ownerId = newCombatant.ownerId;
-        if (newCombatant.ownerName) newEntry.ownerName = newCombatant.ownerName;
+        for (let i = 0; i < qty; i++) {
+            const suffix = qty > 1 ? ` ${i + 1}` : '';
+            const entry: Combatant = {
+                id: Math.random().toString(36).substr(2, 9),
+                name: `${baseName}${suffix}`.trim(),
+                type: newCombatant.type,
+                hp: Number(newCombatant.hp) || 1,
+                maxHp: Number(newCombatant.hp) || 1,
+                initiative: Number(newCombatant.initiative) || 0,
+                ac: Number(newCombatant.ac) || 10,
+                cr: newCombatant.cr || '0',
+                xp: newCombatant.xp === '' ? undefined : Number(newCombatant.xp) || newCombatant.xp,
+                status: 'active',
+                statusEffects: []
+            };
 
-        const updated = [...combatants, newEntry];
+            if (newCombatant.externalId) entry.externalId = `${newCombatant.externalId}${qty > 1 ? `-${i + 1}` : ''}`;
+            if (newCombatant.ownerId) entry.ownerId = newCombatant.ownerId;
+            if (newCombatant.ownerName) entry.ownerName = newCombatant.ownerName;
+
+            entries.push(entry);
+        }
+
+        const updated = [...combatants, ...entries];
         setCombatants(updated);
         await syncState({ combatants: updated });
         setIsAddModalOpen(false);
@@ -533,6 +615,8 @@ export default function ConfrontoDetalhesPage() {
             type: 'monster',
             ac: '' as any,
             cr: '0',
+            xp: '' as any,
+            quantity: 1,
             externalId: '',
             ownerId: '',
             ownerName: ''
@@ -613,15 +697,40 @@ export default function ConfrontoDetalhesPage() {
     };
 
     // --- Efeitos de Classe (Individual) ---
-    const applyClassEffectToCombatant = useCallback(async (combatantId: string, effect: StatusEffect) => {
+    const applyClassEffectToCombatant = useCallback(async (combatantId: string, effect: any) => {
+        // Garantir que temos um objeto com id, name e duration
+        const effectToApply: StatusEffect = {
+            id: effect.id,
+            name: effect.name || effect.id,
+            duration: effect.duration || 1
+        };
+        
         const updated = combatants.map(c => {
             if (c.id !== combatantId) return c;
-            const has = Array.isArray(c.statusEffects) && c.statusEffects.some(se => se.id === effect.id);
+            const has = Array.isArray(c.statusEffects) && c.statusEffects.some(se => se.id === effectToApply.id);
             if (has) return c; // evita duplicata
-            return { ...c, statusEffects: [...(c.statusEffects || []), effect] } as Combatant;
+            return { ...c, statusEffects: [...(c.statusEffects || []), effectToApply] } as Combatant;
         });
         setCombatants(updated);
         await syncState({ combatants: updated });
+        
+        // Sincronizar com a ficha do personagem se for vinculado
+        const combatant = updated.find(c => c.id === combatantId);
+        if (combatant?.externalId) {
+            try {
+                const charRef = doc(db, 'personagens', combatant.externalId);
+                const charSnap = await getDoc(charRef);
+                if (charSnap.exists()) {
+                    const charData = charSnap.data();
+                    const activeEffects = charData.activeEffects || [];
+                    if (!activeEffects.includes(effectToApply.id)) {
+                        await updateDoc(charRef, { activeEffects: [...activeEffects, effectToApply.id] });
+                    }
+                }
+            } catch (err) {
+                console.error('[SYNC] Erro ao aplicar efeito na ficha:', err);
+            }
+        }
     }, [combatants, syncState]);
 
     const removeClassEffectFromCombatant = useCallback(async (combatantId: string, effectId: string) => {
@@ -634,6 +743,22 @@ export default function ConfrontoDetalhesPage() {
         });
         setCombatants(updated);
         await syncState({ combatants: updated });
+        
+        // Sincronizar com a ficha do personagem se for vinculado
+        const combatant = combatants.find(c => c.id === combatantId);
+        if (combatant?.externalId) {
+            try {
+                const charRef = doc(db, 'personagens', combatant.externalId);
+                const charSnap = await getDoc(charRef);
+                if (charSnap.exists()) {
+                    const charData = charSnap.data();
+                    const activeEffects = (charData.activeEffects || []).filter((e: string) => e !== effectId);
+                    await updateDoc(charRef, { activeEffects });
+                }
+            } catch (err) {
+                console.error('[SYNC] Erro ao remover efeito da ficha:', err);
+            }
+        }
     }, [combatants, syncState]);
 
     const toggleOnlineCombat = async () => {
@@ -788,12 +913,32 @@ export default function ConfrontoDetalhesPage() {
 
             <main className="container mx-auto p-3 sm:p-6 flex-grow pb-24">
                 <div className="grid grid-cols-1 gap-3 sm:gap-4 max-w-4xl mx-auto">
-                    {combatants.map((c, index) => (
+                    {combatants.map((c, index) => {
+                        const hasEffects = c.statusEffects && c.statusEffects.length > 0;
+                        const effectAnimationClass = hasEffects ? c.statusEffects.map(fx => {
+                            if (fx.id === 'rage') return 'animate-rage';
+                            if (fx.id === 'bless') return 'animate-bless';
+                            if (fx.id === 'inspiration') return 'animate-inspiration';
+                            return 'animate-effect-glow';
+                        }).join(' ') : '';
+                        
+                        // Detectar se tem ambos benefícios e malefícios
+                        const benefitIds = ['rage', 'reckless', 'inspiration', 'counter-charm', 'bless', 'sanctuary', 'shield-faith', 'wild-shape', 'barkskin', 'action-surge', 'second-wind', 'indomitable', 'evasion', 'uncanny-dodge', 'flurry', 'patient-defense', 'lay-hands', 'divine-smite', 'aura-protection', 'invisivel', 'enfeiticado'];
+                        const hasBenefits = hasEffects && c.statusEffects.some(se => benefitIds.includes(se.id) || (se as any).category === 'benefit');
+                        const hasDebuffs = hasEffects && c.statusEffects.some(se => !benefitIds.includes(se.id) && (se as any).category !== 'benefit');
+                        const hasBothEffects = hasBenefits && hasDebuffs;
+                        
+                        return (
                         <div
                             key={String(c.externalId || c.id)}
                             className={`
-                                relative p-3 sm:p-5 rounded-xl border-2 transition-all duration-300
-                                ${phase === 'combat' && turnIndex === index ? 'bg-rpg-gold/15 border-rpg-gold shadow-glow-gold/20 scale-[1.01] z-10' : 'bg-rpg-panel/80 border-rpg-gold/10 shadow-lg'}
+                                relative p-3 sm:p-5 rounded-xl transition-all duration-300
+                                ${hasBothEffects ? 'border-l-[6px] border-l-green-500 border-r-[6px] border-r-red-500 border-t-2 border-b-2 border-t-purple-500/50 border-b-purple-500/50' : 'border-2'}
+                                ${phase === 'combat' && turnIndex === index ? 'bg-rpg-gold/15 border-rpg-gold shadow-glow-gold/20 scale-[1.01] z-10' : 
+                                  hasBothEffects ? 'bg-gradient-to-r from-green-950/20 via-rpg-dark/50 to-red-950/20 shadow-lg' :
+                                  c.type === 'player' ? 'bg-blue-950/20 border-blue-500/30 shadow-lg shadow-blue-900/10' :
+                                  c.type === 'npc' ? 'bg-yellow-950/20 border-yellow-600/30 shadow-lg shadow-yellow-900/10' :
+                                  'bg-red-950/20 border-red-600/30 shadow-lg shadow-red-900/10'}
                                 ${c.status === 'dead' ? 'opacity-40 grayscale blur-[0.5px]' : ''}
                             `}
                         >
@@ -804,33 +949,22 @@ export default function ConfrontoDetalhesPage() {
                                     </div>
                                     <div className="flex-1 overflow-hidden">
                                         <h3 className="text-base sm:text-xl font-cinzel text-rpg-parchment leading-tight truncate group-hover:text-rpg-gold transition-colors">{c.name}</h3>
-                                        <div className="flex flex-wrap gap-2 text-[10px] sm:text-xs text-rpg-grey uppercase font-bold tracking-widest mt-1">
-                                            <span className={`px-1.5 py-0.5 rounded border ${c.type === 'player' ? 'border-blue-500/30 text-blue-400' : 'border-red-500/30 text-red-400'}`}>
-                                                {c.type === 'monster' ? 'MONSTRO' : c.type === 'player' ? 'JOGADOR' : 'NPC'}
+                                        <div className="flex flex-wrap gap-2 text-[10px] sm:text-xs uppercase font-bold tracking-widest mt-1">
+                                            <span className={`px-1.5 py-0.5 rounded border ${
+                                                c.type === 'player' ? 'border-blue-500/50 text-blue-400 bg-blue-950/30' : 
+                                                c.type === 'npc' ? 'border-yellow-600/50 text-yellow-400 bg-yellow-950/30' :
+                                                'border-red-600/50 text-red-400 bg-red-950/30'
+                                            }`}>
+                                                {c.type === 'monster' ? '👹 MONSTRO' : c.type === 'player' ? '🛡️ JOGADOR' : '⚔️ NPC'}
                                             </span>
-                                            {c.ac && <span className="bg-rpg-dark/50 px-1.5 py-0.5 rounded border border-white/5">CA {c.ac}</span>}
-                                            {c.cr && <span className="bg-rpg-dark/50 px-1.5 py-0.5 rounded border border-white/5">CR {c.cr}</span>}
+                                            {c.ac && <span className="bg-rpg-dark/50 px-1.5 py-0.5 rounded border border-white/5 text-rpg-grey">CA {c.ac}</span>}
+                                            {c.cr && <span className="bg-rpg-dark/50 px-1.5 py-0.5 rounded border border-white/5 text-rpg-grey">CR {c.cr}</span>}
+                                            {hasEffects && (
+                                                <span className="px-1.5 py-0.5 rounded border border-purple-500/50 text-purple-300 bg-purple-950/30 animate-pulse">
+                                                    ✨ {c.statusEffects.length} EFEITO{c.statusEffects.length > 1 ? 'S' : ''}
+                                                </span>
+                                            )}
                                         </div>
-                                        {/* Efeitos Ativos */}
-                                        {c.statusEffects && c.statusEffects.length > 0 && (
-                                            <div className="flex flex-wrap gap-1.5 mt-2">
-                                                {c.statusEffects.map((fx) => (
-                                                    <div
-                                                        key={fx.id}
-                                                        className="group/fx flex items-center gap-1 px-2 py-1 rounded-md bg-purple-900/30 border border-purple-500/40 text-purple-300 text-[9px] sm:text-[10px] font-bold"
-                                                    >
-                                                        <span>{fx.name}</span>
-                                                        <button
-                                                            onClick={() => removeClassEffectFromCombatant(c.id, fx.id)}
-                                                            className="opacity-50 group-hover/fx:opacity-100 hover:text-red-400 transition-all"
-                                                            title="Remover efeito"
-                                                        >
-                                                            ×
-                                                        </button>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        )}
                                     </div>
                                 </div>
 
@@ -849,79 +983,196 @@ export default function ConfrontoDetalhesPage() {
                                         </div>
                                     </div>
 
+                                    {/* Exibição de Efeitos Ativos */}
+                                    {hasEffects && (
+                                        (() => {
+                                            const benefits = c.statusEffects.filter(se => {
+                                                const benefitIds = ['rage', 'reckless', 'inspiration', 'counter-charm', 'bless', 'sanctuary', 'shield-faith', 'wild-shape', 'barkskin', 'action-surge', 'second-wind', 'indomitable', 'evasion', 'uncanny-dodge', 'flurry', 'patient-defense', 'lay-hands', 'divine-smite', 'aura-protection', 'invisivel', 'enfeiticado'];
+                                                return benefitIds.includes(se.id) || (se as any).category === 'benefit';
+                                            });
+                                            const debuffs = c.statusEffects.filter(se => !benefits.includes(se));
+                                            
+                                            // Se houver ambos, exibir card split com metade verde e metade vermelha
+                                            if (benefits.length > 0 && debuffs.length > 0) {
+                                                return (
+                                                    <div className="w-full rounded-lg overflow-hidden border-2 border-purple-500/50">
+                                                        <div className="flex h-12">
+                                                            {/* Lado Esquerdo - Benefícios (Verde) */}
+                                                            <div className="flex-1 bg-gradient-to-br from-green-900/50 to-green-900/20 border-r border-green-600/50 px-2 py-1 overflow-y-auto flex flex-col justify-center">
+                                                                <div className="text-[9px] text-green-400 font-bold uppercase mb-0.5">✦ Ben.</div>
+                                                                <div className="space-y-0">
+                                                                    {benefits.map(se => (
+                                                                        <div key={se.id} className="text-[14px] text-green-300 font-bold truncate leading-tight">
+                                                                            {getEffectDisplayName(se.id, se.name)}
+                                                                        </div>
+                                                                    ))}
+                                                                </div>
+                                                            </div>
+                                                            
+                                                            {/* Lado Direito - Malefícios (Vermelho) */}
+                                                            <div className="flex-1 bg-gradient-to-br from-red-900/50 to-red-900/20 px-2 py-1 overflow-y-auto flex flex-col justify-center">
+                                                                <div className="text-[9px] text-red-400 font-bold uppercase mb-0.5">⚠ Mal.</div>
+                                                                <div className="space-y-0">
+                                                                    {debuffs.map(se => (
+                                                                        <div key={se.id} className="text-[14px] text-red-300 font-bold truncate leading-tight">
+                                                                            {getEffectDisplayName(se.id, se.name)}
+                                                                        </div>
+                                                                    ))}
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            }
+                                            
+                                            // Se apenas benefícios
+                                            if (benefits.length > 0) {
+                                                return (
+                                                    <div className="w-full">
+                                                        <div className="text-[9px] text-rpg-gold font-cinzel tracking-wider uppercase mb-1.5 opacity-70">Efeitos Ativos</div>
+                                                        <div className="space-y-1">
+                                                            {benefits.map(se => (
+                                                                <div key={se.id} className="p-1.5 rounded bg-gradient-to-r from-green-900/40 to-green-900/20 border border-green-600/50 text-green-300 text-[8px] font-bold truncate flex items-center gap-1">
+                                                                    <span>✦</span>
+                                                                    <span className="truncate">{getEffectDisplayName(se.id, se.name)}</span>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                );
+                                            }
+                                            
+                                            // Se apenas malefícios
+                                            return (
+                                                <div className="w-full">
+                                                    <div className="text-[9px] text-rpg-gold font-cinzel tracking-wider uppercase mb-1.5 opacity-70">Efeitos Ativos</div>
+                                                    <div className="space-y-1">
+                                                        {debuffs.map(se => (
+                                                            <div key={se.id} className="p-1.5 rounded bg-gradient-to-r from-red-900/40 to-red-900/20 border border-red-600/50 text-red-300 text-[8px] font-bold truncate flex items-center gap-1">
+                                                                <span>⚠</span>
+                                                                <span className="truncate">{getEffectDisplayName(se.id, se.name)}</span>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            );
+                                        })()
+                                    )}
+
                                     {/* Botões de Controle - Embaixo */}
-                                    <div className="flex gap-1.5 sm:gap-2 items-center justify-start flex-wrap">
-                                        {c.type === 'player' && (
+                                    <div className="flex flex-col gap-2">
+                                        {/* Primeira linha: Efeitos de Classe, +/-, Remover */}
+                                        <div className="flex gap-2 items-center justify-start">
+                                            {c.type === 'player' && (
+                                                <button
+                                                    onClick={() => {
+                                                        setClassFxTarget(c);
+                                                        setIsClassFxOpen(true);
+                                                    }}
+                                                    className="w-14 h-12 sm:w-16 sm:h-12 rounded-lg bg-indigo-900/20 border border-indigo-500/40 text-indigo-300 hover:bg-indigo-900/40 transition-all text-sm active:scale-95 shadow-sm flex items-center justify-center"
+                                                    title="Efeitos de Classe"
+                                                >
+                                                    ✨
+                                                </button>
+                                            )}
+                                            
                                             <button
-                                                onClick={() => {
-                                                    setClassFxTarget(c);
-                                                    setIsClassFxOpen(true);
-                                                }}
-                                                className="w-10 h-10 sm:w-11 sm:h-11 rounded-lg bg-indigo-900/20 border border-indigo-500/40 text-indigo-300 hover:bg-indigo-900/40 transition-all text-sm active:scale-95 shadow-sm flex items-center justify-center"
-                                                title="Efeitos de Classe"
+                                                onClick={() => updateHP(c.id, -1)}
+                                                className="flex-1 h-12 rounded-lg bg-red-900/20 border border-red-500/40 text-red-400 hover:bg-red-900/40 transition-all font-bold text-lg active:scale-95 shadow-sm"
                                             >
-                                                ✨
+                                                -
                                             </button>
-                                        )}
-                                        
-                                        {/* Input Dano Rápido */}
-                                        <div className="flex gap-1 items-center bg-rpg-dark/30 rounded-lg border border-white/5 px-2 py-1.5">
-                                            <input
-                                                type="number"
-                                                inputMode="numeric"
-                                                placeholder="Dano"
-                                                value={hpAdjustmentValues[c.id] || ''}
-                                                onChange={(e) => sethpAdjustmentValues(prev => ({ ...prev, [c.id]: e.target.value }))}
-                                                onKeyDown={(e) => {
-                                                    if (e.key === 'Enter') {
+                                            <button
+                                                onClick={() => updateHP(c.id, 1)}
+                                                className="flex-1 h-12 rounded-lg bg-green-900/20 border border-green-500/40 text-green-400 hover:bg-green-900/40 transition-all font-bold text-lg active:scale-95 shadow-sm"
+                                            >
+                                                +
+                                            </button>
+                                            <button
+                                                onClick={() => removeCombatant(c.id)}
+                                                className="w-14 h-12 sm:w-16 sm:h-12 rounded-lg bg-rpg-dark/50 border border-white/10 text-white/20 hover:text-red-500 hover:border-red-500/50 transition-all active:scale-95 flex items-center justify-center"
+                                                title="Remover"
+                                            >
+                                                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18" /><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" /><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" /><line x1="10" y1="11" x2="10" y2="17" /><line x1="14" y1="11" x2="14" y2="17" /></svg>
+                                            </button>
+                                        </div>
+
+                                        {/* Segunda linha: Inputs de Dano e Cura lado a lado */}
+                                        <div className="flex gap-2 items-center">
+                                            {/* Input Dano Rápido */}
+                                            <div className="flex-1 flex gap-1 items-center bg-rpg-dark/30 rounded-lg border border-red-500/20 px-2 py-1.5">
+                                                <input
+                                                    type="number"
+                                                    inputMode="numeric"
+                                                    placeholder="Dano"
+                                                    value={hpAdjustmentValues[c.id] || ''}
+                                                    onChange={(e) => sethpAdjustmentValues(prev => ({ ...prev, [c.id]: e.target.value }))}
+                                                    onKeyDown={(e) => {
+                                                        if (e.key === 'Enter') {
+                                                            const value = parseInt(hpAdjustmentValues[c.id] || '0');
+                                                            if (value) {
+                                                                updateHP(c.id, -value);
+                                                                sethpAdjustmentValues(prev => ({ ...prev, [c.id]: '' }));
+                                                            }
+                                                        }
+                                                    }}
+                                                    className="w-full h-10 bg-rpg-dark/50 border border-white/10 rounded px-2 text-sm text-center focus:border-rpg-gold outline-none font-medieval text-white font-bold"
+                                                />
+                                                <button
+                                                    onClick={() => {
                                                         const value = parseInt(hpAdjustmentValues[c.id] || '0');
                                                         if (value) {
                                                             updateHP(c.id, -value);
                                                             sethpAdjustmentValues(prev => ({ ...prev, [c.id]: '' }));
                                                         }
-                                                    }
-                                                }}
-                                                className="w-14 h-10 bg-rpg-dark/50 border border-white/10 rounded px-2 text-sm text-center focus:border-rpg-gold outline-none font-medieval text-white font-bold"
-                                            />
-                                            <button
-                                                onClick={() => {
-                                                    const value = parseInt(hpAdjustmentValues[c.id] || '0');
-                                                    if (value) {
-                                                        updateHP(c.id, -value);
-                                                        sethpAdjustmentValues(prev => ({ ...prev, [c.id]: '' }));
-                                                    }
-                                                }}
-                                                className="h-10 px-3 flex items-center justify-center text-red-400 hover:bg-red-900/40 transition-all font-bold text-sm rounded active:scale-95"
-                                                title="Aplicar Dano"
-                                            >
-                                                ✓
-                                            </button>
+                                                    }}
+                                                    className="h-10 px-3 flex items-center justify-center text-red-400 hover:bg-red-900/40 transition-all font-bold text-sm rounded active:scale-95"
+                                                    title="Aplicar Dano"
+                                                >
+                                                    ✓
+                                                </button>
+                                            </div>
+
+                                            {/* Input Cura Rápido */}
+                                            <div className="flex-1 flex gap-1 items-center bg-rpg-dark/30 rounded-lg border border-green-500/20 px-2 py-1.5">
+                                                <input
+                                                    type="number"
+                                                    inputMode="numeric"
+                                                    placeholder="Cura"
+                                                    value={healAdjustmentValues[c.id] || ''}
+                                                    onChange={(e) => setHealAdjustmentValues(prev => ({ ...prev, [c.id]: e.target.value }))}
+                                                    onKeyDown={(e) => {
+                                                        if (e.key === 'Enter') {
+                                                            const value = parseInt(healAdjustmentValues[c.id] || '0');
+                                                            if (value) {
+                                                                updateHP(c.id, value);
+                                                                setHealAdjustmentValues(prev => ({ ...prev, [c.id]: '' }));
+                                                            }
+                                                        }
+                                                    }}
+                                                    className="w-full h-10 bg-rpg-dark/50 border border-white/10 rounded px-2 text-sm text-center focus:border-rpg-gold outline-none font-medieval text-white font-bold"
+                                                />
+                                                <button
+                                                    onClick={() => {
+                                                        const value = parseInt(healAdjustmentValues[c.id] || '0');
+                                                        if (value) {
+                                                            updateHP(c.id, value);
+                                                            setHealAdjustmentValues(prev => ({ ...prev, [c.id]: '' }));
+                                                        }
+                                                    }}
+                                                    className="h-10 px-3 flex items-center justify-center text-green-400 hover:bg-green-900/40 transition-all font-bold text-sm rounded active:scale-95"
+                                                    title="Aplicar Cura"
+                                                >
+                                                    ✓
+                                                </button>
+                                            </div>
                                         </div>
-                                        
-                                        <button
-                                            onClick={() => updateHP(c.id, -5)}
-                                            className="w-10 h-10 sm:w-11 sm:h-11 rounded-lg bg-red-900/20 border border-red-500/40 text-red-400 hover:bg-red-900/40 transition-all font-bold text-lg active:scale-95 shadow-sm"
-                                        >
-                                            -
-                                        </button>
-                                        <button
-                                            onClick={() => updateHP(c.id, 5)}
-                                            className="w-10 h-10 sm:w-11 sm:h-11 rounded-lg bg-green-900/20 border border-green-500/40 text-green-400 hover:bg-green-900/40 transition-all font-bold text-lg active:scale-95 shadow-sm"
-                                        >
-                                            +
-                                        </button>
-                                        <button
-                                            onClick={() => removeCombatant(c.id)}
-                                            className="w-10 h-10 sm:w-11 sm:h-11 rounded-lg bg-rpg-dark/50 border border-white/10 text-white/20 hover:text-red-500 hover:border-red-500/50 transition-all active:scale-95 flex items-center justify-center"
-                                            title="Remover"
-                                        >
-                                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18" /><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" /><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" /><line x1="10" y1="11" x2="10" y2="17" /><line x1="14" y1="11" x2="14" y2="17" /></svg>
-                                        </button>
                                     </div>
                                 </div>
                             </div>
                         </div>
-                    ))}
+                        );
+                    })}
                 </div>
 
                 {combatants.length === 0 && (
@@ -964,7 +1215,7 @@ export default function ConfrontoDetalhesPage() {
                         {/* Conteúdo Contextual por Aba */}
                         {newCombatant.type === 'monster' || newCombatant.type === 'npc' ? (
                             <div className="relative" ref={searchRef}>
-                                <label className="block text-rpg-gold text-[10px] font-bold mb-1.5 font-cinzel tracking-widest uppercase opacity-70">BUSCAR NA BIBLIOTECA</label>
+                                <label className="block text-rpg-gold text-[9px] font-bold mb-1 font-cinzel tracking-wider uppercase opacity-70">BUSCAR NA BIBLIOTECA</label>
                                 <div className="relative">
                                     <input
                                         ref={inputRef}
@@ -978,8 +1229,8 @@ export default function ConfrontoDetalhesPage() {
                                             if (!val) setNewCombatant({ ...newCombatant, name: '' });
                                         }}
                                         onFocus={() => setShowMonsterResults(true)}
-                                        className="w-full bg-rpg-dark border border-rpg-gold/30 rounded-xl p-4 text-rpg-parchment outline-none focus:border-rpg-gold shadow-inner text-sm"
-                                        placeholder="Ex: Dragão, Orc, Guarda, Plebeu..."
+                                        className="w-full bg-rpg-dark border border-rpg-gold/30 rounded-lg p-2.5 text-rpg-parchment outline-none focus:border-rpg-gold shadow-inner text-sm"
+                                        placeholder="Ex: Dragão, Orc, Guarda..."
                                         autoComplete="off"
                                     />
                                     {monsterSearch && <div className="absolute right-4 top-1/2 -translate-y-1/2 text-rpg-gold/30 pointer-events-none">🔍</div>}
@@ -987,25 +1238,39 @@ export default function ConfrontoDetalhesPage() {
 
                                 {/* Resultados da Busca */}
                                 {showMonsterResults && monsterSearch.trim().length > 0 && (
-                                    <div className="absolute z-50 left-0 right-0 mt-2 bg-rpg-panel border border-rpg-gold/30 rounded-xl shadow-2xl overflow-hidden backdrop-blur-md">
+                                    <div className="absolute z-50 left-0 right-0 mt-2 bg-rpg-panel border border-rpg-gold/30 rounded-xl shadow-2xl overflow-hidden backdrop-blur-md max-h-80 overflow-y-auto custom-scrollbar">
                                         {filteredMonsters.length > 0 ? (
-                                            filteredMonsters.map((m, i) => (
-                                                <button
-                                                    key={i}
-                                                    type="button"
-                                                    onClick={() => handleSelectMonster(m)}
-                                                    className="w-full text-left p-4 hover:bg-rpg-gold/10 flex justify-between items-center group transition-colors border-b border-white/5 last:border-0"
-                                                >
-                                                    <div>
-                                                        <div className="text-rpg-parchment font-medieval text-base group-hover:text-rpg-gold">{m.name}</div>
-                                                        <div className="text-[10px] text-rpg-grey uppercase tracking-wider">{m.type || m.race || m.role}</div>
-                                                    </div>
-                                                    <div className="text-right">
-                                                        <div className="text-rpg-gold font-cinzel text-xs">CR {m.challenge}</div>
-                                                        <div className="text-[10px] text-rpg-grey">{m.hp} HP | {m.ac} CA</div>
-                                                    </div>
-                                                </button>
-                                            ))
+                                            filteredMonsters.map((m, i) => {
+                                                const translated = translateMonster({
+                                                    name: m.name,
+                                                    type: typeof m.type === 'string' ? m.type : (m.type?.type || m.type),
+                                                });
+                                                const typeLabel = (m && typeof m.type === 'object' && m.type !== null)
+                                                    ? (m.type.type || Object.values(m.type).join(', '))
+                                                    : m.type;
+                                                const displayName = translated?.name || m.name;
+                                                const displayType = translated?.type || typeLabel;
+                                                const challengeLabel = m.challenge || m.cr || '—';
+                                                const hpLabel = m.hp ?? '—';
+                                                const acLabel = m.ac ?? '—';
+                                                return (
+                                                    <button
+                                                        key={i}
+                                                        type="button"
+                                                        onClick={() => handleSelectMonster(m)}
+                                                        className="w-full text-left p-4 hover:bg-rpg-gold/10 flex justify-between items-center group transition-colors border-b border-white/5 last:border-0"
+                                                    >
+                                                        <div>
+                                                            <div className="text-rpg-parchment font-medieval text-base group-hover:text-rpg-gold">{displayName}</div>
+                                                            <div className="text-[10px] text-rpg-grey uppercase tracking-wider">{displayType || m.race || m.role}</div>
+                                                        </div>
+                                                        <div className="text-right">
+                                                            <div className="text-rpg-gold font-cinzel text-xs">CR {challengeLabel}</div>
+                                                            <div className="text-[10px] text-rpg-grey">{hpLabel} HP | {acLabel} CA</div>
+                                                        </div>
+                                                    </button>
+                                                );
+                                            })
                                         ) : (
                                             <div className="p-4 text-center text-rpg-grey italic border border-white/5">
                                                 Nenhum {newCombatant.type === 'monster' ? 'monstro' : 'NPC'} encontrado...
@@ -1015,14 +1280,14 @@ export default function ConfrontoDetalhesPage() {
                                 )}
 
                                 {newCombatant.name && (
-                                    <div className="mt-4 animate-fade-in">
-                                        <label className="block text-rpg-gold text-[10px] font-bold mb-1.5 font-cinzel tracking-widest uppercase opacity-70">NOME DO {newCombatant.type === 'monster' ? 'MONSTRO' : 'NPC'} (CUSTOMIZÁVEL)</label>
+                                    <div className="mt-3 animate-fade-in">
+                                        <label className="block text-rpg-gold text-[9px] font-bold mb-1 font-cinzel tracking-wider uppercase opacity-70">NOME (CUSTOMIZÁVEL)</label>
                                         <input
                                             type="text"
                                             value={newCombatant.name}
                                             onFocus={(e) => e.target.select()}
                                             onChange={(e) => setNewCombatant({ ...newCombatant, name: e.target.value })}
-                                            className="w-full bg-rpg-dark/30 border border-rpg-gold/20 rounded-xl p-4 text-rpg-parchment outline-none focus:border-rpg-gold"
+                                            className="w-full bg-rpg-dark/30 border border-rpg-gold/20 rounded-lg p-2.5 text-rpg-parchment outline-none focus:border-rpg-gold text-sm"
                                         />
                                     </div>
                                 )}
@@ -1065,12 +1330,12 @@ export default function ConfrontoDetalhesPage() {
                                 )}
 
                                 <div className="relative pt-2">
-                                    <label className="block text-rpg-gold text-[10px] font-bold mb-1.5 font-cinzel tracking-widest uppercase opacity-70">OU CRIE UM HERÓI TEMPORÁRIO</label>
+                                    <label className="block text-rpg-gold text-[9px] font-bold mb-1 font-cinzel tracking-wider uppercase opacity-70">OU CRIE UM HERÓI</label>
                                     <input
                                         type="text"
                                         value={newCombatant.name}
                                         onChange={(e) => setNewCombatant({ ...newCombatant, name: e.target.value, externalId: '', ownerId: '' })}
-                                        className="w-full bg-rpg-dark border border-rpg-gold/30 rounded-xl p-4 text-rpg-parchment outline-none focus:border-rpg-gold shadow-inner text-sm"
+                                        className="w-full bg-rpg-dark border border-rpg-gold/30 rounded-lg p-2.5 text-rpg-parchment outline-none focus:border-rpg-gold shadow-inner text-sm"
                                         placeholder="Nome do Herói..."
                                         autoComplete="off"
                                     />
@@ -1079,69 +1344,92 @@ export default function ConfrontoDetalhesPage() {
                         )}
 
                         {/* Atributos Comuns */}
-                        <div className="space-y-4 pt-2">
-                            <div className="grid grid-cols-2 gap-4">
-                                <div className="space-y-1.5">
-                                    <label className="block text-rpg-gold text-[10px] font-bold font-cinzel tracking-widest uppercase opacity-70">INICIATIVA</label>
+                        <div className="space-y-2.5 pt-2">
+                            <div className="grid grid-cols-3 gap-2">
+                                <div className="space-y-1">
+                                    <label className="block text-rpg-gold text-[9px] font-bold font-cinzel tracking-wider uppercase opacity-70">INIC</label>
                                     <input
                                         type="number"
                                         value={newCombatant.initiative}
                                         placeholder="0"
                                         onFocus={(e) => e.target.select()}
                                         onChange={(e) => setNewCombatant({ ...newCombatant, initiative: e.target.value === '' ? '' : Number(e.target.value) })}
-                                        className="w-full bg-rpg-dark border border-rpg-gold/30 rounded-xl p-3 text-rpg-parchment outline-none shadow-inner text-center font-medieval text-lg"
+                                        className="w-full bg-rpg-dark border border-rpg-gold/30 rounded-lg p-2.5 text-rpg-parchment outline-none shadow-inner text-center font-medieval text-base"
                                     />
                                 </div>
-                                <div className="space-y-1.5">
-                                    <label className="block text-rpg-gold text-[10px] font-bold font-cinzel tracking-widest uppercase opacity-70">VIDA MÁXIMA</label>
+                                <div className="space-y-1">
+                                    <label className="block text-rpg-gold text-[9px] font-bold font-cinzel tracking-wider uppercase opacity-70">HP</label>
                                     <input
                                         type="number"
                                         value={newCombatant.hp}
                                         placeholder="10"
                                         onFocus={(e) => e.target.select()}
                                         onChange={(e) => setNewCombatant({ ...newCombatant, hp: e.target.value === '' ? '' : Number(e.target.value) })}
-                                        className="w-full bg-rpg-dark border border-rpg-gold/30 rounded-xl p-3 text-rpg-parchment outline-none shadow-inner text-center font-medieval text-lg"
+                                        className="w-full bg-rpg-dark border border-rpg-gold/30 rounded-lg p-2.5 text-rpg-parchment outline-none shadow-inner text-center font-medieval text-base"
                                     />
                                 </div>
-                            </div>
-
-                            <div className="grid grid-cols-2 gap-4">
-                                <div className="space-y-1.5">
-                                    <label className="block text-rpg-gold text-[10px] font-bold font-cinzel tracking-widest uppercase opacity-70">CA (DEFESA)</label>
+                                <div className="space-y-1">
+                                    <label className="block text-rpg-gold text-[9px] font-bold font-cinzel tracking-wider uppercase opacity-70">CA</label>
                                     <input
                                         type="number"
                                         value={newCombatant.ac}
                                         placeholder="10"
                                         onFocus={(e) => e.target.select()}
                                         onChange={(e) => setNewCombatant({ ...newCombatant, ac: e.target.value === '' ? '' : Number(e.target.value) })}
-                                        className="w-full bg-rpg-dark border border-rpg-gold/30 rounded-xl p-3 text-rpg-parchment outline-none shadow-inner text-center font-medieval text-lg"
+                                        className="w-full bg-rpg-dark border border-rpg-gold/30 rounded-lg p-2.5 text-rpg-parchment outline-none shadow-inner text-center font-medieval text-base"
                                     />
                                 </div>
-                                <div className="space-y-1.5">
-                                    <label className="block text-rpg-gold text-[10px] font-bold font-cinzel tracking-widest uppercase opacity-70">NÍVEL / ND (CR)</label>
+                            </div>
+
+                            <div className="grid grid-cols-3 gap-2">
+                                <div className="space-y-1">
+                                    <label className="block text-rpg-gold text-[9px] font-bold font-cinzel tracking-wider uppercase opacity-70">CR</label>
                                     <input
                                         type="text"
                                         value={newCombatant.cr}
+                                        placeholder="0"
                                         onFocus={(e) => e.target.select()}
                                         onChange={(e) => setNewCombatant({ ...newCombatant, cr: e.target.value })}
-                                        className="w-full bg-rpg-dark border border-rpg-gold/30 rounded-xl p-3 text-rpg-parchment outline-none shadow-inner text-center font-medieval text-lg"
-                                        placeholder="0, 1/4, 5, etc"
+                                        className="w-full bg-rpg-dark border border-rpg-gold/30 rounded-lg p-2.5 text-rpg-parchment outline-none shadow-inner text-center font-medieval text-base"
+                                    />
+                                </div>
+                                <div className="space-y-1">
+                                    <label className="block text-rpg-gold text-[9px] font-bold font-cinzel tracking-wider uppercase opacity-70">XP</label>
+                                    <input
+                                        type="number"
+                                        value={newCombatant.xp}
+                                        placeholder="450"
+                                        onFocus={(e) => e.target.select()}
+                                        onChange={(e) => setNewCombatant({ ...newCombatant, xp: e.target.value === '' ? '' : Number(e.target.value) })}
+                                        className="w-full bg-rpg-dark border border-rpg-gold/30 rounded-lg p-2.5 text-rpg-parchment outline-none shadow-inner text-center font-medieval text-base"
+                                    />
+                                </div>
+                                <div className="space-y-1">
+                                    <label className="block text-rpg-gold text-[9px] font-bold font-cinzel tracking-wider uppercase opacity-70">QTD</label>
+                                    <input
+                                        type="number"
+                                        min={1}
+                                        max={20}
+                                        value={newCombatant.quantity}
+                                        onFocus={(e) => e.target.select()}
+                                        onChange={(e) => setNewCombatant({ ...newCombatant, quantity: e.target.value === '' ? 1 : Number(e.target.value) })}
+                                        className="w-full bg-rpg-dark border border-rpg-gold/30 rounded-lg p-2.5 text-rpg-parchment outline-none shadow-inner text-center font-medieval text-base"
                                     />
                                 </div>
                             </div>
                         </div>
 
-                        <div className="flex flex-col sm:flex-row justify-end gap-3 pt-6 border-t border-white/5">
+                        <div className="flex flex-col sm:flex-row justify-end gap-2 pt-4 border-t border-white/5">
                             <button
                                 type="button"
                                 onClick={() => { setIsAddModalOpen(false); setMonsterSearch(''); }}
-                                className="px-6 py-4 sm:py-2 text-rpg-grey hover:text-rpg-parchment font-cinzel order-2 sm:order-1 tracking-widest text-[10px]"
+                                className="px-4 py-3 sm:py-2 text-rpg-grey hover:text-rpg-parchment font-cinzel order-2 sm:order-1 tracking-widest text-[10px]"
                             >
                                 CANCELAR
                             </button>
                             <button
                                 type="submit"
-                                className="bg-rpg-gold text-rpg-dark px-10 py-4 sm:py-2 rounded-xl font-bold font-cinzel hover:bg-rpg-gold-light transition-all shadow-lg active:scale-95 order-1 sm:order-2 tracking-widest text-[10px] shadow-glow-gold/20"
+                                className="bg-rpg-gold text-rpg-dark px-8 py-3 sm:py-2 rounded-lg font-bold font-cinzel hover:bg-rpg-gold-light transition-all shadow-lg active:scale-95 order-1 sm:order-2 tracking-widest text-[10px] shadow-glow-gold/20"
                             >
                                 CONVOCAR
                             </button>
@@ -1185,6 +1473,8 @@ export default function ConfrontoDetalhesPage() {
                 onClose={() => {
                     setIsClassFxOpen(false);
                     setClassFxTarget(null);
+                    setEffectTab('all');
+                    setEffectSearchQuery('');
                 }} 
                 title={`Efeitos • ${classFxTarget?.name || ''}`}
             >
@@ -1194,48 +1484,152 @@ export default function ConfrontoDetalhesPage() {
                         const availableEffects = charClass ? (CLASS_EFFECTS[charClass] || []) : [];
                         const charLevel = classFxTarget?.externalId ? characterInfo[classFxTarget.externalId]?.level : undefined;
 
-                        if (!charClass || availableEffects.length === 0) {
-                            return (
-                                <div className="text-center py-4 px-2">
-                                    <div className="text-3xl mb-2 opacity-30">🎭</div>
-                                    <p className="text-rpg-grey text-xs italic">
-                                        {!charClass 
-                                            ? 'Carregando...'
-                                            : 'Nenhum efeito disponível.'}
-                                    </p>
-                                </div>
+                        // Obter condições globais
+                        const globalConditions = getCategorizedGlobalConditions();
+                        
+                        // Combinar efeitos de classe com condições globais
+                        const classEffectsWithType = availableEffects.map(fx => ({ ...fx, type: 'class' as const }));
+                        const globalBenefitsWithType = globalConditions.benefits.map(c => ({ id: c.id, name: c.name, duration: 1, category: 'benefit' as const, type: 'global' as const }));
+                        const globalDebuffsWithType = globalConditions.debuffs.map(c => ({ id: c.id, name: c.name, duration: 1, category: 'debuff' as const, type: 'global' as const }));
+
+                        // Categorizar todos os efeitos (classe + globais)
+                        const benefitIds = ['rage', 'reckless', 'inspiration', 'counter-charm', 'bless', 'sanctuary', 'shield-faith', 'wild-shape', 'barkskin', 'action-surge', 'second-wind', 'indomitable', 'evasion', 'uncanny-dodge', 'flurry', 'patient-defense', 'lay-hands', 'divine-smite', 'aura-protection', 'hunters-mark', 'favored-foe', 'metamagic', 'tides-chaos', 'invocation', 'arcane-recovery', 'spell-mastery', 'sneak-attack', 'armor-agathys', 'multiattack', 'mirror-image'];
+                        const debuffIds = ['stunning-strike', 'hex', 'curse', 'entangle', 'knocked-down', 'paralyzed-ki', 'wrathful-smite', 'wild-surge', 'hypnotic-pattern'];
+                        
+                        const allEffects = [...classEffectsWithType, ...globalBenefitsWithType, ...globalDebuffsWithType];
+                        const benefits = allEffects.filter(fx => (benefitIds.includes(fx.id)) || (fx.type === 'global' && fx.category === 'benefit'));
+                        const debuffs = allEffects.filter(fx => (debuffIds.includes(fx.id)) || (fx.type === 'global' && fx.category === 'debuff'));
+                        
+                        // Aplicar filtro de busca
+                        const normalizeSearch = (text: string) => text.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+                        const searchTerm = normalizeSearch(effectSearchQuery);
+                        
+                        const filterEffects = (effects: any[]) => {
+                            if (!searchTerm) return effects;
+                            return effects.filter(fx => 
+                                normalizeSearch(fx.name).includes(searchTerm) ||
+                                normalizeSearch(fx.id).includes(searchTerm)
                             );
-                        }
+                        };
+                        
+                        const filteredBenefits = filterEffects(benefits);
+                        const filteredDebuffs = filterEffects(debuffs);
+                        const displayedEffects = effectTab === 'benefits' ? filteredBenefits : effectTab === 'debuffs' ? filteredDebuffs : filterEffects(allEffects);
 
                         return (
                             <>
-                                <div className="text-center pb-2 border-b border-white/10 mb-2">
+                                <div className="text-center pb-2 border-b border-white/10 mb-3">
                                     <div className="text-rpg-gold font-cinzel text-xs tracking-widest uppercase">{charClass}</div>
                                     {charLevel && <div className="text-rpg-grey text-[9px] mt-0.5">Nível {charLevel}</div>}
                                 </div>
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-60 overflow-y-auto pr-2">
-                                    {availableEffects.map((fx) => {
+
+                                {/* Barra de Busca */}
+                                <div className="mb-3">
+                                    <input
+                                        type="text"
+                                        placeholder="🔍 Buscar efeito..."
+                                        value={effectSearchQuery}
+                                        onChange={(e) => setEffectSearchQuery(e.target.value)}
+                                        className="w-full bg-rpg-dark border border-rpg-gold/30 rounded-lg p-2.5 text-rpg-parchment outline-none focus:border-rpg-gold focus:ring-1 focus:ring-rpg-gold/30 transition-all text-sm"
+                                    />
+                                </div>
+
+                                {/* Sistema de Abas */}
+                                <div className="flex gap-1 mb-3 border-b border-white/10">
+                                    <button
+                                        onClick={() => setEffectTab('all')}
+                                        className={`flex-1 px-3 py-2 text-[10px] font-cinzel tracking-wider uppercase transition-all border-b-2 ${
+                                            effectTab === 'all'
+                                                ? 'border-rpg-gold text-rpg-gold'
+                                                : 'border-transparent text-rpg-grey hover:text-rpg-parchment'
+                                        }`}
+                                    >
+                                        🎭 Todos ({filterEffects(allEffects).length})
+                                    </button>
+                                    <button
+                                        onClick={() => setEffectTab('benefits')}
+                                        className={`flex-1 px-3 py-2 text-[10px] font-cinzel tracking-wider uppercase transition-all border-b-2 ${
+                                            effectTab === 'benefits'
+                                                ? 'border-green-500 text-green-400'
+                                                : 'border-transparent text-rpg-grey hover:text-rpg-parchment'
+                                        }`}
+                                    >
+                                        ✦ Benef. ({filteredBenefits.length})
+                                    </button>
+                                    <button
+                                        onClick={() => setEffectTab('debuffs')}
+                                        className={`flex-1 px-3 py-2 text-[10px] font-cinzel tracking-wider uppercase transition-all border-b-2 ${
+                                            effectTab === 'debuffs'
+                                                ? 'border-red-500 text-red-400'
+                                                : 'border-transparent text-rpg-grey hover:text-rpg-parchment'
+                                        }`}
+                                    >
+                                        ⚠ Malef. ({filteredDebuffs.length})
+                                    </button>
+                                </div>
+
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-60 overflow-y-auto pr-2 custom-scrollbar">
+                                    {displayedEffects.length === 0 ? (
+                                        <div className="col-span-full text-center py-6">
+                                            <div className="text-2xl mb-2 opacity-30">🎭</div>
+                                            <p className="text-rpg-grey text-xs italic">
+                                                Nenhum efeito nesta categoria
+                                            </p>
+                                        </div>
+                                    ) : displayedEffects.map((fx: any) => {
                                         const hasEffect = classFxTarget?.statusEffects?.some(se => se.id === fx.id);
+                                        const isGlobal = fx.type === 'global';
+                                        const isBenefit = fx.category === 'benefit';
+                                        const isDebuff = fx.category === 'debuff';
+                                        
+                                        // Estilos baseados na categoria
+                                        const cardClasses = isBenefit 
+                                            ? 'bg-gradient-to-br from-green-900/30 to-green-900/10 border-green-600/50 hover:border-green-500 shadow-lg shadow-green-900/20' 
+                                            : 'bg-gradient-to-br from-red-900/30 to-red-900/10 border-red-600/50 hover:border-red-500 shadow-lg shadow-red-900/20';
+                                        
+                                        const icon = isBenefit ? '✦' : '⚠';
+                                        const iconColor = isBenefit ? 'text-green-400' : 'text-red-400';
+                                        
                                         return (
-                                            <div key={fx.id} className="p-2 rounded-lg bg-rpg-panel border border-white/10">
-                                                <div className="text-rpg-parchment font-cinzel text-[11px] sm:text-xs mb-1.5 leading-tight">{fx.name}</div>
+                                            <div key={fx.id} className={`p-3 rounded-lg border transition-all ${cardClasses}`}>
+                                                <div className="flex justify-between items-start mb-2">
+                                                    <div className="flex items-start gap-2 flex-1">
+                                                        <span className={`${iconColor} text-lg leading-none`}>{icon}</span>
+                                                        <div className="flex-1">
+                                                            <div className="text-rpg-parchment font-cinzel text-xs font-bold leading-tight">{fx.name}</div>
+                                                            {isGlobal && <span className="text-[8px] text-rpg-gold opacity-70 font-bold uppercase mt-0.5 block">Global</span>}
+                                                        </div>
+                                                    </div>
+                                                </div>
                                                 <div className="flex gap-1">
                                                     <button
                                                         onClick={() => {
                                                             applyClassEffectToCombatant(classFxTarget!.id, fx);
+                                                            setIsClassFxOpen(false);
+                                                            setClassFxTarget(null);
+                                                            setEffectTab('all');
+                                                            setEffectSearchQuery('');
                                                         }}
                                                         disabled={hasEffect}
                                                         className={`flex-1 px-2 py-1.5 rounded text-[10px] font-bold transition-all active:scale-95 ${
                                                             hasEffect 
                                                                 ? 'bg-gray-700 text-gray-400 cursor-not-allowed opacity-50'
-                                                                : 'bg-green-700 text-white hover:bg-green-600'
+                                                                : isBenefit
+                                                                ? 'bg-green-700 text-white hover:bg-green-600 shadow-glow-green/30'
+                                                                : 'bg-red-700 text-white hover:bg-red-600 shadow-glow-red/30'
                                                         }`}
                                                     >
                                                         {hasEffect ? 'Ativo' : 'Aplicar'}
                                                     </button>
                                                     {hasEffect && (
                                                         <button
-                                                            onClick={() => removeClassEffectFromCombatant(classFxTarget!.id, fx.id)}
+                                                            onClick={() => {
+                                                                removeClassEffectFromCombatant(classFxTarget!.id, fx.id);
+                                                                setIsClassFxOpen(false);
+                                                                setClassFxTarget(null);
+                                                                setEffectTab('all');
+                                                                setEffectSearchQuery('');
+                                                            }}
                                                             className="flex-1 bg-red-800 text-white px-2 py-1.5 rounded text-[10px] hover:bg-red-700 transition-all active:scale-95 font-bold"
                                                         >
                                                             ✕
@@ -1245,6 +1639,59 @@ export default function ConfrontoDetalhesPage() {
                                             </div>
                                         );
                                     })}
+                                </div>
+                                
+                                {/* Criar Efeito Customizado */}
+                                <div className="mt-4 pt-4 border-t border-white/10">
+                                    <div className="text-rpg-gold font-cinzel text-[10px] tracking-wider uppercase mb-2 opacity-70">Criar Efeito Customizado</div>
+                                    <div className="space-y-2">
+                                        <input
+                                            type="text"
+                                            placeholder="Nome do Efeito"
+                                            value={newEffect.name}
+                                            onChange={(e) => setNewEffect({ ...newEffect, name: e.target.value })}
+                                            className="w-full bg-rpg-dark border border-rpg-gold/30 rounded-lg p-2 text-rpg-parchment outline-none focus:border-rpg-gold text-sm"
+                                        />
+                                        <select
+                                            value={newEffect.category}
+                                            onChange={(e) => setNewEffect({ ...newEffect, category: e.target.value as 'benefit' | 'debuff' })}
+                                            className="w-full bg-rpg-dark border border-rpg-gold/30 rounded-lg p-2 text-rpg-parchment outline-none focus:border-rpg-gold text-sm"
+                                        >
+                                            <option value="benefit" className="bg-rpg-dark">✦ Benefício</option>
+                                            <option value="debuff" className="bg-rpg-dark">⚠ Malefício</option>
+                                        </select>
+                                        <input
+                                            type="number"
+                                            placeholder="Duração (turnos) *"
+                                            min="1"
+                                            value={newEffect.duration}
+                                            onChange={(e) => setNewEffect({ ...newEffect, duration: e.target.value })}
+                                            className="w-full bg-rpg-dark border border-rpg-gold/30 rounded-lg p-2 text-rpg-parchment outline-none focus:border-rpg-gold text-sm text-center"
+                                        />
+                                        <button
+                                            onClick={() => {
+                                                if (!newEffect.name.trim() || !newEffect.duration || Number(newEffect.duration) < 1) {
+                                                    alert('Preencha o nome, o tipo e a duração do efeito!');
+                                                    return;
+                                                }
+                                                const customEffect: StatusEffect & { category?: 'benefit' | 'debuff' } = {
+                                                    id: `custom-${Date.now()}`,
+                                                    name: newEffect.name.trim(),
+                                                    duration: Number(newEffect.duration),
+                                                    category: newEffect.category
+                                                };
+                                                applyClassEffectToCombatant(classFxTarget!.id, customEffect as any);
+                                                setNewEffect({ name: '', duration: '', category: 'benefit' });
+                                                setIsClassFxOpen(false);
+                                                setClassFxTarget(null);
+                                                setEffectTab('all');
+                                                setEffectSearchQuery('');
+                                            }}
+                                            className="w-full bg-purple-700 text-white px-3 py-2 rounded-lg text-[11px] font-bold hover:bg-purple-600 transition-all active:scale-95"
+                                        >
+                                            CRIAR E APLICAR
+                                        </button>
+                                    </div>
                                 </div>
                             </>
                         );

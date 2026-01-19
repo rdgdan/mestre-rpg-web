@@ -38,23 +38,12 @@ import { StartingEquipmentModal } from '@/components/ui/StartingEquipmentModal';
 import { CLASS_PROFICIENCIES } from '@/lib/class-proficiencies';
 
 // --- Constantes de Ficha 2.0 ---
-const COMMON_CONDITIONS = [
-    { id: 'caido', name: 'Caído', icon: '🦵' },
-    { id: 'envenenado', name: 'Envenenado', icon: '🧪' },
-    { id: 'atordoado', name: 'Atordoado', icon: '💫' },
-    { id: 'causado', name: 'Amedrontado', icon: '😨' },
-    { id: 'agarrado', name: 'Agarrado', icon: '🤝' },
-    { id: 'incapacitado', name: 'Incapacitado', icon: '🚫' },
-    { id: 'invisivel', name: 'Invisível', icon: '👻' },
-    { id: 'paralisado', name: 'Paralisado', icon: '⛓️' },
-    { id: 'petrificado', name: 'Petrificado', icon: '🗿' },
-    { id: 'preso', name: 'Preso', icon: '🕸️' },
-    { id: 'inconsciente', name: 'Inconsciente', icon: '😴' },
-];
+import { COMMON_CONDITIONS, CLASS_EFFECTS, EFFECT_STYLES, getEffectStyle } from '@/lib/effects-conditions';
 
 const ACTIVE_EFFECTS = [
     { id: 'rage', name: 'Fúria', icon: '🔥', classReq: 'Bárbaro' },
-    { id: 'bless', name: 'Aperfeiçoar', icon: '✨' },
+    { id: 'bless', name: 'Bênção', icon: '✨' },
+    { id: 'inspiration', name: 'Inspiração Bárdica', icon: '🎵' },
     { id: 'concentrating', name: 'Concentrando', icon: '🧠' },
 ];
 
@@ -211,47 +200,126 @@ const ConditionManager = ({ character, onToggleCondition, onToggleEffect }: {
     const activeConditions = character.conditions || [];
     const activeEffects = character.activeEffects || [];
 
+    // Separar efeitos ativos em benefícios e malefícios
+    const benefitIds = ['rage', 'bless', 'inspiration', 'concentrating', 'reckless', 'counter-charm', 'sanctuary', 'shield-faith', 'wild-shape', 'barkskin', 'action-surge', 'second-wind', 'indomitable', 'evasion', 'uncanny-dodge', 'sneak-attack', 'flurry', 'patient-defense', 'lay-hands', 'divine-smite', 'aura-protection'];
+    
+    const activeEffectObjects = ACTIVE_EFFECTS.filter(e => activeEffects.includes(e.id));
+    const activeBenefits = activeEffectObjects.filter(e => benefitIds.includes(e.id));
+    const activeDebuffs = activeEffectObjects.filter(e => !benefitIds.includes(e.id));
+
     return (
         <div className="space-y-4 mb-6">
-            {/* Efeitos Ativos (Rage, etc) */}
-            <div className="flex flex-wrap gap-2">
-                {ACTIVE_EFFECTS.map(effect => {
-                    if (effect.classReq && !isBarbarian) return null;
-                    const isActive = activeEffects.includes(effect.id);
-                    return (
-                        <button
-                            key={effect.id}
-                            onClick={() => onToggleEffect(effect.id)}
-                            className={`px-3 py-1.5 rounded-full flex items-center gap-2 text-xs font-bold border transition-all ${isActive
-                                ? 'bg-red-600/20 border-red-500 text-red-400 shadow-glow-red/20 scale-105'
-                                : 'bg-rpg-panel border-rpg-gold/10 text-rpg-grey hover:border-rpg-gold/30'
-                                }`}
-                        >
-                            <span>{effect.icon}</span>
-                            <span>{effect.name}</span>
-                        </button>
-                    );
-                })}
+            {/* Efeitos Ativos - Benefícios e Malefícios Lado a Lado */}
+            <div className="grid grid-cols-2 gap-4">
+                {/* Coluna de Benefícios */}
+                <div className="space-y-2">
+                    {activeBenefits.length > 0 && (
+                        <>
+                            <div className="text-xs text-green-400 font-bold uppercase tracking-widest">✦ Benefícios</div>
+                            <div className="space-y-1.5">
+                                {activeBenefits.map(effect => {
+                                    if (effect.classReq && !isBarbarian) return null;
+                                    return (
+                                        <button
+                                            key={effect.id}
+                                            onClick={() => onToggleEffect(effect.id)}
+                                            className="w-full px-3 py-2 rounded-lg flex items-center gap-2 text-xs font-bold border transition-all bg-gradient-to-r from-green-900/40 to-green-900/20 border-green-600/50 text-green-300 hover:border-green-500 hover:from-green-900/60 shadow-lg shadow-green-900/20"
+                                        >
+                                            <span className="text-lg">{effect.icon}</span>
+                                            <span className="truncate">{effect.name}</span>
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        </>
+                    )}
+                    
+                    {/* Botão para adicionar benefícios */}
+                    {ACTIVE_EFFECTS.filter(e => (e.classReq === undefined || (e.classReq && isBarbarian)) && benefitIds.includes(e.id) && !activeEffects.includes(e.id)).length > 0 && (
+                        <div className="pt-2">
+                            <div className="text-[9px] text-rpg-gold/50 font-bold uppercase opacity-70 mb-1">Adicionar:</div>
+                            <div className="space-y-1 max-h-32 overflow-y-auto">
+                                {ACTIVE_EFFECTS.filter(e => (e.classReq === undefined || (e.classReq && isBarbarian)) && benefitIds.includes(e.id) && !activeEffects.includes(e.id)).map(effect => (
+                                    <button
+                                        key={effect.id}
+                                        onClick={() => onToggleEffect(effect.id)}
+                                        className="w-full px-2 py-1.5 rounded text-[9px] font-bold border transition-all bg-green-950/30 border-green-700/30 text-green-400 hover:bg-green-900/40 hover:border-green-600"
+                                    >
+                                        + {effect.name}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+                </div>
+
+                {/* Coluna de Malefícios */}
+                <div className="space-y-2">
+                    {activeDebuffs.length > 0 && (
+                        <>
+                            <div className="text-xs text-red-400 font-bold uppercase tracking-widest">⚠ Malefícios</div>
+                            <div className="space-y-1.5">
+                                {activeDebuffs.map(effect => {
+                                    if (effect.classReq && !isBarbarian) return null;
+                                    return (
+                                        <button
+                                            key={effect.id}
+                                            onClick={() => onToggleEffect(effect.id)}
+                                            className="w-full px-3 py-2 rounded-lg flex items-center gap-2 text-xs font-bold border transition-all bg-gradient-to-r from-red-900/40 to-red-900/20 border-red-600/50 text-red-300 hover:border-red-500 hover:from-red-900/60 shadow-lg shadow-red-900/20"
+                                        >
+                                            <span className="text-lg">{effect.icon}</span>
+                                            <span className="truncate">{effect.name}</span>
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        </>
+                    )}
+
+                    {/* Botão para adicionar malefícios */}
+                    {ACTIVE_EFFECTS.filter(e => (e.classReq === undefined || (e.classReq && isBarbarian)) && !benefitIds.includes(e.id) && !activeEffects.includes(e.id)).length > 0 && (
+                        <div className="pt-2">
+                            <div className="text-[9px] text-rpg-gold/50 font-bold uppercase opacity-70 mb-1">Adicionar:</div>
+                            <div className="space-y-1 max-h-32 overflow-y-auto">
+                                {ACTIVE_EFFECTS.filter(e => (e.classReq === undefined || (e.classReq && isBarbarian)) && !benefitIds.includes(e.id) && !activeEffects.includes(e.id)).map(effect => (
+                                    <button
+                                        key={effect.id}
+                                        onClick={() => onToggleEffect(effect.id)}
+                                        className="w-full px-2 py-1.5 rounded text-[9px] font-bold border transition-all bg-red-950/30 border-red-700/30 text-red-400 hover:bg-red-900/40 hover:border-red-600"
+                                    >
+                                        + {effect.name}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+                </div>
             </div>
 
-            {/* Condições */}
-            <div className="flex flex-wrap gap-2">
-                {COMMON_CONDITIONS.map(cond => {
-                    const isActive = activeConditions.includes(cond.id);
-                    return (
-                        <button
-                            key={cond.id}
-                            onClick={() => onToggleCondition(cond.id)}
-                            className={`px-3 py-1.5 rounded-full flex items-center gap-2 text-[10px] font-bold border transition-all ${isActive
-                                ? 'bg-rpg-gold/20 border-rpg-gold text-rpg-gold shadow-glow-gold/10'
-                                : 'bg-rpg-panel border-white/5 text-rpg-grey/60 hover:text-rpg-grey hover:border-rpg-gold/20'
+            {/* Condições Globais */}
+            <div className="pt-4 border-t border-white/10">
+                <div className="text-xs text-rpg-gold font-bold uppercase tracking-widest mb-2">Condições</div>
+                <div className="flex flex-wrap gap-2">
+                    {COMMON_CONDITIONS.map(cond => {
+                        const isActive = activeConditions.includes(cond.id);
+                        const isBenefit = cond.id === 'invisivel';
+                        return (
+                            <button
+                                key={cond.id}
+                                onClick={() => onToggleCondition(cond.id)}
+                                className={`px-3 py-1.5 rounded-lg flex items-center gap-2 text-[10px] font-bold border transition-all ${isActive
+                                    ? isBenefit 
+                                        ? 'bg-gradient-to-r from-green-900/40 to-green-900/20 border-green-600/50 text-green-300'
+                                        : 'bg-gradient-to-r from-red-900/40 to-red-900/20 border-red-600/50 text-red-300'
+                                    : 'bg-rpg-panel border-white/5 text-rpg-grey/60 hover:text-rpg-grey hover:border-rpg-gold/20'
                                 }`}
-                        >
-                            <span>{cond.icon}</span>
-                            <span>{cond.name}</span>
-                        </button>
-                    );
-                })}
+                            >
+                                <span>{cond.icon}</span>
+                                <span className="truncate">{cond.name}</span>
+                            </button>
+                        );
+                    })}
+                </div>
             </div>
         </div>
     );
@@ -960,7 +1028,8 @@ export default function CharacterSheetPage() {
         });
     };
 
-    const toggleActiveEffect = (id: string) => {
+    const toggleActiveEffect = async (id: string) => {
+        // Atualizar localmente
         updateCharacter(char => {
             const effects = char.activeEffects || [];
             const newEffects = effects.includes(id)
@@ -968,6 +1037,47 @@ export default function CharacterSheetPage() {
                 : [...effects, id];
             return { ...char, activeEffects: newEffects };
         });
+
+        // Sincronizar com o combate se o personagem estiver em um
+        try {
+            // Procura por combates que contenham este personagem
+            const { collection, query, where, getDocs } = await import('firebase/firestore');
+            const encountersRef = collection(db, 'encounters');
+            const q = query(encountersRef);
+            const snapshot = await getDocs(q);
+
+            snapshot.forEach(async (docSnap) => {
+                const combatData = docSnap.data();
+                const combatants = combatData.combatants || [];
+                
+                // Procura o combatente com este personagem
+                const combatant = combatants.find((c: any) => c.externalId === character?.id);
+                if (combatant) {
+                    // Sincroniza o efeito com o combate
+                    const { updateDoc } = await import('firebase/firestore');
+                    const combatRef = doc(db, 'encounters', docSnap.id);
+                    
+                    const updatedCombatants = combatants.map((c: any) => {
+                        if (c.externalId === character?.id) {
+                            const effects = c.statusEffects || [];
+                            const hasEffect = effects.some((e: any) => e.id === id);
+                            return {
+                                ...c,
+                                statusEffects: hasEffect
+                                    ? effects.filter((e: any) => e.id !== id)
+                                    : [...effects, { id, name: '', duration: 10 }]
+                            };
+                        }
+                        return c;
+                    });
+                    
+                    await updateDoc(combatRef, { combatants: updatedCombatants });
+                    console.log(`[SYNC] Efeito ${id} sincronizado com combate`);
+                }
+            });
+        } catch (err) {
+            console.error('[SYNC] Erro ao sincronizar efeito com combate:', err);
+        }
     };
 
     const handleLongRest = () => {
