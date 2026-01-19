@@ -386,7 +386,7 @@ export default function HomePage() {
                           <p className="text-rpg-parchment/70 font-medieval text-sm line-clamp-2">{campaign.description || "Sem descrição."}</p>
                         </div>
 
-                        <div className="flex flex-col gap-2 z-10 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+                        <div className="flex flex-col gap-2 z-10 opacity-100 transition-opacity">
                           <button
                             onClick={(e) => handleOpenEditCampaign(campaign, e)}
                             className="text-rpg-grey hover:text-rpg-gold p-1 hover:bg-rpg-slate rounded transition-colors"
