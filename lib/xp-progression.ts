@@ -107,48 +107,44 @@ export async function removeDuplicatesFromFirestore(collectionName: string): Pro
     duplicates: number;
     removed: string[];
 }> {
-    try {
-        const collectionRef = collection(db, collectionName);
-        const snapshot = await getDocs(collectionRef);
+    const collectionRef = collection(db, collectionName);
+    const snapshot = await getDocs(collectionRef);
 
-        const seen = new Map<string, string>(); // normalizedName -> docId
-        const toDelete: string[] = [];
+    const seen = new Map<string, string>(); // normalizedName -> docId
+    const toDelete: string[] = [];
+    
+    snapshot.docs.forEach(docSnap => {
+        const data = docSnap.data();
+        const normalizedName = data.name?.toLowerCase().trim();
 
-        snapshot.docs.forEach(docSnap => {
-            const data = docSnap.data();
-            const normalizedName = data.name?.toLowerCase().trim();
-
-            if (!normalizedName) {
-                logger.warn(`Documento sem nome em ${collectionName}:`, docSnap.id);
-                return;
-            }
-
-            if (seen.has(normalizedName)) {
-                // Duplicata encontrada!
-                toDelete.push(docSnap.id);
-            } else {
-                // Primeira ocorrência
-                seen.set(normalizedName, docSnap.id);
-            }
-        });
-
-        // Deletar duplicatas
-        if (toDelete.length > 0) {
-            const batch = writeBatch(db);
-            toDelete.forEach(docId => {
-                batch.delete(doc(collectionRef, docId));
-            });
-            await batch.commit();
+        if (!normalizedName) {
+            logger.warn(`Documento sem nome em ${collectionName}:`, docSnap.id);
+            return;
         }
 
-        return {
-            total: snapshot.docs.length,
-            duplicates: toDelete.length,
-            removed: toDelete
-        };
-    } catch (error) {
-        throw error;
+        if (seen.has(normalizedName)) {
+            // Duplicata encontrada!
+            toDelete.push(docSnap.id);
+        } else {
+            // Primeira ocorrência
+            seen.set(normalizedName, docSnap.id);
+        }
+    });
+
+    // Deletar duplicatas
+    if (toDelete.length > 0) {
+        const batch = writeBatch(db);
+        toDelete.forEach(docId => {
+            batch.delete(doc(collectionRef, docId));
+        });
+        await batch.commit();
     }
+
+    return {
+        total: snapshot.docs.length,
+        duplicates: toDelete.length,
+        removed: toDelete
+    };
 }
 
 /**
