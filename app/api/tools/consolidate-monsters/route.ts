@@ -19,11 +19,11 @@ function fixEncoding(value?: string): string {
   return value;
 }
 
+const stripDiacritics = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+
 function normalizeName(name?: string) {
   const fixed = fixEncoding(name);
-  return fixed
-    .normalize('NFD')
-    .replace(/\p{Diacritic}/gu, '')
+  return stripDiacritics(fixed)
     .toLowerCase()
     .trim();
 }

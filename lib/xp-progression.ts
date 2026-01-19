@@ -126,7 +126,6 @@ export async function removeDuplicatesFromFirestore(collectionName: string): Pro
             if (seen.has(normalizedName)) {
                 // Duplicata encontrada!
                 toDelete.push(docSnap.id);
-                console.log(`🗑️ Duplicata: "${data.name}" (${docSnap.id})`);
             } else {
                 // Primeira ocorrência
                 seen.set(normalizedName, docSnap.id);
@@ -140,7 +139,6 @@ export async function removeDuplicatesFromFirestore(collectionName: string): Pro
                 batch.delete(doc(collectionRef, docId));
             });
             await batch.commit();
-            console.log(`✅ ${toDelete.length} duplicatas removidas de ${collectionName}`);
         }
 
         return {
@@ -149,7 +147,6 @@ export async function removeDuplicatesFromFirestore(collectionName: string): Pro
             removed: toDelete
         };
     } catch (error) {
-        console.error(`❌ Erro ao remover duplicatas de ${collectionName}:`, error);
         throw error;
     }
 }
@@ -158,14 +155,9 @@ export async function removeDuplicatesFromFirestore(collectionName: string): Pro
  * UTILITÁRIO: Limpa todas as coleções de dados do jogo
  */
 export async function cleanAllGameData(): Promise<void> {
-    console.log('🧹 Iniciando limpeza de duplicatas...');
-
     const collections = ['itens', 'classes', 'races', 'magias'];
 
     for (const collectionName of collections) {
-        const result = await removeDuplicatesFromFirestore(collectionName);
-        console.log(`📊 ${collectionName}: ${result.total} total, ${result.duplicates} duplicatas removidas`);
+        await removeDuplicatesFromFirestore(collectionName);
     }
-
-    console.log('✅ Limpeza concluída!');
 }
