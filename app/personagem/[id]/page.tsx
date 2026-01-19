@@ -1495,11 +1495,6 @@ export default function CharacterSheetPage() {
 
                 {/* Dashboards Ficha 2.0 */}
                 <div className="px-6 space-y-4">
-                    <ConditionManager
-                        character={character}
-                        onToggleCondition={toggleCondition}
-                        onToggleEffect={toggleActiveEffect}
-                    />
                     <QuickActions character={character} />
                 </div>
 
