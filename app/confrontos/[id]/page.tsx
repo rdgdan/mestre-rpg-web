@@ -1130,16 +1130,11 @@ export default function ConfrontoDetalhesPage() {
                                                 🗑️ Todos
                                             </button>
                                             
-                                            {/* Botão de Testes de Morte para Caído */}
+                                            {/* Botão de Curar Jogador Caído */}
                                             {isFallen && c.type === 'player' && (
                                                 <button
                                                     onClick={async () => {
-                                                        // Fazer 3 testes de morte automáticos
-                                                        const tests = [Math.random() > 0.5, Math.random() > 0.5, Math.random() > 0.5];
-                                                        const successes = tests.filter(t => t).length;
-                                                        
-                                                        if (successes >= 2) {
-                                                            // Passou! Remove "caído" e adiciona cura
+                                                        if (confirm(`Deseja curar ${c.name} com 1 HP para ele retornar ao combate?`)) {
                                                             const updated = combatants.map(comb => {
                                                                 if (comb.id !== c.id) return comb;
                                                                 return {
@@ -1150,15 +1145,12 @@ export default function ConfrontoDetalhesPage() {
                                                             });
                                                             setCombatants(updated);
                                                             await syncState({ combatants: updated });
-                                                        } else {
-                                                            // Falhou, mantém caído
-                                                            alert(`Testes de Morte: ${successes}/3 sucessos. Ainda está caído.`);
                                                         }
                                                     }}
-                                                    className="px-4 py-2.5 rounded-lg text-[11px] font-bold bg-blue-900/30 border border-blue-500/40 text-blue-300 hover:bg-blue-900/50 transition-all active:scale-95 shadow-sm animate-pulse"
-                                                    title="Fazer Testes de Morte (3 automáticos)"
+                                                    className="px-4 py-2.5 rounded-lg text-[11px] font-bold bg-emerald-900/30 border border-emerald-500/40 text-emerald-300 hover:bg-emerald-900/50 transition-all active:scale-95 shadow-sm animate-pulse"
+                                                    title="Curar 1 HP para retornar ao combate"
                                                 >
-                                                    💊 Testes Morte
+                                                    ❤️ Curar 1 HP
                                                 </button>
                                             )}
                                         </div>
