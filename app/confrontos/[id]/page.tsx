@@ -1061,7 +1061,7 @@ export default function ConfrontoDetalhesPage() {
 
                                     {/* Botões de Limpar Efeitos */}
                                     {hasEffects && (
-                                        <div className="flex gap-1 items-center justify-start flex-wrap">
+                                        <div className="flex gap-2 items-center justify-start flex-wrap">
                                             {hasBenefits && (
                                                 <button
                                                     onClick={async () => {
@@ -1076,7 +1076,7 @@ export default function ConfrontoDetalhesPage() {
                                                         setCombatants(updated);
                                                         await syncState({ combatants: updated });
                                                     }}
-                                                    className="px-2 py-1 rounded text-[9px] font-bold bg-green-900/20 border border-green-600/40 text-green-400 hover:bg-green-900/40 transition-all active:scale-95"
+                                                    className="px-4 py-2.5 rounded-lg text-[11px] font-bold bg-green-900/20 border border-green-600/40 text-green-400 hover:bg-green-900/40 transition-all active:scale-95 shadow-sm"
                                                     title="Limpar Benefícios"
                                                 >
                                                     🗑️ Benef.
@@ -1096,7 +1096,7 @@ export default function ConfrontoDetalhesPage() {
                                                         setCombatants(updated);
                                                         await syncState({ combatants: updated });
                                                     }}
-                                                    className="px-2 py-1 rounded text-[9px] font-bold bg-red-900/20 border border-red-600/40 text-red-400 hover:bg-red-900/40 transition-all active:scale-95"
+                                                    className="px-4 py-2.5 rounded-lg text-[11px] font-bold bg-red-900/20 border border-red-600/40 text-red-400 hover:bg-red-900/40 transition-all active:scale-95 shadow-sm"
                                                     title="Limpar Malefícios"
                                                 >
                                                     🗑️ Malef.
@@ -1111,7 +1111,7 @@ export default function ConfrontoDetalhesPage() {
                                                     setCombatants(updated);
                                                     await syncState({ combatants: updated });
                                                 }}
-                                                className="px-2 py-1 rounded text-[9px] font-bold bg-purple-900/20 border border-purple-600/40 text-purple-400 hover:bg-purple-900/40 transition-all active:scale-95"
+                                                className="px-4 py-2.5 rounded-lg text-[11px] font-bold bg-purple-900/20 border border-purple-600/40 text-purple-400 hover:bg-purple-900/40 transition-all active:scale-95 shadow-sm"
                                                 title="Limpar Todos os Efeitos"
                                             >
                                                 🗑️ Todos
