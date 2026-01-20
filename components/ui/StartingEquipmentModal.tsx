@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { CLASS_STARTING_EQUIPMENT, EquipmentOption } from '@/lib/starting-equipment';
 
 interface StartingEquipmentModalProps {
@@ -11,6 +11,19 @@ interface StartingEquipmentModalProps {
 
 export const StartingEquipmentModal: React.FC<StartingEquipmentModalProps> = ({ isOpen, onClose, className, background, onConfirm }) => {
     const [selections, setSelections] = useState<Record<number, number>>({}); // Index da Opção -> Index da Escolha dentro da opção
+
+    // Prevenir scroll da página de fundo quando o modal está aberto
+    useEffect(() => {
+        if (isOpen) {
+            document.body.style.overflow = 'hidden';
+        } else {
+            document.body.style.overflow = 'unset';
+        }
+        
+        return () => {
+            document.body.style.overflow = 'unset';
+        };
+    }, [isOpen]);
 
     if (!isOpen) return null;
 
@@ -97,9 +110,9 @@ export const StartingEquipmentModal: React.FC<StartingEquipmentModalProps> = ({ 
     };
 
     return (
-        <div className="fixed inset-0 z-[260] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
-            <div className="bg-rpg-panel border-2 border-rpg-gold/30 rounded-lg max-w-2xl w-full shadow-[0_0_50px_-10px_rgba(234,179,8,0.3)] max-h-[90vh] flex flex-col">
-                <div className="p-6 border-b border-rpg-gold/20 bg-black/20">
+        <div className="fixed inset-0 z-[260] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in overflow-hidden">
+            <div className="bg-rpg-panel border-2 border-rpg-gold/30 rounded-lg max-w-2xl w-full shadow-[0_0_50px_-10px_rgba(234,179,8,0.3)] max-h-[90vh] flex flex-col overflow-hidden">
+                <div className="p-6 border-b border-rpg-gold/20 bg-black/20 flex-shrink-0">
                     <h3 className="text-xl font-bold font-cinzel text-rpg-gold uppercase tracking-widest text-center">
                         Equipamento Inicial: {className}
                     </h3>
@@ -108,7 +121,7 @@ export const StartingEquipmentModal: React.FC<StartingEquipmentModalProps> = ({ 
                     </p>
                 </div>
 
-                <div className="p-6 overflow-y-auto custom-scrollbar space-y-6 flex-grow">
+                <div className="p-6 overflow-y-auto custom-scrollbar space-y-6 flex-1">{/* scroll apenas interno */}
 
                     {/* Itens Padrão */}
                     {defaultItems.length > 0 && (
@@ -159,7 +172,7 @@ export const StartingEquipmentModal: React.FC<StartingEquipmentModalProps> = ({ 
                     ))}
                 </div>
 
-                <div className="p-6 border-t border-rpg-gold/20 bg-black/20 flex justify-end gap-3">
+                <div className="p-6 border-t border-rpg-gold/20 bg-black/20 flex justify-end gap-3 flex-shrink-0">
                     <button
                         onClick={onClose}
                         className="px-4 py-2 rounded text-rpg-red hover:bg-rpg-red/10 transition-colors uppercase text-xs font-bold tracking-wider"
