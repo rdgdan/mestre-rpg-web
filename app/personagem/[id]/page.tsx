@@ -40,7 +40,7 @@ import { CLASS_PROFICIENCIES } from '@/lib/class-proficiencies';
 import Modal from '@/components/Modal';
 
 // --- Constantes de Ficha 2.0 ---
-import { COMMON_CONDITIONS, CLASS_EFFECTS, EFFECT_STYLES, getEffectStyle } from '@/lib/effects-conditions';
+import { COMMON_CONDITIONS, CLASS_EFFECTS, EFFECT_STYLES, getEffectStyle, getCategorizedGlobalConditions } from '@/lib/effects-conditions';
 
 const ACTIVE_EFFECTS = [
     { id: 'rage', name: 'Fúria', icon: '🔥', classReq: 'Bárbaro' },
@@ -470,6 +470,11 @@ export default function CharacterSheetPage() {
     const [isSpellSelectOpen, setSpellSelectOpen] = useState(false);
     const [isSpellModalOpen, setSpellModalOpen] = useState(false);
     const [spellToEdit, setSpellToEdit] = useState(null);
+
+    // Modal de Efeitos
+    const [isEffectModalOpen, setIsEffectModalOpen] = useState(false);
+    const [effectTab, setEffectTab] = useState<'all' | 'benefits' | 'debuffs'>('all');
+    const [effectSearchQuery, setEffectSearchQuery] = useState('');
 
     const [weaponSearchTerm, setWeaponSearchTerm] = useState('');
     const [equipmentSearchTerm, setEquipmentSearchTerm] = useState('');
@@ -1495,6 +1500,15 @@ export default function CharacterSheetPage() {
 
                 {/* Dashboards Ficha 2.0 */}
                 <div className="px-6 space-y-4">
+                    {/* Botão Adicionar Efeito */}
+                    <button
+                        onClick={() => setIsEffectModalOpen(true)}
+                        className="w-full py-3 border border-dashed border-indigo-500/40 text-indigo-400 rounded-lg text-sm hover:border-indigo-500 hover:text-indigo-300 hover:bg-indigo-900/10 transition-all font-bold uppercase tracking-widest flex items-center justify-center gap-2 group"
+                    >
+                        <span className="text-lg">✨</span>
+                        <span>Adicionar Efeito</span>
+                    </button>
+
                     <QuickActions character={character} />
                 </div>
 
@@ -2365,6 +2379,145 @@ export default function CharacterSheetPage() {
                         setIsEquipmentStartModalOpen(false);
                     }}
                 />
+
+                {/* Modal de Efeitos */}
+                <Modal 
+                    isOpen={isEffectModalOpen} 
+                    onClose={() => {
+                        setIsEffectModalOpen(false);
+                        setEffectTab('all');
+                        setEffectSearchQuery('');
+                    }} 
+                    title={`Efeitos • ${character.name}`}
+                >
+                    <div className="space-y-3">
+                        {(() => {
+                            const charClass = character.class || 'Guerreiro';
+                            const availableEffects = charClass ? (CLASS_EFFECTS[charClass] || []) : [];
+
+                            // Obter condições globais
+                            const globalConditions = getCategorizedGlobalConditions();
+                            
+                            // Combinar efeitos de classe com condições globais
+                            const classEffectsWithType = availableEffects.map(fx => ({ ...fx, type: 'class' as const }));
+                            const globalBenefitsWithType = globalConditions.benefits.map(c => ({ id: c.id, name: c.name, duration: 1, category: 'benefit' as const, type: 'global' as const }));
+                            const globalDebuffsWithType = globalConditions.debuffs.map(c => ({ id: c.id, name: c.name, duration: 1, category: 'debuff' as const, type: 'global' as const }));
+
+                            // Categorizar todos os efeitos (classe + globais)
+                            const benefitIds = ['rage', 'reckless', 'inspiration', 'counter-charm', 'bless', 'sanctuary', 'shield-faith', 'wild-shape', 'barkskin', 'action-surge', 'second-wind', 'indomitable', 'evasion', 'uncanny-dodge', 'flurry', 'patient-defense', 'lay-hands', 'divine-smite', 'aura-protection', 'hunters-mark', 'favored-foe', 'metamagic', 'tides-chaos', 'invocation', 'arcane-recovery', 'spell-mastery', 'sneak-attack', 'armor-agathys', 'multiattack', 'mirror-image'];
+                            const debuffIds = ['stunning-strike', 'hex', 'curse', 'entangle', 'knocked-down', 'paralyzed-ki', 'wrathful-smite', 'wild-surge', 'hypnotic-pattern'];
+                            
+                            const allEffects = [...classEffectsWithType, ...globalBenefitsWithType, ...globalDebuffsWithType];
+                            const benefits = allEffects.filter(fx => (benefitIds.includes(fx.id)) || (fx.type === 'global' && fx.category === 'benefit'));
+                            const debuffs = allEffects.filter(fx => (debuffIds.includes(fx.id)) || (fx.type === 'global' && fx.category === 'debuff'));
+                            
+                            // Aplicar filtro de busca
+                            const normalizeSearch = (text: string) => text.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+                            const searchTerm = normalizeSearch(effectSearchQuery);
+                            
+                            const filterEffects = (effects: any[]) => {
+                                if (!searchTerm) return effects;
+                                return effects.filter(fx => 
+                                    normalizeSearch(fx.name).includes(searchTerm) ||
+                                    normalizeSearch(fx.id).includes(searchTerm)
+                                );
+                            };
+                            
+                            const filteredBenefits = filterEffects(benefits);
+                            const filteredDebuffs = filterEffects(debuffs);
+                            const displayedEffects = effectTab === 'benefits' ? filteredBenefits : effectTab === 'debuffs' ? filteredDebuffs : filterEffects(allEffects);
+
+                            return (
+                                <>
+                                    {/* Barra de Busca */}
+                                    <div className="mb-3">
+                                        <input
+                                            type="text"
+                                            placeholder="🔍 Buscar efeito..."
+                                            value={effectSearchQuery}
+                                            onChange={(e) => setEffectSearchQuery(e.target.value)}
+                                            className="w-full bg-rpg-dark border border-rpg-gold/30 rounded-lg p-2.5 text-rpg-parchment outline-none focus:border-rpg-gold focus:ring-1 focus:ring-rpg-gold/30 transition-all text-sm"
+                                            autoFocus
+                                        />
+                                    </div>
+
+                                    {/* Sistema de Abas */}
+                                    <div className="flex gap-1 mb-3 border-b border-white/10">
+                                        <button
+                                            onClick={() => setEffectTab('all')}
+                                            className={`flex-1 px-3 py-2 text-[10px] font-cinzel tracking-wider uppercase transition-all border-b-2 ${
+                                                effectTab === 'all'
+                                                    ? 'border-rpg-gold text-rpg-gold'
+                                                    : 'border-transparent text-rpg-grey hover:text-rpg-parchment'
+                                            }`}
+                                        >
+                                            🎭 Todos ({filterEffects(allEffects).length})
+                                        </button>
+                                        <button
+                                            onClick={() => setEffectTab('benefits')}
+                                            className={`flex-1 px-3 py-2 text-[10px] font-cinzel tracking-wider uppercase transition-all border-b-2 ${
+                                                effectTab === 'benefits'
+                                                    ? 'border-green-500 text-green-400'
+                                                    : 'border-transparent text-rpg-grey hover:text-rpg-parchment'
+                                            }`}
+                                        >
+                                            ✦ Benef. ({filteredBenefits.length})
+                                        </button>
+                                        <button
+                                            onClick={() => setEffectTab('debuffs')}
+                                            className={`flex-1 px-3 py-2 text-[10px] font-cinzel tracking-wider uppercase transition-all border-b-2 ${
+                                                effectTab === 'debuffs'
+                                                    ? 'border-red-500 text-red-400'
+                                                    : 'border-transparent text-rpg-grey hover:text-rpg-parchment'
+                                            }`}
+                                        >
+                                            ⚠ Malef. ({filteredDebuffs.length})
+                                        </button>
+                                    </div>
+
+                                    {/* Grid de Efeitos */}
+                                    <div className="grid grid-cols-2 gap-2 max-h-[50vh] overflow-y-auto pr-2 custom-scrollbar">
+                                        {displayedEffects.length === 0 ? (
+                                            <div className="col-span-2 text-center py-8 text-rpg-grey italic border border-dashed border-white/10 rounded-lg text-sm">
+                                                Nenhum efeito encontrado
+                                            </div>
+                                        ) : (
+                                            displayedEffects.map(fx => {
+                                                const isBenefit = benefits.some(b => b.id === fx.id);
+                                                const alreadyActive = (character.activeEffects || []).includes(fx.id) || (character.conditions || []).includes(fx.id);
+                                                
+                                                return (
+                                                    <button
+                                                        key={fx.id}
+                                                        onClick={() => {
+                                                            if (alreadyActive) return;
+                                                            toggleActiveEffect(fx.id);
+                                                            setIsEffectModalOpen(false);
+                                                        }}
+                                                        disabled={alreadyActive}
+                                                        className={`p-3 rounded-lg border text-left transition-all ${
+                                                            isBenefit 
+                                                                ? 'bg-green-900/10 border-green-600/30 hover:bg-green-900/20 hover:border-green-500' 
+                                                                : 'bg-red-900/10 border-red-600/30 hover:bg-red-900/20 hover:border-red-500'
+                                                        } ${alreadyActive ? 'opacity-40 cursor-not-allowed' : ''}`}
+                                                    >
+                                                        <div className={`font-cinzel text-xs font-bold ${isBenefit ? 'text-green-100' : 'text-red-100'}`}>
+                                                            {fx.name}
+                                                        </div>
+                                                        <div className="text-[9px] text-rpg-grey uppercase tracking-widest mt-0.5">
+                                                            {fx.type === 'class' ? charClass : 'Global'}
+                                                        </div>
+                                                        {alreadyActive && <div className="text-[9px] text-rpg-gold mt-1">✓ Ativo</div>}
+                                                    </button>
+                                                );
+                                            })
+                                        )}
+                                    </div>
+                                </>
+                            );
+                        })()}
+                    </div>
+                </Modal>
             </div>
         </div>
     );
