@@ -52,7 +52,7 @@ const SpellSelectModal: React.FC<SpellSelectModalProps> = ({
           value={search}
           onChange={e => setSearch(e.target.value)}
         />
-        <div className="space-y-2 max-h-[50vh] overflow-y-auto">
+        <div className="space-y-2 max-h-[50vh] overflow-y-auto custom-scrollbar pr-2">
           {filtered.length > 0 ? filtered.map(spell => (
             <div key={spell.id} className="p-3 bg-rpg-slate/80 border border-rpg-gold/10 rounded-lg flex flex-col gap-1 hover:border-rpg-gold/30 transition-colors cursor-pointer" onClick={() => onSelect(spell)}>
               <div className="flex justify-between items-center">

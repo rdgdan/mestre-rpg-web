@@ -280,7 +280,7 @@ export default function HomePage() {
 
   return (
     <>
-      <div className="min-h-screen bg-rpg-dark text-rpg-parchment flex flex-col bg-[url('https://www.transparenttextures.com/patterns/dark-matter.png')]">
+      <div className="min-h-screen text-rpg-parchment flex flex-col">
 
         {/* HEADER / NAVIGATION */}
         <header className="bg-rpg-panel p-3 sm:p-4 shadow-lg border-b-2 border-rpg-gold/30 backdrop-blur-sm sticky top-0 z-20">
@@ -337,21 +337,62 @@ export default function HomePage() {
         </header>
 
         {/* MAIN DASHBOARD */}
-        <main className="container mx-auto p-4 sm:p-8 flex-grow">
+        <main className="container mx-auto p-4 sm:p-8 flex-grow space-y-8">
 
-          {/* Quick Tools Section */}
-          <section className="mb-8 p-4 sm:p-5 bg-rpg-panel rounded-lg border border-rpg-gold/10 shadow-lg flex flex-col sm:flex-row gap-4 items-center sm:justify-between text-center sm:text-left">
-            <div>
-              <h3 className="text-xl font-cinzel text-rpg-gold">Painel do Mestre</h3>
-              <p className="text-sm text-rpg-grey font-medieval">Ferramentas rápidas para sua sessão.</p>
-            </div>
-            <div className="flex flex-wrap justify-center gap-3 w-full sm:w-auto">
-              <button
-                onClick={() => { setGeneratedNpcs([]); setIsNpcModalOpen(true); }}
-                className="w-full sm:w-auto bg-rpg-slate hover:bg-rpg-slate/80 text-rpg-parchment border border-rpg-gold/20 p-2.5 sm:p-2 px-6 sm:px-4 rounded font-bold font-cinzel text-xs sm:text-sm transition-all shadow-md hover:border-rpg-gold active:scale-95"
-              >
-                🎲 Gerador de NPC
-              </button>
+          {/* HERO */}
+          <section
+            className="relative overflow-hidden rounded-2xl border border-rpg-gold/15 shadow-2xl px-6 sm:px-10 py-12"
+            style={{
+              background: 'linear-gradient(135deg, rgba(30, 24, 70, 0.95), rgba(12, 8, 26, 0.92))'
+            }}
+          >
+            <div className="absolute inset-0 opacity-30 bg-[radial-gradient(circle_at_20%_30%,rgba(255,120,72,0.25),transparent_30%),radial-gradient(circle_at_80%_10%,rgba(255,191,120,0.18),transparent_28%)]"></div>
+            <div className="relative flex flex-col lg:flex-row items-start lg:items-center gap-8">
+              <div className="flex-1 space-y-3">
+                <p className="text-xs sm:text-sm uppercase tracking-[0.35em] text-rpg-grey font-cinzel">Painel do Mestre</p>
+                <h2 className="text-3xl sm:text-4xl font-cinzel font-bold text-rpg-parchment drop-shadow-lg">
+                  Sua taverna digital para campanhas e heróis
+                </h2>
+                <p className="text-sm sm:text-base text-rpg-parchment/80 max-w-2xl font-medieval">
+                  Organize campanhas, acompanhe personagens e invoque NPCs em segundos, com um visual inspirado em meia-noite e brasas.
+                </p>
+                <div className="flex flex-wrap gap-3">
+                  <button
+                    onClick={handleOpenNewCampaign}
+                    className="bg-rpg-gold text-rpg-dark px-4 sm:px-6 py-2.5 rounded-lg font-cinzel font-bold text-sm shadow-lg shadow-glow-gold hover:shadow-glow-ember transition-all active:scale-95"
+                  >
+                    + Nova Campanha
+                  </button>
+                  <button
+                    onClick={() => { setGeneratedNpcs([]); setIsNpcModalOpen(true); }}
+                    className="bg-rpg-slate/70 border border-rpg-gold/30 text-rpg-parchment px-4 sm:px-5 py-2.5 rounded-lg font-cinzel text-sm hover:border-rpg-gold hover:shadow-glow-ember transition-all active:scale-95 flex items-center gap-2"
+                  >
+                    <span className="text-lg">🎲</span> Gerar NPC rápido
+                  </button>
+                </div>
+              </div>
+              <div className="relative w-full lg:w-72 h-40 sm:h-48 bg-white/5 rounded-xl border border-rpg-gold/15 overflow-hidden shadow-lg shadow-glow-ember flex flex-col justify-between p-4">
+                <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_70%,rgba(255,120,72,0.22),transparent_40%),radial-gradient(circle_at_80%_30%,rgba(255,191,120,0.2),transparent_45%)]" />
+                <div className="absolute inset-0 mix-blend-screen opacity-30 bg-[url('https://www.transparenttextures.com/patterns/asfalt-light.png')]" />
+                <div className="relative z-10 flex flex-col gap-3 h-full justify-between">
+                  <div>
+                    <p className="text-xs uppercase tracking-widest text-rpg-grey font-cinzel mb-2">💡 Dica do Mestre</p>
+                    <p className="text-sm sm:text-base text-rpg-parchment font-medieval leading-relaxed line-clamp-3">
+                      {['Sempre tenha 2-3 NPCs prontos na manga para situações inesperadas dos jogadores!',
+                        'Use o Gerador de NPCs para criar encontros únicos em segundos durante a sessão.',
+                        'Organize seus personagens por campanha para não perder nenhum detalhe.',
+                        'Crie mapas personalizados para cada local importante da sua campanha.',
+                        'Documente as decisões dos jogadores para criar histórias mais coesas.',
+                        'Use a Biblioteca para rápido acesso a regras e magias durante o jogo.',
+                        'Prepare armadilhas e desafios que se adaptem ao nível dos personagens.',
+                        'Escute seus jogadores e adapte a história conforme eles evoluem.',
+                        'Tenha NPCs com personalidades distintas para diferenciar seus encontros.',
+                        'Registre notas rápidas sobre os eventos importantes de cada sessão.'][Math.floor(Math.random() * 10)]}
+                    </p>
+                  </div>
+                  <div className="text-xs text-rpg-gold/60 font-cinzel">✨ Atualiza ao recarregar</div>
+                </div>
+              </div>
             </div>
           </section>
 
@@ -359,14 +400,17 @@ export default function HomePage() {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
 
             {/* COLUMN 1: CAMPAIGNS */}
-            <section>
+            <section className="animate-fade-up">
               <div className="flex justify-between items-center mb-6 gap-2">
-                <h2 className="text-2xl sm:text-3xl font-bold font-cinzel text-rpg-gold border-b border-rpg-gold/20 pb-2 flex-grow truncate">
-                  🏰 Campanhas
-                </h2>
+                <div className="flex items-center gap-2">
+                  <span className="text-2xl">🏰</span>
+                  <h2 className="text-2xl sm:text-3xl font-bold font-cinzel text-rpg-gold border-b border-rpg-gold/20 pb-2 flex-grow truncate">
+                    Campanhas
+                  </h2>
+                </div>
                 <button
                   onClick={handleOpenNewCampaign}
-                  className="bg-rpg-gold hover:bg-rpg-gold/80 text-rpg-dark p-2 px-3 sm:px-4 rounded font-bold font-cinzel text-[10px] sm:text-sm transition-all shadow-lg hover:shadow-glow-gold border border-rpg-gold/50 flex-shrink-0 active:scale-95"
+                  className="bg-rpg-gold hover:bg-rpg-gold/80 text-rpg-dark p-2 px-3 sm:px-4 rounded-lg font-bold font-cinzel text-[10px] sm:text-sm transition-all shadow-lg hover:shadow-glow-ember border border-rpg-gold/50 flex-shrink-0 active:scale-95"
                 >
                   + Nova
                 </button>
@@ -378,25 +422,26 @@ export default function HomePage() {
                 <div className="space-y-4">
                   {campaigns.map(campaign => (
                     <Link href={`/campanha/${campaign.id}`} key={campaign.id} className="block">
-                      <div className="bg-rpg-panel rounded-lg border border-rpg-gold/10 p-5 hover:border-rpg-gold/40 transition-all cursor-pointer group shadow-sm hover:shadow-md relative overflow-hidden flex justify-between items-start">
-                        <div className="absolute top-0 right-0 w-24 h-24 bg-gradient-to-bl from-rpg-gold/5 to-transparent rounded-bl-full pointer-events-none"></div>
+                      <div className="bg-rpg-panel/90 rounded-xl border border-rpg-gold/12 p-5 hover:border-rpg-gold/40 transition-all cursor-pointer group shadow-md hover:shadow-glow-ember relative overflow-hidden flex justify-between items-start hover:-translate-y-1">
+                        <div className="absolute inset-0 opacity-0 group-hover:opacity-10 transition-opacity bg-gradient-to-br from-amber-400 to-transparent" />
+                        <div className="absolute top-0 right-0 w-28 h-28 bg-gradient-to-bl from-rpg-gold/10 to-transparent rounded-bl-full pointer-events-none"></div>
 
                         <div className="flex-grow pr-4">
-                          <h3 className="text-xl font-bold font-cinzel text-rpg-gold group-hover:text-rpg-light mb-1">{campaign.name}</h3>
+                          <h3 className="text-xl font-bold font-cinzel text-rpg-parchment group-hover:text-rpg-gold mb-1">{campaign.name}</h3>
                           <p className="text-rpg-parchment/70 font-medieval text-sm line-clamp-2">{campaign.description || "Sem descrição."}</p>
                         </div>
 
                         <div className="flex flex-col gap-2 z-10 opacity-100 transition-opacity">
                           <button
                             onClick={(e) => handleOpenEditCampaign(campaign, e)}
-                            className="text-rpg-grey hover:text-rpg-gold p-1 hover:bg-rpg-slate rounded transition-colors"
+                            className="text-rpg-grey hover:text-rpg-gold p-1 hover:bg-rpg-slate/60 rounded transition-colors"
                             title="Editar"
                           >
                             ✏️
                           </button>
                           <button
                             onClick={(e) => handleDeleteCampaign(campaign.id, campaign.name, e)}
-                            className="text-rpg-grey hover:text-red-400 p-1 hover:bg-rpg-slate rounded transition-colors"
+                            className="text-rpg-grey hover:text-red-400 p-1 hover:bg-rpg-slate/60 rounded transition-colors"
                             title="Excluir"
                           >
                             🗑️
@@ -407,19 +452,23 @@ export default function HomePage() {
                   ))}
                 </div>
               ) : (
-                <div className="text-center py-12 border-2 border-dashed border-rpg-grey/20 rounded-lg bg-rpg-panel/50">
-                  <p className="text-rpg-grey font-medieval mb-2">Nenhuma campanha ativa.</p>
+                <div className="text-center py-12 border-2 border-dashed border-rpg-gold/15 rounded-xl bg-rpg-panel/60 shadow-inner shadow-glow-ember space-y-3">
+                  <div className="text-3xl">🏰</div>
+                  <p className="text-rpg-grey font-medieval">Nenhuma campanha ativa.</p>
                   <button onClick={handleOpenNewCampaign} className="text-rpg-gold hover:underline font-cinzel text-sm">Criar a primeira</button>
                 </div>
               )}
             </section>
 
             {/* COLUMN 2: CHARACTERS */}
-            <section>
+            <section className="animate-fade-up">
               <div className="flex justify-between items-center mb-6 gap-2">
-                <h2 className="text-2xl sm:text-3xl font-bold font-cinzel text-rpg-gold border-b border-rpg-gold/20 pb-2 flex-grow truncate">
-                  👤 Personagens
-                </h2>
+                <div className="flex items-center gap-2">
+                  <span className="text-2xl">🧙‍♂️</span>
+                  <h2 className="text-2xl sm:text-3xl font-bold font-cinzel text-rpg-gold border-b border-rpg-gold/20 pb-2 flex-grow truncate">
+                    Personagens
+                  </h2>
+                </div>
                 <Link href="/personagens" className="text-rpg-grey hover:text-rpg-gold text-xs sm:text-sm font-medieval underline flex-shrink-0">
                   Ver todos
                 </Link>
@@ -431,24 +480,26 @@ export default function HomePage() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   {characters.map(char => (
                     <Link key={char.id} href={`/personagem/${char.id}`}>
-                      <div className="bg-rpg-panel rounded-lg border border-rpg-gold/10 p-4 hover:border-rpg-gold/40 transition-all cursor-pointer h-full flex flex-col shadow-sm hover:shadow-md hover:-translate-y-1 relative overflow-hidden">
+                      <div className="bg-rpg-panel/90 rounded-xl border border-rpg-gold/12 p-4 hover:border-rpg-gold/40 transition-all cursor-pointer h-full flex flex-col shadow-md hover:shadow-glow-ember hover:-translate-y-1 relative overflow-hidden group">
+                        <div className="absolute inset-0 opacity-0 group-hover:opacity-10 transition-opacity bg-gradient-to-br from-amber-300 to-transparent" />
                         {char.imageUrl && (
-                          <div className="absolute inset-0 bg-cover bg-center opacity-10" style={{ backgroundImage: `url(${char.imageUrl})` }}></div>
+                          <div className="absolute inset-0 bg-cover bg-center opacity-20" style={{ backgroundImage: `url(${char.imageUrl})` }}></div>
                         )}
                         <div className="relative z-10">
-                          <h3 className="text-lg font-bold font-cinzel text-rpg-parchment truncate">{char.name}</h3>
+                          <h3 className="text-lg font-bold font-cinzel text-rpg-parchment truncate group-hover:text-rpg-gold">{char.name}</h3>
                           <p className="text-rpg-gold/80 text-xs font-cinzel uppercase tracking-wider mt-1">{char.class} &bull; Lvl {char.level}</p>
                         </div>
                       </div>
                     </Link>
                   ))}
-                  <Link href="/personagens" className="flex items-center justify-center p-4 border border-dashed border-rpg-grey/30 rounded-lg text-rpg-grey hover:text-rpg-gold hover:border-rpg-gold/30 transition-all font-cinzel text-sm">
+                  <Link href="/personagens" className="flex items-center justify-center p-4 border border-dashed border-rpg-gold/30 rounded-xl text-rpg-gold hover:text-rpg-parchment hover:bg-rpg-slate/40 transition-all font-cinzel text-sm shadow-inner">
                     + Ver Lista Completa
                   </Link>
                 </div>
               ) : (
-                <div className="text-center py-12 border-2 border-dashed border-rpg-grey/20 rounded-lg bg-rpg-panel/50">
-                  <p className="text-rpg-grey font-medieval mb-2">Nenhum herói encontrado.</p>
+                <div className="text-center py-12 border-2 border-dashed border-rpg-gold/15 rounded-xl bg-rpg-panel/60 shadow-inner shadow-glow-ember space-y-3">
+                  <div className="text-3xl">🧙‍♂️</div>
+                  <p className="text-rpg-grey font-medieval">Nenhum herói encontrado.</p>
                   <Link href="/personagens" className="text-rpg-gold hover:underline font-cinzel text-sm">Criar ou Importar</Link>
                 </div>
               )}

@@ -13,7 +13,7 @@ function LoginContent() {
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
   const searchParams = useSearchParams();
-  const redirectUrl = searchParams.get('redirect') || '/';
+  const redirectUrl = searchParams.get('redirect') || '/home';
   const redirectParam = searchParams.get('redirect');
   const registerLink = redirectParam ? `/register?redirect=${encodeURIComponent(redirectParam)}` : '/register';
 
@@ -44,8 +44,15 @@ function LoginContent() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-rpg-dark p-4 bg-[url('https://www.transparenttextures.com/patterns/dark-matter.png')]">
-      <div className="text-center mb-8">
+    <div 
+      className="flex flex-col items-center justify-center p-4"
+      style={{
+        background: 'linear-gradient(160deg, rgba(10, 14, 40, 0.95), rgba(12, 8, 22, 0.94))',
+        backgroundImage: 'url("https://www.transparenttextures.com/patterns/dark-matter.png")',
+        backgroundAttachment: 'fixed'
+      }}
+    >
+      <div className="text-center mb-8 animate-fade-up">
         <h1 className="text-5xl font-bold font-cinzel text-rpg-gold text-shadow-lg tracking-wider">D&D Campanha e Álcool</h1>
         <p className="text-rpg-parchment/80 font-medieval text-xl mt-2">Sua aventura aguarda... e a bebida também.</p>
       </div>

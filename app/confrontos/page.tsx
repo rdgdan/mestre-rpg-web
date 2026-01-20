@@ -85,6 +85,7 @@ export default function ConfrontosLobbyPage() {
                 createdAt: new Date().toISOString()
             });
 
+            setIsCreateModalOpen(false); // <--- FECHAR MODAL
             router.push(`/confrontos/${docRef.id}`);
         } catch (err) {
             console.error("Erro ao criar encontro:", err);
@@ -114,7 +115,7 @@ export default function ConfrontosLobbyPage() {
 
     if (loading || authLoading) {
         return (
-            <div className="min-h-screen bg-rpg-dark flex flex-col items-center justify-center">
+            <div className="min-h-screen flex flex-col items-center justify-center">
                 <div className="w-16 h-16 border-4 border-rpg-gold border-t-transparent rounded-full animate-spin mb-4"></div>
                 <p className="text-rpg-gold font-cinzel animate-pulse">Abrindo Biblioteca de Crônicas...</p>
             </div>
@@ -122,15 +123,15 @@ export default function ConfrontosLobbyPage() {
     }
 
     return (
-        <div className="min-h-screen bg-rpg-dark text-rpg-parchment bg-[url('https://www.transparenttextures.com/patterns/dark-matter.png')] flex flex-col font-lato">
+        <div className="min-h-screen text-rpg-parchment flex flex-col font-lato">
 
             {/* HEADER */}
             <header className="bg-rpg-panel p-4 shadow-lg border-b-2 border-rpg-gold/30 sticky top-0 z-30 backdrop-blur-md">
                 <div className="container mx-auto flex justify-between items-center">
                     <div className="flex items-center gap-4">
-                        <Link href="/" className="text-rpg-gold hover:text-rpg-gold-light transition-all text-2xl" title="Página Inicial">🏰</Link>
+                        <Link href="/home" className="hover:text-rpg-gold-light transition-all text-2xl" title="Página Inicial" style={{ color: 'rgb(255, 191, 120)' }}>🏰</Link>
                         <div>
-                            <h1 className="text-2xl font-bold font-cinzel text-rpg-gold text-shadow-md">Sala de Confrontos</h1>
+                            <h1 className="text-2xl font-bold font-cinzel text-shadow-md" style={{ color: 'rgb(255, 120, 72)' }}>Sala de Confrontos</h1>
                             <p className="text-[10px] text-rpg-grey uppercase tracking-widest leading-none">Gerencie suas batalhas épicas</p>
                         </div>
                     </div>
@@ -142,7 +143,7 @@ export default function ConfrontosLobbyPage() {
                             + Novo Confronto
                         </button>
                         <Link
-                            href="/"
+                            href="/home"
                             className="text-rpg-grey hover:text-white font-medieval text-sm flex items-center gap-2 px-3 py-2 border border-white/5 rounded hover:bg-white/5 transition-all"
                         >
                             <span>&larr;</span> Sair
@@ -252,13 +253,21 @@ export default function ConfrontosLobbyPage() {
                     </p>
                     <div className="flex gap-4 justify-center">
                         <button
-                            onClick={executeDeleteEncounter}
+                            type="button"
+                            onClick={() => {
+                                console.log("Confirmar exclusão clicado");
+                                executeDeleteEncounter();
+                            }}
                             className="px-6 py-3 bg-red-600 hover:bg-red-500 text-white font-bold rounded-lg transition-colors"
                         >
                             ✓ Excluir
                         </button>
                         <button
-                            onClick={() => setConfirmDeleteModal({ open: false, encounterId: null, encounterTitle: null })}
+                            type="button"
+                            onClick={() => {
+                                console.log("Cancelar exclusão clicado");
+                                setConfirmDeleteModal({ open: false, encounterId: null, encounterTitle: null });
+                            }}
                             className="px-6 py-3 bg-gray-600 hover:bg-gray-500 text-white font-bold rounded-lg transition-colors"
                         >
                             ✗ Cancelar

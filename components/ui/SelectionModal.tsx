@@ -48,7 +48,7 @@ export default function SelectionModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm">
-      <div className="relative w-full max-w-md p-6 mx-4 bg-rpg-panel border-2 border-rpg-gold/30 rounded-lg shadow-2xl shadow-black/50">
+      <div className="relative w-full max-w-md p-6 mx-4 modal-theme-c border-2 rounded-lg shadow-2xl shadow-black/50">
         <button
           onClick={onClose}
           className="absolute top-3 right-3 text-rpg-grey hover:text-rpg-red transition-colors text-2xl"

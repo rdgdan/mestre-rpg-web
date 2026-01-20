@@ -14,9 +14,12 @@ export default function Modal({ isOpen, onClose, children, title }: ModalProps) 
 
   return (
     <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex justify-center items-center z-[100] p-4 overflow-hidden">
-      <div className="bg-rpg-panel rounded-lg shadow-2xl w-full max-w-2xl border-2 border-rpg-gold/30 shadow-black/50 animate-fade-in-up flex flex-col max-h-[90vh]">
-        <div className="flex justify-between items-center p-4 border-b border-rpg-gold/20 flex-shrink-0">
-          <h2 className="text-2xl font-bold font-cinzel text-rpg-gold">{title}</h2>
+      <div className="rounded-lg shadow-2xl w-full max-w-2xl border-2 shadow-black/50 animate-fade-in-up flex flex-col max-h-[90vh]" style={{
+        background: 'linear-gradient(135deg, rgba(30, 24, 70, 0.98), rgba(12, 8, 26, 0.95))',
+        borderColor: 'rgba(255, 120, 72, 0.3)'
+      }}>
+        <div className="flex justify-between items-center p-4 border-b flex-shrink-0" style={{ borderColor: 'rgba(255, 120, 72, 0.2)' }}>
+          <h2 className="text-2xl font-bold font-cinzel" style={{ color: 'rgb(255, 120, 72)' }}>{title}</h2>
           <button
             onClick={onClose}
             className="text-rpg-grey hover:text-rpg-red transition-colors"

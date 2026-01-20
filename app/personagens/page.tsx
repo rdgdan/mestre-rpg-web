@@ -132,31 +132,33 @@ export default function CharacterListPage() {
 
   if (isLoading && characters.length === 0) {
     return (
-      <div className="bg-gray-900 text-white min-h-screen p-8">
+      <div
+        className="text-white min-h-screen p-8 flex items-center justify-center"
+      >
         <div className="max-w-4xl mx-auto text-center">
-          <h1 className="text-4xl font-serif text-yellow-400 mb-4">Carregando Salão...</h1>
-          <p className="text-gray-400">Buscando seus heróis no plano astral...</p>
+          <h1 className="text-4xl font-serif text-rpg-gold mb-4 animate-fade-up">Carregando Salão...</h1>
+          <p className="text-rpg-parchment/60 animate-fade-up">Buscando seus heróis no plano astral...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="bg-rpg-dark text-rpg-parchment min-h-screen p-4 sm:p-6 md:p-8 bg-[url('https://www.transparenttextures.com/patterns/dark-matter.png')]">
+    <div className="text-rpg-parchment p-4 sm:p-6 md:p-8 bg-transparent min-h-screen">
       {isLoading && (
         <div className="fixed top-0 left-0 w-full h-full bg-black/80 backdrop-blur-sm flex justify-center items-center z-50">
           <div className="text-center">
             <p className="text-3xl font-cinzel text-rpg-gold mb-2 text-shadow-lg animate-pulse">Invocando Aventureiro...</p>
-            <p className="text-rpg-grey font-medieval text-lg">Abrindo o portal e trazendo os dados do plano astral...</p>
+            <p className="text-rpg-parchment/60 font-medieval text-lg">Abrindo o portal e trazendo os dados do plano astral...</p>
           </div>
         </div>
       )}
       <div className="max-w-6xl mx-auto">
-        <header className="flex flex-col sm:flex-row justify-between items-center mb-10 gap-6 border-b-2 border-rpg-gold/20 pb-6">
-          <Link href="/" legacyBehavior>
-            <a className="text-sm text-rpg-gold hover:text-rpg-gold-light hover:underline font-medieval tracking-widest uppercase">&larr; Retornar à Taverna</a>
+        <header className="flex flex-col sm:flex-row justify-between items-center mb-10 gap-6 border-b-2 border-rpg-gold/20 pb-6 animate-fade-up">
+          <Link href="/home" legacyBehavior>
+            <a className="text-sm hover:underline font-medieval tracking-widest uppercase transition-colors" style={{ color: 'rgb(255, 191, 120)' }}>&larr; Retornar à Taverna</a>
           </Link>
-          <h1 className="text-5xl font-bold font-cinzel text-rpg-gold text-center sm:text-left text-shadow-md">Salão dos Heróis</h1>
+          <h1 className="text-5xl font-bold font-cinzel text-center sm:text-left text-shadow-md" style={{ color: 'rgb(255, 120, 72)' }}>Salão dos Heróis</h1>
           <div className="flex flex-col sm:flex-row gap-4 w-full sm:w-auto">
             <input
               type="file"
@@ -180,7 +182,7 @@ export default function CharacterListPage() {
           </div>
         </header>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 animate-fade-up">
           {characters.map(char => (
             <Link key={char.id} href={`/personagem/${char.id}`} passHref legacyBehavior>
               <a className="block bg-rpg-panel p-0 rounded-lg shadow-xl border-2 border-rpg-gold/10 flex flex-col justify-between transition-all transform hover:-translate-y-2 hover:border-rpg-gold hover:shadow-glow-gold/40 relative overflow-hidden cursor-pointer group h-[300px]">
@@ -193,7 +195,7 @@ export default function CharacterListPage() {
 
                 <div className="relative z-20 flex flex-col h-full p-6">
                   <div className="border-b border-white/10 pb-4 mb-2">
-                    <h2 className="text-3xl font-bold text-rpg-gold truncate font-medieval text-shadow-sm group-hover:text-rpg-gold-light transition-colors">{char.name || "Sem Nome"}</h2>
+                    <h2 className="text-3xl font-bold truncate font-medieval text-shadow-sm transition-colors" style={{ color: 'rgb(255, 191, 120)' }}>{char.name || "Sem Nome"}</h2>
                     <p className="text-rpg-parchment/90 font-cinzel text-sm tracking-widest uppercase mt-1">{(char.race || 'Raça')} &bull; {(char.class || 'Classe')} &bull; Nível {char.level || 1}</p>
                   </div>
 

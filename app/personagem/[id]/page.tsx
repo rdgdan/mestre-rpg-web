@@ -5,7 +5,7 @@ import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { logger } from '@/lib/logger';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
-import { doc, getDoc, setDoc, getDocs, collection, writeBatch } from 'firebase/firestore';
+import { doc, getDoc, setDoc, getDocs, collection, writeBatch, query, where, updateDoc, addDoc } from 'firebase/firestore';
 import { db, auth } from '@/lib/firebase';
 import { useAuthState } from 'react-firebase-hooks/auth';
 import {
@@ -24,9 +24,14 @@ import SubclassModal from '../../../components/ui/SubclassModal';
 import WeaponModal from '@/components/ui/WeaponModal';
 import EquipmentModal from '@/components/ui/EquipmentModal';
 import SpellModal from '@/components/ui/SpellModal';
-import SpellSelectModal from '@/components/ui/SpellSelectModal';
+import SpellSelectModalWithLevel from '@/components/ui/SpellSelectModalWithLevel';
 import { searchSpells } from '@/lib/spells-data';
+import { getMaxSpellSlots, getAllSpellSlots, getSpellUsageDescription } from '@/lib/spell-slots';
 import LevelUpModal from '@/components/ui/LevelUpModal';
+import SpellSlotsDisplay from '@/components/ui/SpellSlotsDisplay';
+import UseSpellModal from '@/components/ui/UseSpellModal';
+import { CombatNotification } from '@/components/CombatNotifications';
+import { getMaxSpellSlotsForCharacter, useSpell, restLongSpells, restShortSpells, canUseSpell } from '@/lib/spell-usage';
 import {
     fetchClassFeaturesFromFirestore,
     fetchRaceFeaturesFromFirestore,
@@ -34,114 +39,20 @@ import {
     saveGeneratedSubclassToFirestore
 } from '@/lib/class-features-sync';
 import { SUBCLASSES, SUBCLASS_CHOICE_LEVELS } from '@/lib/class-features';
+import Toast, { ToastMessage } from '@/components/ui/Toast';
 import { StartingProficienciesModal } from '@/components/ui/StartingProficienciesModal';
 import { StartingEquipmentModal } from '@/components/ui/StartingEquipmentModal';
 import { CLASS_PROFICIENCIES } from '@/lib/class-proficiencies';
 import Modal from '@/components/Modal';
+import { CLASS_EFFECTS, COMMON_CONDITIONS, getCategorizedGlobalConditions, getEffectStyle } from '@/lib/effects-conditions';
 
-// --- Constantes de Ficha 2.0 ---
-import { COMMON_CONDITIONS, CLASS_EFFECTS, EFFECT_STYLES, getEffectStyle, getCategorizedGlobalConditions } from '@/lib/effects-conditions';
-
-const ACTIVE_EFFECTS = [
-    { id: 'rage', name: 'Fúria', icon: '🔥', classReq: 'Bárbaro' },
-    { id: 'bless', name: 'Bênção', icon: '✨' },
-    { id: 'inspiration', name: 'Inspiração Bárdica', icon: '🎵' },
-    { id: 'concentrating', name: 'Concentrando', icon: '🧠' },
-];
-
-// --- Componentes Auxiliares ---
-const StatBlock = ({ label, value }: { label: string; value: string | number }) => (
-    <div className="flex flex-col items-center justify-center p-4 rounded-lg bg-rpg-panel border border-rpg-gold/20 shadow-lg h-full backdrop-blur-md group hover:border-rpg-gold/40 transition-all relative overflow-hidden">
-        <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-rpg-gold/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-        <span className="text-[10px] font-black text-rpg-gold/60 text-center uppercase tracking-[0.2em] font-cinzel mb-1">{label}</span>
-        <span className="text-3xl font-bold text-rpg-parchment font-cinzel group-hover:text-white transition-colors drop-shadow-glow-gold/10">{value}</span>
-    </div>
-);
-
-const AttributeInput = ({ label, value, onChange, disabled }: { label: string; value: number; onChange: (newValue: number) => void; disabled?: boolean }) => (
-    <div className={`w-full p-3 text-center transition-all duration-300 bg-rpg-panel border rounded-lg shadow-lg backdrop-blur-sm group ${disabled ? 'opacity-70 border-rpg-grey/20' : 'border-rpg-gold/20 hover:border-rpg-gold/50'}`}>
-        <label className={`block text-xs font-bold tracking-wider uppercase font-cinzel ${disabled ? 'text-rpg-grey' : 'text-rpg-gold group-hover:text-rpg-gold-light'}`}>{label}</label>
-        <input
-            type="number"
-            value={value}
-            onChange={(e) => onChange(parseInt(e.target.value, 10) || 0)}
-            onFocus={(e) => e.target.select()}
-            disabled={disabled}
-            className={`w-20 p-1 text-3xl font-bold text-center bg-transparent border-b-2 focus:outline-none font-medieval ${disabled ? 'text-rpg-grey border-rpg-grey/20 cursor-not-allowed' : 'text-rpg-parchment border-rpg-gold/20 focus:border-rpg-gold'}`}
-        />
-        <div className={`mt-1 text-xl font-bold font-medieval bg-rpg-dark/50 rounded px-2 w-10 mx-auto border border-white/5 ${disabled ? 'text-rpg-grey' : 'text-rpg-parchment'}`}>{Math.floor((value - 10) / 2)}</div>
-    </div>
-);
-
-interface SkillCheckboxProps {
-    skillKey: string;
-    displayName: string;
-    attribute: string;
-    isProficient: boolean;
-    proficiencyBonus: number;
-    attributeMod: number;
-    onChange: (key: string, checked: boolean) => void;
-    disabled?: boolean;
-}
-
-const SkillCheckbox = ({ skillKey, displayName, attribute, isProficient, proficiencyBonus, attributeMod, onChange, disabled }: SkillCheckboxProps) => (
-    <div className={`flex items-center justify-between p-2.5 rounded-lg transition-all border border-transparent ${disabled ? 'opacity-60 cursor-not-allowed' : 'hover:bg-rpg-slate/40 hover:border-rpg-gold/10 hover:shadow-inner group/skill'}`}>
-        <label htmlFor={skillKey} className={`flex items-center flex-grow ${disabled ? 'cursor-not-allowed' : 'cursor-pointer'}`}>
-            <div className="relative flex items-center justify-center">
-                <input
-                    id={skillKey}
-                    type="checkbox"
-                    checked={isProficient}
-                    onChange={(e) => onChange(skillKey, e.target.checked)}
-                    disabled={disabled}
-                    className="absolute opacity-0 w-5 h-5 cursor-pointer z-10"
-                />
-                <div className={`w-5 h-5 rounded border flex items-center justify-center transition-all ${isProficient
-                    ? 'bg-rpg-gold border-rpg-gold shadow-glow-gold/30'
-                    : 'bg-black/40 border-rpg-gold/20 group-hover/skill:border-rpg-gold/40'}`}>
-                    {isProficient && (
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 text-rpg-dark" viewBox="0 0 20 20" fill="currentColor">
-                            <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                        </svg>
-                    )}
-                </div>
-            </div>
-            <div className="ml-4 flex flex-col">
-                <span className={`text-sm tracking-tight transition-colors ${isProficient ? 'text-rpg-gold font-bold' : 'text-rpg-parchment/80 group-hover/skill:text-rpg-parchment'}`}>
-                    {displayName}
-                </span>
-                <span className="text-[9px] text-rpg-grey/50 uppercase font-bold tracking-tighter">
-                    {ATTRIBUTE_DISPLAY_NAMES[attribute as keyof typeof ATTRIBUTE_DISPLAY_NAMES] || attribute}
-                </span>
-            </div>
-        </label>
-        <div className={`flex items-center justify-center w-10 h-10 rounded bg-black/20 border transition-all ${isProficient ? 'border-rpg-gold/30 bg-rpg-gold/5' : 'border-white/5 group-hover/skill:border-white/10'}`}>
-            <span className={`font-medieval text-xl font-bold ${isProficient ? 'text-rpg-gold' : 'text-rpg-parchment/60'}`}>
-                {attributeMod + (isProficient ? proficiencyBonus : 0) >= 0 ? '+' : ''}{attributeMod + (isProficient ? proficiencyBonus : 0)}
-            </span>
-        </div>
-    </div>
-);
-
-interface TabButtonProps {
-    activeTab: 'Principal' | 'Equipamento' | 'Habilidades' | 'Magias' | 'Personalidade';
-    tabName: 'Principal' | 'Equipamento' | 'Habilidades' | 'Magias' | 'Personalidade';
-    onClick: (tab: 'Principal' | 'Equipamento' | 'Habilidades' | 'Magias' | 'Personalidade') => void;
-}
-
-const TabButton = ({ activeTab, tabName, onClick }: TabButtonProps) => (
-    <button onClick={() => onClick(tabName)} className={`flex-grow px-4 py-3 text-sm font-bold rounded-t-lg transition-all duration-200 font-cinzel tracking-wider border-t border-x ${activeTab === tabName ? 'bg-rpg-panel text-rpg-gold border-rpg-gold/30 shadow-[0_-5px_15px_-5px_rgba(218,165,32,0.1)]' : 'bg-rpg-slate text-rpg-grey border-transparent hover:text-rpg-parchment hover:bg-rpg-dark'}`}>
-        {tabName}
-    </button>
-);
-
-// --- DEBOUNCE --- 
-function debounce<F extends (...args: any[]) => any>(func: F, waitFor: number) {
-    let timeout: ReturnType<typeof setTimeout> | null = null;
-    return (...args: Parameters<F>): void => {
-        if (timeout !== null) clearTimeout(timeout);
-        timeout = setTimeout(() => func(...args), waitFor);
-    };
+// Lodash debounce import
+function debounce<T extends (...args: any[]) => any>(fn: T, delay: number): T {
+    let timeoutId: NodeJS.Timeout;
+    return ((...args: any[]) => {
+        clearTimeout(timeoutId);
+        timeoutId = setTimeout(() => fn(...args), delay);
+    }) as T;
 }
 
 // --- Componentes Ficha 2.0 ---
@@ -170,267 +81,30 @@ const QuickActions = ({ character }: { character: Character }) => {
     ].filter(Boolean);
 
     return (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-6">
-            <div className="bg-rpg-panel border border-rpg-gold/20 p-3 rounded-lg flex flex-col items-center">
-                <span className="text-[10px] text-rpg-gold font-bold uppercase mb-1">Ações Principais</span>
-                <div className="flex flex-wrap justify-center gap-1">
-                    {actions.map(a => <span key={a} className="text-[10px] bg-black/30 px-2 py-0.5 rounded text-rpg-grey">{a}</span>)}
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4 mb-8">
+            <div className="bg-rpg-panel border border-rpg-gold/20 p-3 sm:p-4 rounded-lg flex flex-col items-center">
+                <span className="text-xs sm:text-sm text-rpg-gold font-bold uppercase mb-2 tracking-wider">Ações Principais</span>
+                <div className="flex flex-wrap justify-center gap-2">
+                    {actions.map(a => <span key={a} className="text-xs sm:text-sm bg-black/40 px-2.5 py-1.5 rounded text-rpg-grey border border-white/5 font-medium">{a}</span>)}
                 </div>
             </div>
-            <div className="bg-rpg-panel border border-rpg-gold/20 p-3 rounded-lg flex flex-col items-center text-blue-400">
-                <span className="text-[10px] font-bold uppercase mb-1">Ações Bônus</span>
-                <div className="flex flex-wrap justify-center gap-1">
-                    {bonusActions.map(a => <span key={a} className="text-[10px] bg-blue-900/20 px-2 py-0.5 rounded border border-blue-500/20">{a}</span>)}
+            <div className="bg-rpg-panel border border-rpg-gold/20 p-3 sm:p-4 rounded-lg flex flex-col items-center text-blue-400">
+                <span className="text-xs sm:text-sm font-bold uppercase mb-2 tracking-wider">Ações Bônus</span>
+                <div className="flex flex-wrap justify-center gap-2">
+                    {bonusActions.map(a => <span key={a} className="text-xs sm:text-sm bg-blue-900/30 px-2.5 py-1.5 rounded border border-blue-500/30 font-bold">{a}</span>)}
                 </div>
             </div>
-            <div className="bg-rpg-panel border border-rpg-gold/20 p-3 rounded-lg flex flex-col items-center text-red-400">
-                <span className="text-[10px] font-bold uppercase mb-1">Reações</span>
-                <div className="flex flex-wrap justify-center gap-1">
-                    {reactions.map(a => <span key={a} className="text-[10px] bg-red-900/20 px-2 py-0.5 rounded border border-red-500/20">{a}</span>)}
-                </div>
-            </div>
-        </div>
-    );
-};
-
-const ConditionManager = ({ character, onToggleCondition, onToggleEffect }: {
-    character: Character;
-    onToggleCondition: (id: string) => void;
-    onToggleEffect: (id: string) => void;
-}) => {
-    // --- Estados do Modal Unificado ---
-    const [isEffectModalOpen, setIsEffectModalOpen] = useState(false);
-    const [effectTab, setEffectTab] = useState<'all' | 'benefits' | 'debuffs'>('all');
-    const [effectSearchQuery, setEffectSearchQuery] = useState('');
-
-    const isBarbarian = character.class?.toLowerCase().includes('bárbaro') || character.class?.toLowerCase().includes('barbarian');
-    const activeConditions = character.conditions || [];
-    const activeEffects = character.activeEffects || [];
-
-    // --- Dados Sincronizados (Mesma lógica de Confrontos) ---
-    // Preparar lista unificada de efeitos disponíveis
-    const availableEffects = useMemo(() => {
-        // 1. Efeitos de Classe (Do arquivo compartilhado)
-        const charClass = character.class || 'Guerreiro'; 
-        
-        // Mapear efeitos da classe com icons
-        let classFx: any[] = (CLASS_EFFECTS[charClass] || []).map(fx => {
-            let icon = '⚔️';
-            if (fx.category === 'benefit') icon = '✨';
-            if (fx.id === 'rage') icon = '🔥';
-            if (fx.id === 'wild-shape') icon = '🐻';
-            if (fx.id === 'bardic-inspiration') icon = '🎵';
-            return { ...fx, icon, type: 'class' };
-        });
-
-        // 2. Condições Globais (COMMON_CONDITIONS)
-        const globalConditions = COMMON_CONDITIONS.map(cond => {
-            const isBenefit = ['invisivel', 'abençoado', 'inspirado', 'velocidade'].includes(cond.id); 
-            return {
-                id: cond.id,
-                name: cond.name,
-                icon: cond.icon,
-                category: isBenefit ? 'benefit' : 'debuff',
-                type: 'global'
-            };
-        });
-
-        // 3. Efeitos Extras
-        const extraGlobals = [
-            { id: 'bless', name: 'Bênção', icon: '✨', category: 'benefit', type: 'global' },
-            { id: 'inspiration', name: 'Inspiração', icon: '🎵', category: 'benefit', type: 'global' },
-            { id: 'haste', name: 'Velocidade', icon: '⚡', category: 'benefit', type: 'global' },
-            { id: 'shield-faith', name: 'Escudo da Fé', icon: '🛡️', category: 'benefit', type: 'global' },
-            { id: 'mage-armor', name: 'Armadura Arcana', icon: '🧥', category: 'benefit', type: 'global' },
-        ];
-
-        // Combinar tudo
-        const allEffects = [
-            ...classFx,
-            ...globalConditions,
-            ...extraGlobals.filter(e => !globalConditions.some(g => g.id === e.id) && !classFx.some(c => c.id === e.id))
-        ];
-
-        return allEffects;
-    }, [character.class]);
-
-    // Combinar IDs ativos de ambas as fontes
-    const combinedActiveIds = [...activeConditions, ...activeEffects];
-
-    const activeBenefits = availableEffects.filter(e => combinedActiveIds.includes(e.id) && e.category === 'benefit');
-    const activeDebuffs = availableEffects.filter(e => combinedActiveIds.includes(e.id) && e.category !== 'benefit');
-
-    const handleToggle = (id: string) => {
-         const effect = availableEffects.find(e => e.id === id);
-         // Se for condição global padrão, usa onToggleCondition
-         if (effect && effect.type === 'global' && COMMON_CONDITIONS.some(c => c.id === id)) {
-             onToggleCondition(id);
-         } else {
-             onToggleEffect(id);
-         }
-    };
-
-    // Filtragem para o Modal
-    const filteredModalEffects = useMemo(() => {
-        const normalize = (s: string) => s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-        const query = normalize(effectSearchQuery);
-        
-        return availableEffects.filter(fx => {
-            const matchesSearch = normalize(fx.name).includes(query);
-            const matchesTab = effectTab === 'all' || 
-                             (effectTab === 'benefits' && fx.category === 'benefit') || 
-                             (effectTab === 'debuffs' && fx.category !== 'benefit');
-            return matchesSearch && matchesTab;
-        });
-    }, [availableEffects, effectSearchQuery, effectTab]);
-
-    return (
-        <div className="space-y-4 mb-6">
-            <Modal isOpen={isEffectModalOpen} onClose={() => setIsEffectModalOpen(false)} title={`Efeitos • ${character.name}`}>
-                <div className="space-y-4">
-                    {/* Barra de Busca */}
-                    <div className="relative">
-                        <input
-                            type="text"
-                            placeholder="🔍 Buscar efeito..."
-                            value={effectSearchQuery}
-                            onChange={(e) => setEffectSearchQuery(e.target.value)}
-                            className="w-full bg-rpg-dark border border-rpg-gold/30 rounded-lg p-3 pl-10 text-rpg-parchment outline-none focus:border-rpg-gold focus:ring-1 focus:ring-rpg-gold/30 transition-all text-sm font-medieval"
-                            autoFocus
-                        />
-                        <span className="absolute left-3 top-3 text-rpg-gold/50">✨</span>
-                    </div>
-
-                    {/* Sistema de Abas */}
-                    <div className="flex gap-2 border-b border-white/10 pb-1">
-                        <button
-                            onClick={() => setEffectTab('all')}
-                            className={`flex-1 px-3 py-2 text-[10px] font-cinzel tracking-wider uppercase transition-all rounded-t-lg ${
-                                effectTab === 'all'
-                                    ? 'bg-rpg-gold/10 text-rpg-gold border-b-2 border-rpg-gold'
-                                    : 'text-rpg-grey hover:text-rpg-parchment hover:bg-white/5'
-                            }`}
-                        >
-                            Todos
-                        </button>
-                        <button
-                            onClick={() => setEffectTab('benefits')}
-                            className={`flex-1 px-3 py-2 text-[10px] font-cinzel tracking-wider uppercase transition-all rounded-t-lg ${
-                                effectTab === 'benefits'
-                                    ? 'bg-green-900/20 text-green-400 border-b-2 border-green-500'
-                                    : 'text-rpg-grey hover:text-rpg-parchment hover:bg-white/5'
-                            }`}
-                        >
-                            Benefícios
-                        </button>
-                        <button
-                            onClick={() => setEffectTab('debuffs')}
-                            className={`flex-1 px-3 py-2 text-[10px] font-cinzel tracking-wider uppercase transition-all rounded-t-lg ${
-                                effectTab === 'debuffs'
-                                    ? 'bg-red-900/20 text-red-400 border-b-2 border-red-500'
-                                    : 'text-rpg-grey hover:text-rpg-parchment hover:bg-white/5'
-                            }`}
-                        >
-                            Malefícios
-                        </button>
-                    </div>
-
-                    {/* Grid de Efeitos */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-[50vh] overflow-y-auto custom-scrollbar pr-2">
-                        {filteredModalEffects.length === 0 ? (
-                            <div className="col-span-full text-center py-8 text-rpg-grey italic border border-dashed border-white/10 rounded-lg">
-                                Nenhum efeito encontrado.
-                            </div>
-                        ) : (
-                            filteredModalEffects.map(fx => {
-                                const isActive = combinedActiveIds.includes(fx.id);
-                                const isBenefit = fx.category === 'benefit';
-                                
-                                const cardClasses = isBenefit 
-                                    ? 'bg-gradient-to-br from-green-900/20 to-green-900/5 border-green-600/30 hover:border-green-500 hover:from-green-900/40' 
-                                    : 'bg-gradient-to-br from-red-900/20 to-red-900/5 border-red-600/30 hover:border-red-500 hover:from-red-900/40';
-
-                                return (
-                                    <button
-                                        key={fx.id}
-                                        onClick={() => { handleToggle(fx.id); setIsEffectModalOpen(false); }}
-                                        disabled={isActive}
-                                        className={`p-3 rounded-lg border transition-all text-left flex items-center gap-3 group relative overflow-hidden ${cardClasses} ${isActive ? 'opacity-50 cursor-not-allowed grayscale' : 'shadow-lg'}`}
-                                    >
-                                        <span className="text-2xl filter drop-shadow-md group-hover:scale-110 transition-transform">{fx.icon}</span>
-                                        <div className="flex-1 min-w-0">
-                                            <div className={`font-cinzel text-xs font-bold truncate ${isBenefit ? 'text-green-100 group-hover:text-white' : 'text-red-100 group-hover:text-white'}`}>
-                                                {fx.name}
-                                            </div>
-                                            <div className="text-[9px] opacity-60 uppercase tracking-widest mt-0.5">
-                                                {fx.type === 'class' ? character.class : 'Global'}
-                                            </div>
-                                        </div>
-                                        {isActive && <div className="absolute right-2 top-2 text-xs font-bold">✔</div>}
-                                    </button>
-                                );
-                            })
-                        )}
-                    </div>
-                </div>
-            </Modal>
-
-            {/* Dashboards Visuais na Ficha */}
-            <div className="grid grid-cols-2 gap-4">
-                {/* Coluna de Benefícios */}
-                <div className="space-y-2">
-                    <div className="text-xs text-green-400 font-bold uppercase tracking-widest flex justify-between items-center border-b border-green-900/50 pb-1">
-                        <span>✦ Benefícios</span>
-                        {activeBenefits.length > 0 && <span className="text-[9px] bg-green-900/60 px-1.5 py-0.5 rounded text-white">{activeBenefits.length}</span>}
-                    </div>
-
-                    <div className="space-y-2 min-h-[50px]">
-                        {activeBenefits.map(effect => (
-                            <button
-                                key={effect.id}
-                                onClick={() => onToggleEffect(effect.id)}
-                                className="w-full px-3 py-2.5 rounded-lg flex items-center gap-3 text-xs font-bold border transition-all bg-gradient-to-r from-green-900/40 to-green-900/20 border-green-600/50 text-green-100 hover:border-red-500 hover:bg-red-900/30 group relative overflow-hidden shadow-sm"
-                            >
-                                <span className="text-lg">{effect.icon}</span>
-                                <span className="truncate flex-grow text-left group-hover:text-red-200 transition-colors">{effect.name}</span>
-                                <span className="text-[10px] opacity-0 group-hover:opacity-100 text-red-400 font-black transition-all transform translate-x-2 group-hover:translate-x-0">REMOVER</span>
-                            </button>
-                        ))}
-                        
-                        <button
-                            onClick={() => { setEffectTab('all'); setIsEffectModalOpen(true); }}
-                            className="w-full py-2 border border-dashed border-green-800/40 text-green-600/70 rounded-lg text-[10px] hover:border-green-500 hover:text-green-400 hover:bg-green-900/10 transition-all font-bold uppercase tracking-widest flex items-center justify-center gap-2 group"
-                        >
-                            <span className="group-hover:scale-125 transition-transform text-sm">+</span> Adicionar Efeito
-                        </button>
-                    </div>
-                </div>
-
-                {/* Coluna de Malefícios */}
-                <div className="space-y-2">
-                     <div className="text-xs text-red-400 font-bold uppercase tracking-widest flex justify-between items-center border-b border-red-900/50 pb-1">
-                        <span>⚠ Malefícios</span>
-                        {activeDebuffs.length > 0 && <span className="text-[9px] bg-red-900/60 px-1.5 py-0.5 rounded text-white">{activeDebuffs.length}</span>}
-                    </div>
-
-                    <div className="space-y-2 min-h-[50px]">
-                        {activeDebuffs.map(effect => (
-                            <button
-                                key={effect.id}
-                                onClick={() => onToggleEffect(effect.id)}
-                                className="w-full px-3 py-2.5 rounded-lg flex items-center gap-3 text-xs font-bold border transition-all bg-gradient-to-r from-red-900/40 to-red-900/20 border-red-600/50 text-red-100 hover:border-red-500 hover:bg-red-900/40 group relative overflow-hidden shadow-sm"
-                            >
-                                <span className="text-lg">{effect.icon}</span>
-                                <span className="truncate flex-grow text-left group-hover:text-white transition-colors">{effect.name}</span>
-                                <span className="text-[10px] opacity-0 group-hover:opacity-100 text-white font-black transition-all transform translate-x-2 group-hover:translate-x-0">REMOVER</span>
-                            </button>
-                        ))}
-                    </div>
+            <div className="bg-rpg-panel border border-rpg-gold/20 p-3 sm:p-4 rounded-lg flex flex-col items-center text-red-400 col-span-2 md:col-span-1">
+                <span className="text-xs sm:text-sm font-bold uppercase mb-2 tracking-wider">Reações</span>
+                <div className="flex flex-wrap justify-center gap-2">
+                    {reactions.map(a => <span key={a} className="text-xs sm:text-sm bg-red-900/30 px-2.5 py-1.5 rounded border border-red-500/30 font-bold">{a}</span>)}
                 </div>
             </div>
         </div>
     );
 };
+
+
 
 // --- Componente Principal --- 
 export default function CharacterSheetPage() {
@@ -439,6 +113,7 @@ export default function CharacterSheetPage() {
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [isReadOnly, setIsReadOnly] = useState(false); // True quando o mestre está visualizando
+    const [toast, setToast] = useState<ToastMessage | null>(null);
     const [activeTab, setActiveTab] = useState<'Principal' | 'Equipamento' | 'Habilidades' | 'Magias' | 'Personalidade'>('Principal');
     const [activeSkillSubTab, setActiveSkillSubTab] = useState<'skills' | 'features' | 'feats'>('skills');
     const [skillSearchQuery, setSkillSearchQuery] = useState('');
@@ -476,7 +151,11 @@ export default function CharacterSheetPage() {
     const [effectTab, setEffectTab] = useState<'all' | 'benefits' | 'debuffs'>('all');
     const [effectSearchQuery, setEffectSearchQuery] = useState('');
 
+    const [isXPModalOpen, setIsXPModalOpen] = useState(false);
+    const [xpAmountToAdd, setXpAmountToAdd] = useState<string>('100');
+
     const [weaponSearchTerm, setWeaponSearchTerm] = useState('');
+    const [spellLevelFilter, setSpellLevelFilter] = useState<number | undefined>(undefined);
     const [equipmentSearchTerm, setEquipmentSearchTerm] = useState('');
     const [expandedSpellLevels, setExpandedSpellLevels] = useState<Record<number, boolean>>({ 0: true });
 
@@ -488,6 +167,16 @@ export default function CharacterSheetPage() {
     const [confirmRemoveFeatureModal, setConfirmRemoveFeatureModal] = useState<{ open: boolean; featureName: string | null }>({ open: false, featureName: null });
 
     const dataFetchInitiated = useRef(false);
+
+    // Helper para mostrar toasts
+    const showToast = useCallback((message: string, type: 'success' | 'error' | 'info' | 'warning' = 'info', duration = 4000) => {
+        setToast({
+            id: Date.now().toString(),
+            message,
+            type,
+            duration
+        });
+    }, []);
 
     const handleSelectSubclass = (subclassName: string | null) => {
         if (!subclassName) {
@@ -568,6 +257,106 @@ export default function CharacterSheetPage() {
             return finalChar;
         });
     }, [isReadOnly, debouncedSave]);
+
+    // --- Notificar Ações para o Confronto ---
+    const notifyEncounter = useCallback(async (action: {
+        type: CombatNotification['type'],
+        message: string,
+        icon: string,
+        severity?: CombatNotification['severity']
+    }) => {
+        if (!character?.activeEncounterId || !character?.id || isReadOnly) return;
+
+        try {
+            const logsRef = collection(db, 'encounters', character.activeEncounterId, 'logs');
+            await addDoc(logsRef, {
+                characterId: character.id,
+                characterName: character.name,
+                timestamp: Date.now(),
+                type: action.type,
+                message: action.message,
+                icon: action.icon,
+                severity: action.severity || 'info'
+            });
+        } catch (err) {
+            console.error("Erro ao enviar notificação para o encontro:", err);
+        }
+    }, [character?.activeEncounterId, character?.id, character?.name, isReadOnly]);
+
+    const handleSaveNewCharacter = async () => {
+        if (!user || !character) return;
+        try {
+            // Gerar novo ID usando Firestore
+            const newDocRef = doc(collection(db, 'personagens'));
+            const charToSave = {
+                ...character,
+                id: newDocRef.id,
+                ownerId: user.uid,
+                createdAt: new Date().toISOString(),
+                spellSlotsCurrent: character.class
+                    ? getMaxSpellSlotsForCharacter(character.class as any, character.level || 1)
+                    : {}
+            };
+            await setDoc(newDocRef, JSON.parse(JSON.stringify(charToSave)));
+            // Aguardar um pouco para garantir que Firestore sincronizou
+            await new Promise(resolve => setTimeout(resolve, 500));
+            router.push(`/personagem/${newDocRef.id}`);
+        } catch (err) {
+            console.error("Erro ao salvar novo personagem:", err);
+            showToast('Erro ao salvar personagem. Tente novamente.', 'error');
+        }
+    };
+
+    const handleSpellUsed = useCallback((spell: any) => {
+        if (!character) return;
+
+        const canUseIt = canUseSpell(character.spellSlotsCurrent || {}, spell);
+
+        if (!canUseIt) {
+            showToast(`❌ Sem slots disponíveis para magia nível ${spell.level || 0}`, 'error');
+            return;
+        }
+
+        const newSlots = useSpell(character.spellSlotsCurrent || {}, spell);
+        updateCharacter(char => ({
+            ...char,
+            spellSlotsCurrent: newSlots
+        }));
+
+        // Notificar Mestre
+        notifyEncounter({
+            type: 'spell-use',
+            message: `Lançou ${spell.name} (Nível ${spell.level || 'Truque'})`,
+            icon: '🪄',
+            severity: 'info'
+        });
+    }, [character, updateCharacter, showToast, notifyEncounter]);
+
+    const handleRest = useCallback((restType: 'short' | 'long') => {
+        if (!character) return;
+
+        let newSlots = character.spellSlotsCurrent || {};
+        if (restType === 'short') {
+            newSlots = restShortSpells(character.class as any, character.level || 1, newSlots);
+            showToast("☕ Descanso curto completado! Bruxaria e recursos especiais recuperados.", 'success');
+        } else {
+            newSlots = restLongSpells(character.class as any, character.level || 1);
+            showToast("🌙 Descanso longo completado! Todos os slots e PV recuperados.", 'success');
+        }
+
+        updateCharacter(char => ({
+            ...char,
+            spellSlotsCurrent: newSlots
+        }));
+
+        // Notificar Mestre
+        notifyEncounter({
+            type: restType === 'short' ? 'rest-short' : 'rest-long',
+            message: `Realizou um ${restType === 'short' ? 'Descanso Curto' : 'Descanso Longo'}`,
+            icon: restType === 'short' ? '☕' : '⛺',
+            severity: 'success'
+        });
+    }, [character, updateCharacter, showToast, notifyEncounter]);
 
     // --- Carregamento de Dados ---
     useEffect(() => {
@@ -1036,12 +825,73 @@ export default function CharacterSheetPage() {
         }));
     };
 
+    const getEffectName = (id: string) => {
+        const cond = COMMON_CONDITIONS.find(c => c.id === id);
+        if (cond) return cond.name;
+
+        const classEff = Object.values(CLASS_EFFECTS).flat().find(e => e.id === id);
+        if (classEff) return classEff.name;
+
+        return id;
+    };
+
     const toggleCondition = (id: string) => {
         updateCharacter(char => {
             const conditions = char.conditions || [];
             const newConditions = conditions.includes(id)
                 ? conditions.filter(c => c !== id)
                 : [...conditions, id];
+
+            const isAdding = !conditions.includes(id);
+            if (isAdding) {
+                const condName = COMMON_CONDITIONS.find(c => c.id === id)?.name || id;
+                notifyEncounter({
+                    type: 'effect-applied',
+                    message: `Está agora ${condName}`,
+                    icon: '⚠️',
+                    severity: 'warning'
+                });
+            }
+
+            // --- Sincronização Direta com Confronto ---
+            if (character.activeEncounterId && !isReadOnly) {
+                const updateCombat = async () => {
+                    try {
+                        const { doc, getDoc, updateDoc } = await import('firebase/firestore');
+                        const combatRef = doc(db, 'encounters', character.activeEncounterId!);
+                        const combatSnap = await getDoc(combatRef);
+
+                        if (combatSnap.exists()) {
+                            const combatData = combatSnap.data();
+                            const combatants = combatData.combatants || [];
+                            const updated = combatants.map((c: any) => {
+                                if (c.externalId === character.id) {
+                                    const effects = c.statusEffects || [];
+                                    const hasEffect = effects.some((e: any) => e.id === id);
+                                    return {
+                                        ...c,
+                                        statusEffects: hasEffect
+                                            ? effects.filter((e: any) => e.id !== id)
+                                            : [...effects, { id, name: getEffectName(id), duration: 10 }]
+                                    };
+                                }
+                                return c;
+                            });
+                            await updateDoc(combatRef, { combatants: updated });
+
+                            // Se estiver online, sincroniza com arenas_online também
+                            if (combatData.isOnline) {
+                                const arenaRef = doc(db, 'arenas_online', character.activeEncounterId!);
+                                await updateDoc(arenaRef, { combatants: updated });
+                            }
+                        }
+                    } catch (err) {
+                        console.error("[SYNC-COND] Erro na sincronização direta:", err);
+                    }
+                };
+                updateCombat();
+            }
+
             return { ...char, conditions: newConditions };
         });
     };
@@ -1053,49 +903,58 @@ export default function CharacterSheetPage() {
             const newEffects = effects.includes(id)
                 ? effects.filter(e => e !== id)
                 : [...effects, id];
+            const isAdding = !effects.includes(id);
+            if (isAdding) {
+                const effectName = Object.values(CLASS_EFFECTS).flat().find(e => e.id === id)?.name || id;
+                notifyEncounter({
+                    type: 'effect-applied',
+                    message: `Ativou ${effectName}`,
+                    icon: '✨',
+                    severity: 'info'
+                });
+            }
+
+            // --- Sincronização Direta com Confronto ---
+            if (character.activeEncounterId && !isReadOnly) {
+                const updateCombat = async () => {
+                    try {
+                        const { doc, getDoc, updateDoc } = await import('firebase/firestore');
+                        const combatRef = doc(db, 'encounters', character.activeEncounterId!);
+                        const combatSnap = await getDoc(combatRef);
+
+                        if (combatSnap.exists()) {
+                            const combatData = combatSnap.data();
+                            const combatants = combatData.combatants || [];
+                            const updated = combatants.map((c: any) => {
+                                if (c.externalId === character.id) {
+                                    const effs = c.statusEffects || [];
+                                    const hasEff = effs.some((e: any) => e.id === id);
+                                    return {
+                                        ...c,
+                                        statusEffects: hasEff
+                                            ? effs.filter((e: any) => e.id !== id)
+                                            : [...effs, { id, name: getEffectName(id), duration: 10 }]
+                                    };
+                                }
+                                return c;
+                            });
+                            await updateDoc(combatRef, { combatants: updated });
+
+                            // Se estiver online, sincroniza com arenas_online também
+                            if (combatData.isOnline) {
+                                const arenaRef = doc(db, 'arenas_online', character.activeEncounterId!);
+                                await updateDoc(arenaRef, { combatants: updated });
+                            }
+                        }
+                    } catch (err) {
+                        console.error("[SYNC-EFF] Erro na sincronização direta:", err);
+                    }
+                };
+                updateCombat();
+            }
+
             return { ...char, activeEffects: newEffects };
         });
-
-        // Sincronizar com o combate se o personagem estiver em um
-        try {
-            // Procura por combates que contenham este personagem
-            const { collection, query, where, getDocs } = await import('firebase/firestore');
-            const encountersRef = collection(db, 'encounters');
-            const q = query(encountersRef);
-            const snapshot = await getDocs(q);
-
-            snapshot.forEach(async (docSnap) => {
-                const combatData = docSnap.data();
-                const combatants = combatData.combatants || [];
-                
-                // Procura o combatente com este personagem
-                const combatant = combatants.find((c: any) => c.externalId === character?.id);
-                if (combatant) {
-                    // Sincroniza o efeito com o combate
-                    const { updateDoc } = await import('firebase/firestore');
-                    const combatRef = doc(db, 'encounters', docSnap.id);
-                    
-                    const updatedCombatants = combatants.map((c: any) => {
-                        if (c.externalId === character?.id) {
-                            const effects = c.statusEffects || [];
-                            const hasEffect = effects.some((e: any) => e.id === id);
-                            return {
-                                ...c,
-                                statusEffects: hasEffect
-                                    ? effects.filter((e: any) => e.id !== id)
-                                    : [...effects, { id, name: '', duration: 10 }]
-                            };
-                        }
-                        return c;
-                    });
-                    
-                    await updateDoc(combatRef, { combatants: updatedCombatants });
-                    console.log(`[SYNC] Efeito ${id} sincronizado com combate`);
-                }
-            });
-        } catch (err) {
-            console.error('[SYNC] Erro ao sincronizar efeito com combate:', err);
-        }
     };
 
     const handleLongRest = () => {
@@ -1112,7 +971,7 @@ export default function CharacterSheetPage() {
                 )
             }
         }));
-        alert('✨ Descanso Longo concluído! PV e Slots de Magia restaurados.');
+        showToast('✨ Descanso Longo concluído! PV e Slots de Magia restaurados.', 'success');
     };
 
     const togglePreparedSpell = (spellName: string) => {
@@ -1294,7 +1153,25 @@ export default function CharacterSheetPage() {
     };
 
     // --- Magias ---
+    // Validar se a magia é permitida para a classe/nível do personagem
+    const isSpellAllowedForCharacter = (spell: any): boolean => {
+        // Truques sempre são permitidos
+        if (spell.level === undefined || spell.level === 0) return true;
+
+        // Magias customizadas com nível definido devem estar disponíveis
+        const maxSlots = getMaxSpellSlots(character.class, character.level, spell.level);
+
+        // Se o personagem não tem slots para este nível de magia, não é permitido
+        return maxSlots > 0;
+    };
+
     const handleSaveSpell = (spell: any) => {
+        // Validar se a magia é permitida
+        if (!isSpellAllowedForCharacter(spell)) {
+            showToast(`${character.name} é ${character.class} nível ${character.level} e não pode aprender magias de nível ${spell.level} ainda. Níveis de magia disponíveis: 0-${Math.max(...[1, 2, 3, 4, 5, 6, 7, 8, 9].filter(l => getMaxSpellSlots(character.class, character.level, l) > 0))}`, 'warning');
+            return;
+        }
+
         updateCharacter(char => {
             const filtered = (char.spells || []).filter(s => s.name.trim().toLowerCase() !== spell.name.trim().toLowerCase());
             return { ...char, spells: [...filtered, spell] };
@@ -1362,9 +1239,136 @@ export default function CharacterSheetPage() {
     const filteredWeapons = character.inventory.weapons.filter(w => w.name.toLowerCase().includes(weaponSearchTerm.toLowerCase()));
     const filteredEquipment = character.inventory.otherEquipment.filter(e => e.name.toLowerCase().includes(equipmentSearchTerm.toLowerCase()));
 
+    // Calcular efeitos ativos para aplicar estilo no fundo
+    const activeEffects = character.activeEffects || [];
+    const activeConditions = character.conditions || [];
+    const allActiveIds = [...activeEffects, ...activeConditions];
+
+    const benefitIds = ['rage', 'reckless', 'inspiration', 'counter-charm', 'bless', 'sanctuary', 'shield-faith', 'wild-shape', 'barkskin', 'action-surge', 'second-wind', 'indomitable', 'evasion', 'uncanny-dodge', 'flurry', 'patient-defense', 'lay-hands', 'divine-smite', 'aura-protection', 'hunters-mark', 'favored-foe', 'metamagic', 'tides-chaos', 'invocation', 'arcane-recovery', 'spell-mastery', 'sneak-attack', 'armor-agathys', 'multiattack', 'mirror-image', 'invisivel'];
+    const commonConditionIds = ['caido', 'envenenado', 'atordoado', 'amedrontado', 'agarrado', 'incapacitado', 'invisivel', 'paralisado', 'petrificado', 'preso', 'inconsciente', 'cego', 'surdo', 'aterrorizado', 'exaurido', 'cansado', 'queimado', 'enfraquecido', 'fome', 'sangrando', 'ebrio', 'amaldicoado'];
+
+    const benefits = allActiveIds.filter(id => benefitIds.includes(id));
+    const debuffs = allActiveIds.filter(id => !benefitIds.includes(id));
+
+    const hasBenefits = benefits.length > 0;
+    const hasDebuffs = debuffs.length > 0;
+    const hasBothEffects = hasBenefits && hasDebuffs;
+    const hasOnlyBenefits = hasBenefits && !hasDebuffs;
+    const hasOnlyDebuffs = hasDebuffs && !hasBenefits;
+    const hasUniqueEffects = allActiveIds.some(id => !commonConditionIds.includes(id));
+
+    // Classe do container baseada nos efeitos ativos
+    const containerEffectClass = hasBothEffects
+        ? 'bg-gradient-to-br from-green-900/30 via-rpg-dark/70 to-red-900/30 border-l-8 border-l-green-400 border-r-8 border-r-red-500'
+        : hasOnlyBenefits
+            ? 'bg-gradient-to-br from-green-900/25 via-green-950/15 to-rpg-dark/70 border-4 border-green-500/50 shadow-[0_0_50px_rgba(34,197,94,0.3)]'
+            : hasOnlyDebuffs
+                ? 'bg-gradient-to-br from-red-900/30 via-orange-950/20 to-rpg-dark/70 border-4 border-red-500/60 shadow-[0_0_50px_rgba(220,38,38,0.4)]'
+                : 'bg-dnd-gradient';
+
+    const effectAnimationClass = hasUniqueEffects ? 'effect-unique' : '';
+    const bgGlowClass = hasBenefits ? 'bg-glow-benefit' : hasDebuffs ? 'bg-glow-debuff' : '';
+
     return (
-        <div className="min-h-screen p-4 text-rpg-parchment md:p-8 bg-dnd-gradient font-sans selection:bg-rpg-gold/30 selection:text-rpg-gold">
-            <div className="max-w-7xl mx-auto">
+        <div className={`min-h-screen p-4 text-rpg-parchment md:p-8 font-sans selection:bg-rpg-gold/30 selection:text-rpg-gold transition-all duration-500 relative overflow-hidden ${containerEffectClass} ${effectAnimationClass} ${bgGlowClass}`}>
+            {/* Partículas de Benefícios - AO REDOR DE TODA A TELA */}
+            {hasBenefits && (
+                <div className="fixed inset-0 pointer-events-none z-0">
+                    {/* Partículas subindo da base */}
+                    {[10, 20, 35, 50, 65, 80, 90].map((left, i) => (
+                        <div
+                            key={`benefit-up-${i}`}
+                            className="particle-benefit particle-benefit-up"
+                            style={{
+                                left: `${left}%`,
+                                animationDelay: `${i * 0.4}s`,
+                                animationDuration: `${3 + (i % 3) * 0.5}s`
+                            }}
+                        />
+                    ))}
+                    {/* Partículas descendo do topo */}
+                    {[15, 45, 75].map((left, i) => (
+                        <div
+                            key={`benefit-down-${i}`}
+                            className="particle-benefit particle-benefit-down"
+                            style={{
+                                left: `${left}%`,
+                                animationDelay: `${i * 0.6}s`,
+                                animationDuration: `${3.5 + (i % 2) * 0.5}s`
+                            }}
+                        />
+                    ))}
+                    {/* Partículas da esquerda */}
+                    {[10, 40, 70].map((top, i) => (
+                        <div
+                            key={`benefit-left-${i}`}
+                            className="particle-benefit particle-benefit-left"
+                            style={{
+                                top: `${top}%`,
+                                animationDelay: `${i * 0.5}s`,
+                                animationDuration: `${3.2 + (i % 3) * 0.4}s`
+                            }}
+                        />
+                    ))}
+                    {/* Partículas da direita */}
+                    {[20, 50, 80].map((top, i) => (
+                        <div
+                            key={`benefit-right-${i}`}
+                            className="particle-benefit particle-benefit-right"
+                            style={{
+                                top: `${top}%`,
+                                animationDelay: `${i * 0.7}s`,
+                                animationDuration: `${3.3 + (i % 2) * 0.6}s`
+                            }}
+                        />
+                    ))}
+                </div>
+            )}
+
+            {/* Partículas de Malefícios - AO REDOR DE TODA A TELA */}
+            {hasDebuffs && (
+                <div className="fixed inset-0 pointer-events-none z-0">
+                    {/* Brasas subindo */}
+                    {[5, 15, 30, 45, 60, 75, 85, 95].map((left, i) => (
+                        <div
+                            key={`debuff-up-${i}`}
+                            className="particle-debuff particle-debuff-up"
+                            style={{
+                                left: `${left}%`,
+                                animationDelay: `${i * 0.3}s`,
+                                animationDuration: `${2.5 + (i % 4) * 0.3}s`
+                            }}
+                        />
+                    ))}
+                    {/* Brasas diagonais */}
+                    {[0, 25, 50, 75, 100].map((val, i) => (
+                        <div
+                            key={`debuff-diag-${i}`}
+                            className="particle-debuff particle-debuff-diagonal"
+                            style={{
+                                left: `${val}%`,
+                                top: `${100 - val}%`,
+                                animationDelay: `${i * 0.5}s`,
+                                animationDuration: `${3 + (i % 3) * 0.4}s`
+                            }}
+                        />
+                    ))}
+                    {/* Brasas laterais */}
+                    {[10, 35, 60, 85].map((top, i) => (
+                        <div
+                            key={`debuff-side-${i}`}
+                            className="particle-debuff particle-debuff-side"
+                            style={{
+                                top: `${top}%`,
+                                animationDelay: `${i * 0.4}s`,
+                                animationDuration: `${2.8 + (i % 2) * 0.5}s`
+                            }}
+                        />
+                    ))}
+                </div>
+            )}
+
+            <div className="max-w-7xl mx-auto relative z-10">
                 {/* Header e Navigation */}
                 <div className="mb-6 flex flex-col gap-4 md:flex-row md:justify-between md:items-center">
                     <div className="w-full md:w-auto">
@@ -1382,20 +1386,29 @@ export default function CharacterSheetPage() {
                                 <span>👁️</span> <span className="hidden sm:inline">Modo Espectador (Mestre)</span><span className="sm:hidden">Espectador</span>
                             </div>
                         )}
-                        
+
                         {!isReadOnly && id !== 'novo' && (
-                            <button
-                                onClick={handleLongRest}
-                                className="flex-grow md:flex-grow-0 bg-indigo-900/20 border border-indigo-500/30 text-indigo-400 px-3 py-2 rounded hover:bg-indigo-900/40 transition-all text-xs font-bold flex items-center justify-center gap-2"
-                                title="Restaurar PV e Slots de Magia"
-                            >
-                                <span>⛺</span> Descanso Longo
-                            </button>
+                            <>
+                                <button
+                                    onClick={() => handleRest('short')}
+                                    className="flex-grow md:flex-grow-0 bg-amber-900/20 border border-amber-500/30 text-amber-400 px-3 py-2 rounded hover:bg-amber-900/40 transition-all text-xs font-bold flex items-center justify-center gap-2"
+                                    title="Descanso Curto - 1 hora (Bruxaria se recupera)"
+                                >
+                                    <span>☕</span> Curto
+                                </button>
+                                <button
+                                    onClick={() => handleRest('long')}
+                                    className="flex-grow md:flex-grow-0 bg-indigo-900/20 border border-indigo-500/30 text-indigo-400 px-3 py-2 rounded hover:bg-indigo-900/40 transition-all text-xs font-bold flex items-center justify-center gap-2"
+                                    title="Restaurar PV e Slots de Magia"
+                                >
+                                    <span>⛺</span> Longo
+                                </button>
+                            </>
                         )}
-                        
+
                         {id === 'novo' && (
-                            <button 
-                                onClick={() => { /* Logic is handled by auto-save or context, but usually this button is ceremonial or triggers a specific save if manual */ }} 
+                            <button
+                                onClick={handleSaveNewCharacter}
                                 className="w-full md:w-auto px-6 py-2 font-bold rounded-md bg-gradient-to-r from-rpg-gold to-yellow-600 text-rpg-dark hover:from-yellow-400 hover:to-rpg-gold shadow-lg transform hover:scale-105 transition-all"
                             >
                                 Salvar Novo Personagem
@@ -1428,84 +1441,192 @@ export default function CharacterSheetPage() {
                             )}
                         </div>
                     </div>
-                    <div className="flex flex-wrap items-end gap-3 w-full md:w-auto">
-                        <div className="w-full sm:w-40"><label className="block text-[10px] font-bold text-rpg-gold uppercase tracking-wider mb-1 font-cinzel">Classe</label><button disabled={isReadOnly} onClick={() => openSelectionModal('class')} className={`w-full bg-rpg-slate border border-rpg-gold/20 rounded-md px-3 py-2 text-left hover:border-rpg-gold/50 font-medieval text-sm ${isReadOnly ? 'opacity-70 cursor-not-allowed' : ''}`}>{character.class || 'Selecione...'}</button></div>
-                        <div className="w-20 text-center group">
-                            <label className="block text-[10px] font-bold text-rpg-gold uppercase tracking-wider mb-1 font-cinzel transition-colors group-hover:text-yellow-400">Nível</label>
-                            <div className="relative flex items-center justify-between bg-rpg-slate border-2 border-rpg-gold/30 rounded-lg p-1 shadow-lg shadow-black/40 group-hover:border-rpg-gold transition-all h-[38px]">
-                                <button
-                                    onClick={() => handleFieldChange('level', Math.max(1, (character.level || 1) - 1))}
-                                    disabled={isReadOnly}
-                                    className={`w-6 h-full flex items-center justify-center bg-rpg-dark/50 hover:bg-rpg-red/20 text-rpg-grey hover:text-rpg-red rounded transition-all font-bold z-10 ${isReadOnly ? 'opacity-50 cursor-not-allowed' : ''}`}
-                                >-</button>
-
-                                <span className="text-2xl font-black text-rpg-gold font-medieval drop-shadow-glow-gold px-1">{character.level || 1}</span>
-
-                                <button
-                                    onClick={() => handleFieldChange('level', Math.min(20, (character.level || 1) + 1))}
-                                    disabled={isReadOnly}
-                                    className={`w-6 h-full flex items-center justify-center bg-rpg-dark/50 hover:bg-green-900/20 text-rpg-grey hover:text-green-500 rounded transition-all font-bold z-10 ${isReadOnly ? 'opacity-50 cursor-not-allowed' : ''}`}
-                                >+</button>
-                            </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 w-full lg:w-[600px]">
+                        {/* Linha 1: Classe e Raça */}
+                        <div className="flex flex-col gap-1">
+                            <label className="block text-[10px] font-bold text-rpg-gold uppercase tracking-wider mb-1 font-cinzel">Classe</label>
+                            <button disabled={isReadOnly} onClick={() => openSelectionModal('class')} className={`w-full bg-rpg-slate border border-rpg-gold/20 rounded-md px-3 py-2 text-left hover:border-rpg-gold/50 font-medieval text-sm ${isReadOnly ? 'opacity-70 cursor-not-allowed' : ''}`}>
+                                {character.class || 'Selecione...'}
+                            </button>
                         </div>
-                        <div className="w-full md:w-64">
-                            <label className="block text-[10px] font-bold text-rpg-gold uppercase tracking-wider mb-1 font-cinzel">Experiência</label>
-                            <div className="bg-rpg-slate border border-rpg-gold/20 rounded-md p-2">
-                                {/* XP Info */}
-                                <div className="flex justify-between items-center mb-1">
-                                    <span className="text-[10px] text-rpg-grey font-cinzel truncate">
-                                        {(() => {
-                                           try {
-                                                const { getXPForNextLevel } = require('@/lib/xp-progression');
-                                                const nextXP = getXPForNextLevel(character.level);
-                                                return character.level >= 20 ? 'Max' : `${character.experience} / ${nextXP} XP`;
-                                           } catch (e) { return `${character.experience} XP`; }
-                                        })()}
-                                    </span>
-                                    {!isReadOnly && (
-                                        <button
-                                            onClick={() => {
-                                                const amount = prompt('Quanto XP adicionar?', '100');
-                                                if (amount && !isNaN(Number(amount))) {
-                                                    handleFieldChange('experience', (character.experience || 0) + Number(amount));
-                                                }
-                                            }}
-                                            className="text-[9px] bg-rpg-gold/20 hover:bg-rpg-gold/30 text-rpg-gold px-2 py-0.5 rounded font-bold transition-all whitespace-nowrap"
-                                        >
-                                            + XP
-                                        </button>
+                        <div className="flex flex-col gap-1">
+                            <label className="block text-[10px] font-bold text-rpg-gold uppercase tracking-wider mb-1 font-cinzel text-left">Raça</label>
+                            <button disabled={isReadOnly} onClick={() => openSelectionModal('race')} className={`w-full bg-rpg-slate border border-rpg-gold/20 rounded-md px-3 py-2 text-left hover:border-rpg-gold/50 font-medieval text-sm ${isReadOnly ? 'opacity-70 cursor-not-allowed' : ''}`}>
+                                {character.race || 'Selecione...'}
+                            </button>
+                        </div>
+
+                        {/* Linha 2: Nível e Experiência (Lado a Lado) */}
+                        <div className="flex items-end gap-3 col-span-1 sm:col-span-2">
+                            <div className="w-24 text-center group shrink-0">
+                                <label className="block text-[10px] font-bold text-rpg-gold uppercase tracking-wider mb-1 font-cinzel transition-colors group-hover:text-yellow-400">Nível</label>
+                                <div className="relative flex items-center justify-between bg-rpg-slate border-2 border-rpg-gold/30 rounded-lg p-1 shadow-lg shadow-black/40 group-hover:border-rpg-gold transition-all h-[42px]">
+                                    <button
+                                        onClick={() => handleFieldChange('level', Math.max(1, (character.level || 1) - 1))}
+                                        disabled={isReadOnly}
+                                        className={`w-7 h-full flex items-center justify-center bg-rpg-dark/50 hover:bg-rpg-red/20 text-rpg-grey hover:text-rpg-red rounded transition-all font-bold z-10 ${isReadOnly ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                    >-</button>
+                                    <span className="text-2xl font-black text-rpg-gold font-medieval drop-shadow-glow-gold px-1">{character.level || 1}</span>
+                                    <button
+                                        onClick={() => handleFieldChange('level', Math.min(20, (character.level || 1) + 1))}
+                                        disabled={isReadOnly}
+                                        className={`w-7 h-full flex items-center justify-center bg-rpg-dark/50 hover:bg-green-900/20 text-rpg-grey hover:text-green-500 rounded transition-all font-bold z-10 ${isReadOnly ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                    >+</button>
+                                </div>
+                            </div>
+
+                            <div className="flex-grow min-w-0">
+                                <label className="block text-[10px] font-bold text-rpg-gold uppercase tracking-wider mb-1 font-cinzel">Experiência</label>
+                                <div className="bg-rpg-slate border border-rpg-gold/20 rounded-md p-2 flex flex-col gap-1">
+                                    {/* XP Info */}
+                                    <div className="flex justify-between items-center mb-1">
+                                        <span className="text-[10px] text-rpg-grey font-cinzel truncate">
+                                            {(() => {
+                                                try {
+                                                    const { getXPForNextLevel } = require('@/lib/xp-progression');
+                                                    const nextXP = getXPForNextLevel(character.level);
+                                                    return character.level >= 20 ? 'Max' : `${character.experience} / ${nextXP} XP`;
+                                                } catch (e) { return `${character.experience} XP`; }
+                                            })()}
+                                        </span>
+                                        {!isReadOnly && (
+                                            <button
+                                                onClick={() => {
+                                                    setXpAmountToAdd('100');
+                                                    setIsXPModalOpen(true);
+                                                }}
+                                                className="text-[9px] bg-rpg-gold/20 hover:bg-rpg-gold/30 text-rpg-gold px-2 py-0.5 rounded font-bold transition-all whitespace-nowrap"
+                                            >
+                                                + XP
+                                            </button>
+                                        )}
+                                    </div>
+                                    {/* Progress Bar */}
+                                    {character.level < 20 && (
+                                        <div className="h-2 bg-black/40 rounded-full border border-white/5 overflow-hidden mt-1 mx-0.5">
+                                            <div
+                                                className="h-full bg-gradient-to-r from-rpg-gold/60 to-rpg-gold transition-all duration-500 shadow-[0_0_8px_rgba(212,175,55,0.4)]"
+                                                style={{
+                                                    width: `${(() => {
+                                                        try {
+                                                            const { getXPProgress } = require('@/lib/xp-progression');
+                                                            return getXPProgress(character.level, character.experience);
+                                                        } catch (e) { return 0; }
+                                                    })()}%`
+                                                }}
+                                            />
+                                        </div>
                                     )}
                                 </div>
-                                {/* Progress Bar */}
-                                {character.level < 20 && (
-                                    <div className="h-1.5 bg-black/40 rounded-full border border-white/5 overflow-hidden">
-                                        <div
-                                            className="h-full bg-gradient-to-r from-rpg-gold/60 to-rpg-gold transition-all duration-500"
-                                            style={{
-                                                width: `${(() => {
-                                                    try {
-                                                        const { getXPProgress } = require('@/lib/xp-progression');
-                                                        return getXPProgress(character.level, character.experience);
-                                                    } catch (e) { return 0; }
-                                                })()}%`
-                                            }}
-                                        />
-                                    </div>
-                                )}
                             </div>
                         </div>
-                        <div className="w-full sm:w-40"><label className="block text-[10px] font-bold text-rpg-gold uppercase tracking-wider mb-1 font-cinzel text-left">Raça</label><button disabled={isReadOnly} onClick={() => openSelectionModal('race')} className={`w-full bg-rpg-slate border border-rpg-gold/20 rounded-md px-3 py-2 text-left hover:border-rpg-gold/50 font-medieval text-sm ${isReadOnly ? 'opacity-70 cursor-not-allowed' : ''}`}>{character.race || 'Selecione...'}</button></div>
                     </div>
                 </header>
+
+                {/* Indicador Visual de Efeitos Ativos */}
+                {(() => {
+                    const activeEffects = character.activeEffects || [];
+                    const activeConditions = character.conditions || [];
+                    const allActiveIds = [...activeEffects, ...activeConditions];
+
+                    if (allActiveIds.length === 0) return null;
+
+                    // Categorizar efeitos
+                    const benefitIds = ['rage', 'reckless', 'inspiration', 'counter-charm', 'bless', 'sanctuary', 'shield-faith', 'wild-shape', 'barkskin', 'action-surge', 'second-wind', 'indomitable', 'evasion', 'uncanny-dodge', 'flurry', 'patient-defense', 'lay-hands', 'divine-smite', 'aura-protection', 'hunters-mark', 'favored-foe', 'metamagic', 'tides-chaos', 'invocation', 'arcane-recovery', 'spell-mastery', 'sneak-attack', 'armor-agathys', 'multiattack', 'mirror-image', 'invisivel'];
+
+                    const benefits = allActiveIds.filter(id => benefitIds.includes(id));
+                    const debuffs = allActiveIds.filter(id => !benefitIds.includes(id));
+
+                    const hasBenefits = benefits.length > 0;
+                    const hasDebuffs = debuffs.length > 0;
+
+                    // Função para obter nome do efeito
+                    const getEffectName = (id: string) => {
+                        const classEffect = Object.values(CLASS_EFFECTS).flat().find(e => e.id === id);
+                        if (classEffect) return classEffect.name;
+                        const commonCondition = COMMON_CONDITIONS.find(c => c.id === id);
+                        if (commonCondition) return commonCondition.name;
+                        return id;
+                    };
+
+                    return (
+                        <div className="px-6 py-4 border-y border-rpg-gold/20 bg-gradient-to-r from-black/40 via-rpg-dark/60 to-black/40">
+                            <div className="max-w-7xl mx-auto">
+                                <div className="flex items-center gap-4 flex-wrap">
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-rpg-gold font-cinzel text-xs uppercase tracking-widest font-bold">⚡ Efeitos Ativos</span>
+                                        <span className="bg-rpg-gold/20 text-rpg-gold px-2 py-0.5 rounded-full text-[10px] font-bold">{allActiveIds.length}</span>
+                                    </div>
+
+                                    <div className="flex-1 flex gap-2 flex-wrap">
+                                        {/* Benefícios */}
+                                        {hasBenefits && (
+                                            <div className="flex gap-1.5 flex-wrap">
+                                                {benefits.map(id => {
+                                                    const style = getEffectStyle(id);
+                                                    return (
+                                                        <div
+                                                            key={id}
+                                                            className={`px-3 py-1.5 rounded-lg border ${style.borderClass} ${style.bgClass} flex items-center gap-2 animate-pulse-soft`}
+                                                        >
+                                                            <span className={`text-xs ${style.iconBg}`}>✨</span>
+                                                            <span className="text-xs font-bold text-green-100">{getEffectName(id)}</span>
+                                                            {!isReadOnly && (
+                                                                <button
+                                                                    onClick={() => toggleActiveEffect(id)}
+                                                                    className="text-[10px] hover:text-red-400 transition-colors ml-1"
+                                                                    title="Remover"
+                                                                >
+                                                                    ✕
+                                                                </button>
+                                                            )}
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        )}
+
+                                        {/* Malefícios */}
+                                        {hasDebuffs && (
+                                            <div className="flex gap-1.5 flex-wrap">
+                                                {debuffs.map(id => {
+                                                    const style = getEffectStyle(id);
+                                                    return (
+                                                        <div
+                                                            key={id}
+                                                            className={`px-3 py-1.5 rounded-lg border ${style.borderClass} ${style.bgClass} flex items-center gap-2 animate-pulse-soft`}
+                                                        >
+                                                            <span className={`text-xs ${style.iconBg}`}>⚠</span>
+                                                            <span className="text-xs font-bold text-red-100">{getEffectName(id)}</span>
+                                                            {!isReadOnly && (
+                                                                <button
+                                                                    onClick={() => toggleActiveEffect(id)}
+                                                                    className="text-[10px] hover:text-white transition-colors ml-1"
+                                                                    title="Remover"
+                                                                >
+                                                                    ✕
+                                                                </button>
+                                                            )}
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    );
+                })()}
 
                 {/* Dashboards Ficha 2.0 */}
                 <div className="px-6 space-y-4">
                     {/* Botão Adicionar Efeito */}
                     <button
                         onClick={() => setIsEffectModalOpen(true)}
-                        className="w-full py-3 border border-dashed border-indigo-500/40 text-indigo-400 rounded-lg text-sm hover:border-indigo-500 hover:text-indigo-300 hover:bg-indigo-900/10 transition-all font-bold uppercase tracking-widest flex items-center justify-center gap-2 group"
+                        className="w-full py-4 border border-dashed border-indigo-500/60 text-indigo-300 rounded-lg text-base hover:border-indigo-500 hover:text-indigo-200 hover:bg-indigo-900/20 transition-all font-bold uppercase tracking-[0.2em] flex items-center justify-center gap-3 group shadow-lg shadow-indigo-500/10"
                     >
-                        <span className="text-lg">✨</span>
+                        <span className="text-xl">✨</span>
                         <span>Adicionar Efeito</span>
                     </button>
 
@@ -1513,62 +1634,126 @@ export default function CharacterSheetPage() {
                 </div>
 
                 {/* Tabs Navigation */}
-                <div className="mb-6 border-b border-rpg-gold/20">
-                    <div className="flex flex-wrap gap-1">
+                <div className="mb-6 border-b-2 border-purple-500/20 bg-gradient-to-r from-purple-900/10 via-transparent to-purple-900/10 rounded-t-lg overflow-hidden">
+                    <div className="flex overflow-x-auto no-scrollbar gap-0.5 px-2 snap-x">
                         {(['Principal', 'Equipamento', 'Habilidades', 'Magias', 'Personalidade'] as const).map(tab => (
                             <TabButton key={tab} activeTab={activeTab} tabName={tab} onClick={setActiveTab} />
                         ))}
                     </div>
                 </div>
 
-                <main>
+                <main className="max-w-5xl mx-auto bg-gradient-to-b from-purple-950/20 via-transparent to-purple-900/10 rounded-b-lg p-3 sm:p-6 border border-t-0 border-purple-500/20 shadow-lg">
                     {/* ABA PRINCIPAL */}
                     {activeTab === 'Principal' && (
                         <div className="space-y-6 animate-fade-in">
-                            <div className="flex gap-2 overflow-x-auto pb-4">
+                            {/* Grid de Atributos - Heroic Row with Horizontal Scroll */}
+                            <div className="flex gap-2 overflow-x-auto pb-4 no-scrollbar -mx-2 px-2 snap-x sm:justify-center sm:overflow-visible">
                                 {ATTRIBUTE_KEYS.map((key) => (
-                                    <AttributeInput key={key} label={ATTRIBUTE_DISPLAY_NAMES[key].slice(0, 3)} value={character.attributes[key]} onChange={(val) => handleNestedChange(`attributes.${key}`, val)} disabled={isReadOnly} />
+                                    <div key={key} className="snap-center">
+                                        <AttributeInput label={ATTRIBUTE_DISPLAY_NAMES[key].slice(0, 3)} value={character.attributes[key]} onChange={(val) => handleNestedChange(`attributes.${key}`, val)} disabled={isReadOnly} />
+                                    </div>
                                 ))}
                             </div>
 
-                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                                <div className="p-4 bg-rpg-panel border border-rpg-gold/20 rounded-lg shadow-md text-center backdrop-blur-sm group hover:border-rpg-gold/40 transition-all">
-                                    <h4 className="text-xs font-bold text-rpg-gold uppercase mb-2 tracking-widest font-cinzel">Pontos de Vida</h4>
-                                    <div className="flex items-center justify-center gap-2 mb-2">
-                                        <input type="number" disabled={isReadOnly} value={character.currentHp === 0 ? '0' : (character.currentHp || '')} onChange={(e) => handleFieldChange('currentHp', e.target.value === '' ? '' : parseInt(e.target.value))} className={`w-16 text-3xl font-bold text-center bg-transparent border-b-2 border-rpg-gold/30 text-rpg-parchment font-medieval ${isReadOnly ? 'opacity-70' : ''}`} />
-                                        <span className="text-xl text-rpg-grey/50">/</span>
-                                        <input type="number" disabled={isReadOnly} value={character.maxHp === 0 ? '0' : (character.maxHp || '')} onChange={(e) => handleFieldChange('maxHp', e.target.value === '' ? '' : parseInt(e.target.value))} className={`w-16 text-xl font-bold text-center bg-transparent text-rpg-grey font-medieval ${isReadOnly ? 'opacity-70' : ''}`} />
-                                    </div>
-                                    <div className="flex justify-center gap-2">
-                                        <button disabled={isReadOnly} onClick={() => updateCharacter(c => ({ ...c, currentHp: Math.max(0, c.currentHp - 1) }))} className={`px-2 py-1 bg-rpg-red/20 text-red-200 border border-rpg-red/30 rounded text-xs font-bold hover:bg-rpg-red/40 transition-colors ${isReadOnly ? 'opacity-50 cursor-not-allowed' : ''}`}>-1</button>
-                                        <button disabled={isReadOnly} onClick={() => updateCharacter(c => ({ ...c, currentHp: Math.min(c.maxHp, c.currentHp + 1) }))} className={`px-2 py-1 bg-green-900/30 text-green-200 border border-green-700/30 rounded text-xs font-bold hover:bg-green-700/40 transition-colors ${isReadOnly ? 'opacity-50 cursor-not-allowed' : ''}`}>+1</button>
-                                    </div>
-                                </div>
-                                <div className="p-4 bg-rpg-panel border border-rpg-gold/20 rounded-lg shadow-md text-center backdrop-blur-sm group hover:border-rpg-gold/40 transition-all">
-                                    <h4 className="text-xs font-bold text-rpg-gold uppercase mb-2 tracking-widest font-cinzel">PV Temporários</h4>
-                                    <input type="number" disabled={isReadOnly} value={character.temporaryHp === 0 ? '0' : (character.temporaryHp || '')} onChange={(e) => handleFieldChange('temporaryHp', e.target.value === '' ? '' : parseInt(e.target.value))} className={`w-full text-3xl font-bold text-center bg-transparent border-b-2 border-rpg-gold/30 text-blue-200 font-medieval ${isReadOnly ? 'opacity-70' : ''}`} />
-                                </div>
-                                <StatBlock label="Classe de Armadura" value={character.armorClass} />
-                                <StatBlock label="Iniciativa" value={character.initiative >= 0 ? `+${character.initiative}` : character.initiative} />
+                            {/* Vitality Center - Unified Health Management */}
+                            <div className="bg-rpg-panel border-t-2 border-rpg-gold/40 border-x border-b border-rpg-gold/10 rounded-xl shadow-2xl p-3 sm:p-6 mb-4 relative backdrop-blur-md overflow-hidden animate-fade-in">
+                                <div className="absolute top-0 left-1/2 -translate-x-1/2 w-20 h-[1px] bg-rpg-gold shadow-[0_0_10px_rgba(212,175,55,0.4)]"></div>
 
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                    <div className="p-4 bg-rpg-panel border border-rpg-gold/20 rounded-lg shadow-md text-center backdrop-blur-sm group hover:border-rpg-gold/40 transition-colors">
-                                        <h4 className="text-sm font-semibold text-rpg-gold text-center font-medieval tracking-wide">Deslocamento</h4>
-                                        <div className="flex items-center justify-center gap-1">
-                                            <input type="number" disabled={isReadOnly} value={character.speed === 0 ? '0' : (character.speed || '')} onChange={(e) => handleFieldChange('speed', e.target.value === '' ? '' : parseInt(e.target.value))} className={`w-16 text-3xl font-bold text-center bg-transparent border-b-2 border-rpg-gold/30 text-rpg-parchment font-medieval ${isReadOnly ? 'opacity-70' : ''}`} />
-                                            <span className="text-rpg-grey font-medieval">m</span>
+                                <div className="flex flex-col gap-3 sm:gap-6">
+                                    {/* Line 1: Main HP & Bar */}
+                                    <div className="flex flex-col items-center justify-center py-2">
+                                        <div className="flex items-center gap-3 sm:gap-6 mb-3 sm:mb-4">
+                                            <button
+                                                disabled={isReadOnly}
+                                                onClick={() => {
+                                                    updateCharacter(c => ({ ...c, currentHp: Math.max(0, c.currentHp - 1) }));
+                                                    notifyEncounter({ type: 'ability-use', message: 'Sofreu 1 de dano', icon: '🩸', severity: 'alert' });
+                                                }}
+                                                className="w-10 h-10 sm:w-12 sm:h-12 flex items-center justify-center bg-rpg-red/10 border border-rpg-red/30 rounded-full text-red-500 font-bold hover:bg-rpg-red/20 active:scale-90 transition-all shadow-md text-xs sm:text-lg">-1</button>
+
+                                            <div className="flex items-center gap-1 sm:gap-2">
+                                                <input type="number" inputMode="numeric" disabled={isReadOnly} value={character.currentHp === 0 ? '0' : (character.currentHp || '')} onChange={(e) => handleFieldChange('currentHp', e.target.value === '' ? '' : parseInt(e.target.value))} className="w-20 sm:w-28 text-4xl sm:text-6xl font-bold text-center bg-transparent text-rpg-parchment font-medieval focus:outline-none drop-shadow-[0_2px_4px_rgba(0,0,0,0.5)]" />
+                                                <span className="text-2xl sm:text-4xl text-rpg-gold/40 font-medieval">/</span>
+                                                <input type="number" inputMode="numeric" disabled={isReadOnly} value={character.maxHp === 0 ? '0' : (character.maxHp || '')} onChange={(e) => handleFieldChange('maxHp', e.target.value === '' ? '' : parseInt(e.target.value))} className="w-16 sm:w-24 text-2xl sm:text-3xl font-bold text-center bg-transparent text-rpg-grey font-medieval focus:outline-none" />
+                                            </div>
+
+                                            <button
+                                                disabled={isReadOnly}
+                                                onClick={() => {
+                                                    updateCharacter(c => ({ ...c, currentHp: Math.min(c.maxHp, c.currentHp + 1) }));
+                                                    notifyEncounter({ type: 'ability-use', message: 'Recuperou 1 PV', icon: '💚', severity: 'success' });
+                                                }}
+                                                className="w-10 h-10 sm:w-12 sm:h-12 flex items-center justify-center bg-green-900/20 border border-green-600/30 rounded-full text-green-500 font-bold hover:bg-green-900/30 active:scale-90 transition-all shadow-md text-xs sm:text-lg">+1</button>
+                                        </div>
+
+                                        {/* Progress Bar - Slimmer on mobile */}
+                                        <div className="h-2 sm:h-3 w-full max-w-[300px] sm:max-w-xl bg-black/40 rounded-full border border-white/5 overflow-hidden shadow-inner relative">
+                                            <div
+                                                className={`h-full transition-all duration-700 rounded-full ${(character.currentHp / character.maxHp) > 0.5 ? 'bg-gradient-to-r from-green-600 to-green-400' :
+                                                    (character.currentHp / character.maxHp) > 0.2 ? 'bg-gradient-to-r from-yellow-600 to-yellow-400' : 'bg-gradient-to-r from-red-700 to-red-500 shadow-[0_0_10px_rgba(239,68,68,0.5)]'
+                                                    }`}
+                                                style={{ width: `${Math.min(100, (character.currentHp / character.maxHp) * 100)}%` }}
+                                            />
                                         </div>
                                     </div>
-                                    <div className="p-5 bg-rpg-panel border border-rpg-gold/10 rounded-lg text-center flex flex-col justify-center shadow-lg backdrop-blur-sm">
-                                        <span className="text-sm text-rpg-gold font-bold uppercase mb-2 tracking-widest">Bônus de Proficiência</span>
-                                        <span className="text-5xl font-bold text-rpg-parchment font-medieval">+{character.proficiencyBonus}</span>
+                                </div>
+                            </div>
+
+                            {/* Secondary Stats Grid */}
+                            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+                                <StatBlock label="Classe de Armadura" value={character.armorClass} subLabel="CA" />
+                                <StatBlock label="Iniciativa" value={character.initiative >= 0 ? `+${character.initiative}` : character.initiative} subLabel="Mod. Destreza" />
+                                <StatBlock label="Deslocamento" value={`${character.speed}m`} subLabel="Caminhada" />
+                                <div className="p-3 sm:p-5 bg-rpg-panel border border-rpg-gold/10 rounded-lg shadow-lg text-center flex flex-col justify-center items-center backdrop-blur-md group hover:border-rpg-gold/30 transition-all min-h-[90px] sm:min-h-[120px] relative">
+                                    <h4 className="text-[9px] sm:text-[11px] font-bold text-rpg-gold uppercase mb-1 sm:mb-2 tracking-[0.1em] sm:tracking-[0.15em] font-cinzel">Proficiência</h4>
+                                    <div className="text-2xl sm:text-4xl font-bold text-rpg-parchment font-medieval">+{character.proficiencyBonus}</div>
+                                    <div className="w-1/4 h-[1px] bg-rpg-gold/20 mt-2 sm:mt-4 rounded-full"></div>
+                                </div>
+                            </div>
+
+                            {/* Deconstructed Stats: Death Saves & Temp HP */}
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                {/* HP Temporário - Independent Block */}
+                                <div className="bg-blue-900/10 border border-blue-500/20 p-4 rounded-xl text-center shadow-inner backdrop-blur-sm group hover:border-blue-500/40 transition-all">
+                                    <h5 className="text-[10px] sm:text-[11px] font-bold text-blue-400 uppercase tracking-widest font-cinzel mb-2">HP Temporário</h5>
+                                    <div className="flex items-center justify-center gap-4">
+                                        <button disabled={isReadOnly} onClick={() => handleFieldChange('temporaryHp', Math.max(0, (character.temporaryHp || 0) - 1))} className="w-8 h-8 rounded-full bg-blue-500/10 border border-blue-500/30 text-blue-400 flex items-center justify-center hover:bg-blue-500/20 active:scale-90">-</button>
+                                        <input
+                                            type="number"
+                                            inputMode="numeric"
+                                            disabled={isReadOnly}
+                                            value={character.temporaryHp || 0}
+                                            onChange={(e) => handleFieldChange('temporaryHp', parseInt(e.target.value) || 0)}
+                                            className="w-16 text-3xl font-bold text-blue-200 bg-transparent text-center font-medieval outline-none"
+                                        />
+                                        <button disabled={isReadOnly} onClick={() => handleFieldChange('temporaryHp', (character.temporaryHp || 0) + 1)} className="w-8 h-8 rounded-full bg-blue-500/10 border border-blue-500/30 text-blue-400 flex items-center justify-center hover:bg-blue-500/20 active:scale-90">+</button>
                                     </div>
+                                    <div className="w-12 h-[1px] bg-blue-500/20 mx-auto mt-2"></div>
                                 </div>
 
-                                <div className="p-5 bg-rpg-panel border border-rpg-gold/10 rounded-lg shadow-md">
-                                    <h4 className="font-bold text-rpg-gold mb-3 font-cinzel tracking-wide text-lg border-b border-rpg-gold/10 pb-2 text-center sm:text-left">Resistências à Morte</h4>
-                                    <div className="flex justify-between items-center mb-2"><span className="text-sm text-rpg-grey font-bold uppercase tracking-widest">Sucessos</span> <div className="flex gap-2">{[1, 2, 3].map(i => <input key={i} type="checkbox" disabled={isReadOnly} checked={character.deathSaves?.successes >= i} onChange={(e) => handleNestedChange('deathSaves.successes', e.target.checked ? i : i - 1)} className={`w-5 h-5 rounded-full accent-green-600 ${isReadOnly ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`} />)}</div></div>
-                                    <div className="flex justify-between items-center"><span className="text-sm text-rpg-grey font-bold uppercase tracking-widest">Falhas</span> <div className="flex gap-2">{[1, 2, 3].map(i => <input key={i} type="checkbox" disabled={isReadOnly} checked={character.deathSaves?.failures >= i} onChange={(e) => handleNestedChange('deathSaves.failures', e.target.checked ? i : i - 1)} className={`w-5 h-5 rounded-full accent-rpg-red ${isReadOnly ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`} />)}</div></div>
+                                {/* Resistência à Morte - Independent Block */}
+                                <div className="bg-red-900/10 border border-red-500/20 p-4 rounded-xl shadow-inner backdrop-blur-sm group hover:border-red-500/40 transition-all">
+                                    <h5 className="text-[10px] sm:text-[11px] font-bold text-red-400 uppercase tracking-widest font-cinzel mb-3 text-center">Resistência à Morte</h5>
+                                    <div className="space-y-5 max-w-[200px] mx-auto py-2">
+                                        <div className="flex justify-between items-center gap-6">
+                                            <span className="text-[12px] text-green-500 font-bold tracking-[0.2em]">SUCESSO</span>
+                                            <div className="flex gap-3">
+                                                {[1, 2, 3].map(i => (
+                                                    <div key={i} onClick={() => !isReadOnly && handleNestedChange('deathSaves.successes', character.deathSaves?.successes >= i ? i - 1 : i)}
+                                                        className={`w-5 h-5 sm:w-6 sm:h-6 rounded-sm rotate-45 border-2 transition-all cursor-pointer ${character.deathSaves?.successes >= i ? 'bg-green-500 border-green-400 shadow-[0_0_12px_rgba(34,197,94,0.6)]' : 'bg-black/40 border-white/10 hover:border-rpg-gold/40'}`} />
+                                                ))}
+                                            </div>
+                                        </div>
+                                        <div className="flex justify-between items-center gap-6">
+                                            <span className="text-[12px] text-red-500 font-bold tracking-[0.2em]">FALHA</span>
+                                            <div className="flex gap-3">
+                                                {[1, 2, 3].map(i => (
+                                                    <div key={i} onClick={() => !isReadOnly && handleNestedChange('deathSaves.failures', character.deathSaves?.failures >= i ? i - 1 : i)}
+                                                        className={`w-5 h-5 sm:w-6 sm:h-6 rounded-sm rotate-45 border-2 transition-all cursor-pointer ${character.deathSaves?.failures >= i ? 'bg-red-500 border-red-400 shadow-[0_0_12px_rgba(239,68,68,0.6)]' : 'bg-black/40 border-white/10 hover:border-rpg-gold/40'}`} />
+                                                ))}
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -2003,9 +2188,25 @@ export default function CharacterSheetPage() {
                                 <StatBlock label="CD de Resistência" value={character.spellcasting?.saveDc || 0} />
                                 <StatBlock label="Bônus de Ataque" value={`+${character.spellcasting?.attackBonus || 0}`} />
                             </div>
+
+                            {/* Exibição de Slots de Magia */}
+                            {character.class && character.spells && character.spellSlotsCurrent && (
+                                <SpellSlotsDisplay
+                                    spellSlotsCurrent={character.spellSlotsCurrent}
+                                    characterClass={character.class}
+                                    characterLevel={character.level || 1}
+                                    spells={character.spells}
+                                    onUseSpell={handleSpellUsed}
+                                    compact={false}
+                                />
+                            )}
+
                             <div className="flex justify-end mb-2">
                                 {!isReadOnly && (
-                                    <button onClick={() => setSpellSelectOpen(true)} className="px-4 py-2 rounded bg-rpg-gold text-rpg-dark font-bold hover:bg-yellow-400 transition-all shadow-glow-gold/10 uppercase text-xs tracking-wider">+ Selecionar Magia</button>
+                                    <button onClick={() => setSpellSelectOpen(true)} className="px-5 py-2.5 rounded-lg bg-rpg-gold text-rpg-dark font-bold hover:shadow-glow-gold transition-all shadow-md uppercase text-xs tracking-wider font-cinzel" style={{
+                                        background: 'linear-gradient(135deg, #FFB800 0%, #FF7848 100%)',
+                                        boxShadow: '0 0 16px rgba(255, 120, 72, 0.4)'
+                                    }}>+ Adicionar Magia</button>
                                 )}
                             </div>
 
@@ -2015,29 +2216,37 @@ export default function CharacterSheetPage() {
                                 if (cantrips.length > 0) {
                                     return (
                                         <div className="mb-8">
-                                            <h3 className="text-sm font-bold text-rpg-gold font-cinzel uppercase tracking-widest mb-3 border-b border-rpg-gold/20 pb-1 flex items-center gap-2">
-                                                <span className="text-lg">✨</span> Truques & Talentos Mágicos
-                                            </h3>
+                                            <div className="bg-gradient-to-r from-purple-900/30 to-purple-800/10 border border-purple-500/20 rounded-lg p-4 shadow-md hover:border-purple-500/40 transition-all mb-4">
+                                                <div className="flex items-center justify-between">
+                                                    <div className="flex items-center gap-3">
+                                                        <span className="text-2xl">✨</span>
+                                                        <h3 className="text-base font-bold text-amber-400 font-cinzel uppercase tracking-widest">Truques & Talentos Mágicos</h3>
+                                                    </div>
+                                                    <span className="text-[11px] bg-purple-500/20 border border-purple-400/30 text-purple-200 uppercase tracking-widest font-semibold px-3 py-1 rounded-full">∞ Ilimitados</span>
+                                                </div>
+                                                <p className="text-[11px] text-rpg-grey/70 uppercase tracking-widest mt-2">Magia de nível 0 - Sempre disponível</p>
+                                            </div>
                                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                                 {cantrips.sort((a, b) => (a.name || '').localeCompare(b.name || '')).map((spell, idx) => (
-                                                    <div key={spell.id || idx} className="bg-rpg-panel border border-rpg-gold/10 hover:border-rpg-gold/30 rounded-lg p-3 transition-all relative group">
-                                                        <div className="flex justify-between items-center mb-1">
-                                                            <span className="font-bold text-rpg-parchment font-medieval text-lg group-hover:text-rpg-gold transition-colors">{spell.name}</span>
-                                                            <div className="flex gap-1">
+                                                    <div key={spell.id || idx} className="bg-gradient-to-br from-slate-900/60 to-slate-950/40 border border-purple-500/20 hover:border-purple-500/40 rounded-lg p-4 transition-all relative shadow-md hover:shadow-lg hover:shadow-purple-500/10">
+                                                        <div className="flex justify-between items-start mb-2">
+                                                            <span className="font-bold text-amber-300 font-medieval text-base flex-grow">{spell.name}</span>
+                                                            <div className="flex gap-1 ml-2 flex-shrink-0">
                                                                 {spell.concentration && <span className="text-[8px] bg-blue-900/60 text-blue-200 px-1.5 py-0.5 rounded font-black tracking-tighter" title="Concentração">C</span>}
                                                                 {spell.ritual && <span className="text-[8px] bg-amber-900/60 text-amber-200 px-1.5 py-0.5 rounded font-black tracking-tighter" title="Ritual">R</span>}
+                                                                <span className="text-[8px] bg-green-900/60 text-green-200 px-1.5 py-0.5 rounded font-black tracking-tighter" title="Ilimitado">∞</span>
                                                             </div>
                                                         </div>
-                                                        <div className="flex flex-wrap gap-x-3 gap-y-1 mb-2 text-[10px] text-rpg-grey/70 uppercase font-sans tracking-tight border-b border-rpg-gold/5 pb-1">
+                                                        <div className="flex flex-wrap gap-x-3 gap-y-1 mb-2 text-[10px] text-rpg-grey/70 uppercase font-sans tracking-tight border-b border-purple-500/10 pb-2">
                                                             <span>{formatSpellValue(spell.castingTime)}</span>
                                                             <span>{formatSpellValue(spell.range)}</span>
                                                             <span>{formatSpellValue(spell.duration)}</span>
-                                                            <span className="text-purple-400/60 italic">{spell.school}</span>
+                                                            <span className="text-purple-400/70 italic">{spell.school}</span>
                                                         </div>
-                                                        <p className="text-xs text-rpg-grey/90 leading-relaxed line-clamp-3 group-hover:line-clamp-none transition-all duration-300">{spell.description}</p>
+                                                        <p className="text-xs text-rpg-grey/80 leading-relaxed">{spell.description}</p>
                                                         {!isReadOnly && (
-                                                            <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity bg-rpg-panel shadow-sm rounded-full">
-                                                                <button onClick={() => handleRemoveSpell(spell.name)} className="p-1 text-rpg-red/60 hover:text-rpg-red transition-colors" title="Esquecer Magia">
+                                                            <div className="flex justify-end mt-3">
+                                                                <button onClick={() => handleRemoveSpell(spell.name)} className="p-1.5 text-rpg-red/70 hover:text-rpg-red transition-colors" title="Esquecer Magia">
                                                                     <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
                                                                 </button>
                                                             </div>
@@ -2052,7 +2261,10 @@ export default function CharacterSheetPage() {
                             })()}
 
                             {/* Magias Niveladas e Slots */}
-                            <div className="space-y-6">
+                            <div className="space-y-3 mt-6">
+                                <h3 className="text-base font-bold text-amber-400 font-cinzel uppercase tracking-widest flex items-center gap-2 ml-1 mb-4">
+                                    <span className="text-lg">📖</span> Grimório de Magias
+                                </h3>
                                 {(() => {
                                     // Agrupar magias por nível (apenas nível 1+)
                                     const validSpells = (character.spells || []).filter(s => s && typeof s === 'object' && s.level && s.level > 0);
@@ -2080,42 +2292,30 @@ export default function CharacterSheetPage() {
                                         // Renderização dos Slots no Cabeçalho
                                         const SlotCounter = () => {
                                             if (!slotInfo) return null;
+                                            // Usar spellSlotsCurrent como fonte de verdade (atualiza em tempo real quando magia é usada)
+                                            const currentSlots = character.spellSlotsCurrent?.[level] ?? slotInfo.current;
+                                            const maxSlots = slotInfo.max;
                                             return (
-                                                <div className="flex items-center gap-1 bg-black/30 px-2 py-1 rounded ml-4 border border-white/5" onClick={e => e.stopPropagation()}>
-                                                    <span className="text-[10px] text-rpg-grey uppercase font-bold mr-2 tracking-wider">Slots:</span>
-                                                    {Array.from({ length: slotInfo.max }).map((_, i) => {
-                                                        const isAvailable = i < slotInfo.current;
-                                                        return (
-                                                            <button
-                                                                key={i}
-                                                                disabled={isReadOnly}
-                                                                onClick={(e) => {
-                                                                    e.stopPropagation();
-                                                                    const newCurrent = isAvailable ? slotInfo.current - 1 : slotInfo.current + 1;
-                                                                    handleNestedChange(`spellcasting.slots.${level}.current`, Math.max(0, Math.min(newCurrent, slotInfo.max)));
-                                                                }}
-                                                                className={`w-4 h-4 rounded-full border transition-all ${isAvailable ? 'bg-purple-600 border-purple-400 shadow-[0_0_5px_rgba(147,51,234,0.5)] hover:bg-purple-500' : 'bg-gray-800 border-gray-700 opacity-50 hover:opacity-80'}`}
-                                                                title={isAvailable ? "Gastar Slot" : "Recuperar Slot"}
-                                                            ></button>
-                                                        );
-                                                    })}
+                                                <div className="flex items-center gap-2 bg-purple-900/30 px-3 py-1 rounded border border-purple-500/40 ml-4" onClick={e => e.stopPropagation()}>
+                                                    <span className="text-xs text-purple-300 font-bold">Slots: <span className="text-purple-100 font-cinzel">{currentSlots}/{maxSlots}</span></span>
                                                 </div>
                                             );
                                         };
 
                                         return (
-                                            <div key={level} className="bg-rpg-panel border border-rpg-gold/10 rounded-lg shadow-md overflow-hidden transition-all">
+                                            <div key={level} className="bg-rpg-panel border border-rpg-gold/10 rounded-lg shadow-md overflow-hidden transition-all hover:border-rpg-gold/20">
                                                 <div
-                                                    className="w-full flex justify-between items-center p-3 bg-rpg-slate/40 border-b border-rpg-gold/5 cursor-pointer hover:bg-rpg-slate/60 transition-colors"
+                                                    className="w-full flex justify-between items-center p-4 bg-gradient-to-r from-purple-900/30 to-purple-800/10 border-b border-purple-500/20 cursor-pointer hover:bg-gradient-to-r hover:from-purple-900/50 hover:to-purple-800/20 transition-all"
                                                     onClick={() => setExpandedSpellLevels(prev => ({ ...prev, [level]: !prev[level] }))}
                                                 >
-                                                    <div className="flex items-center flex-wrap gap-2">
-                                                        <span className="w-6 h-6 flex items-center justify-center bg-purple-900/40 text-purple-300 rounded-full text-xs font-bold border border-purple-500/20">{level}</span>
-                                                        <h3 className="text-base font-bold text-rpg-gold font-cinzel uppercase tracking-widest mr-2">{levelLabel}</h3>
+                                                    <div className="flex items-center flex-wrap gap-3">
+                                                        <span className="w-8 h-8 flex items-center justify-center bg-gradient-to-br from-purple-400 to-purple-600 text-white rounded-full text-sm font-bold border border-purple-300/50 shadow-[0_0_8px_rgba(147,51,234,0.4)]">{level}</span>
+                                                        <h3 className="text-base font-bold text-rpg-gold font-cinzel uppercase tracking-widest">{levelLabel}</h3>
+                                                        <div className="flex-grow" />
                                                         <SlotCounter />
                                                     </div>
-                                                    <div className="flex items-center gap-4">
-                                                        <span className="text-[10px] text-rpg-grey uppercase tracking-widest">{spells.length} Magias</span>
+                                                    <div className="flex items-center gap-4 ml-4">
+                                                        <span className="text-[11px] text-rpg-grey/80 uppercase tracking-widest font-semibold bg-black/20 px-3 py-1 rounded-full">{spells.length} magia{spells.length !== 1 ? 's' : ''}</span>
                                                         <span className={`text-rpg-gold transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`}>
                                                             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
                                                                 <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
@@ -2125,37 +2325,43 @@ export default function CharacterSheetPage() {
                                                 </div>
 
                                                 {isExpanded && (
-                                                    <div className="p-4 grid grid-cols-1 md:grid-cols-2 gap-4 animate-fade-in bg-rpg-dark/20">
+                                                    <div className="p-4 grid grid-cols-1 md:grid-cols-2 gap-4 animate-fade-in bg-gradient-to-b from-purple-950/20 to-transparent rounded-b-lg">
                                                         {spells.length === 0 ? (
                                                             <div className="col-span-full text-center py-4 text-rpg-grey/50 italic text-xs">Nenhuma magia aprendida deste nível.</div>
                                                         ) : (
                                                             spells.sort((a, b) => (a.name || '').localeCompare(b.name || '')).map((spell, idx) => (
-                                                                <div key={spell.id || idx} className="bg-rpg-slate/40 p-3 rounded-lg border border-rpg-gold/5 hover:border-purple-500/30 transition-all group relative">
-                                                                    <div className="flex justify-between items-center mb-1">
-                                                                        <div className="flex items-center gap-2">
+                                                                <div key={spell.id || idx} className="bg-gradient-to-br from-slate-900/50 to-slate-950/30 p-4 rounded-lg border border-purple-500/20 hover:border-purple-500/40 transition-all relative shadow-md hover:shadow-lg hover:shadow-purple-500/10">
+                                                                    <div className="flex justify-between items-start mb-2">
+                                                                        <div className="flex items-center gap-2 flex-grow">
                                                                             <button
                                                                                 disabled={isReadOnly}
                                                                                 onClick={() => togglePreparedSpell(spell.name)}
-                                                                                className={`w-3 h-3 rounded-full border transition-all ${spell.prepared ? 'bg-green-500 border-green-400 shadow-[0_0_5px_rgba(34,197,94,0.5)]' : 'border-white/20 hover:border-green-500/50'}`}
+                                                                                className={`w-3 h-3 rounded-full border transition-all flex-shrink-0 ${spell.prepared ? 'bg-green-500 border-green-400 shadow-[0_0_5px_rgba(34,197,94,0.5)]' : 'border-purple-400/50 hover:border-green-500/70'}`}
                                                                                 title={spell.prepared ? "Despreparar" : "Preparar"}
                                                                             ></button>
-                                                                            <span className="font-bold text-rpg-parchment font-medieval text-lg group-hover:text-rpg-gold transition-colors">{spell.name}</span>
+                                                                            <span className="font-bold text-amber-300 font-medieval text-base">{spell.name}</span>
                                                                         </div>
-                                                                        <div className="flex gap-1">
+                                                                        <div className="flex gap-1 ml-2 flex-shrink-0">
                                                                             {spell.concentration && <span className="text-[8px] bg-blue-900/60 text-blue-200 px-1.5 py-0.5 rounded font-black tracking-tighter" title="Concentração">C</span>}
                                                                             {spell.ritual && <span className="text-[8px] bg-amber-900/60 text-amber-200 px-1.5 py-0.5 rounded font-black tracking-tighter" title="Ritual">R</span>}
+                                                                            {spell.level !== undefined && spell.level !== 0 && (
+                                                                                <span className="text-[8px] bg-purple-900/60 text-purple-200 px-1.5 py-0.5 rounded font-black tracking-tighter" title="Slots">
+                                                                                    {getSpellUsageDescription(spell.level, getMaxSpellSlots(character.class, character.level, spell.level), 0)}
+                                                                                </span>
+                                                                            )}
+                                                                            {spell.level === 0 && <span className="text-[8px] bg-green-900/60 text-green-200 px-1.5 py-0.5 rounded font-black tracking-tighter" title="Ilimitado">∞</span>}
                                                                         </div>
                                                                     </div>
-                                                                    <div className="flex flex-wrap gap-x-3 gap-y-1 mb-2 text-[10px] text-rpg-grey/70 uppercase font-sans tracking-tight border-b border-rpg-gold/5 pb-1">
+                                                                    <div className="flex flex-wrap gap-x-3 gap-y-1 mb-2 text-[10px] text-rpg-grey/70 uppercase font-sans tracking-tight border-b border-purple-500/10 pb-2">
                                                                         <span>{formatSpellValue(spell.castingTime)}</span>
                                                                         <span>{formatSpellValue(spell.range)}</span>
                                                                         <span>{formatSpellValue(spell.duration)}</span>
-                                                                        <span className="text-purple-400/60 italic">{spell.school}</span>
+                                                                        <span className="text-purple-400/70 italic">{spell.school}</span>
                                                                     </div>
-                                                                    <p className="text-xs text-rpg-grey/90 leading-relaxed line-clamp-2 group-hover:line-clamp-none transition-all duration-300">{spell.description}</p>
+                                                                    <p className="text-xs text-rpg-grey/80 leading-relaxed">{spell.description}</p>
                                                                     {!isReadOnly && (
-                                                                        <div className="flex justify-end mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                                            <button onClick={() => handleRemoveSpell(spell.name)} className="p-1 text-rpg-red/60 hover:text-rpg-red transition-colors" title="Esquecer Magia">
+                                                                        <div className="flex justify-end mt-3">
+                                                                            <button onClick={() => handleRemoveSpell(spell.name)} className="p-1.5 text-rpg-red/70 hover:text-rpg-red transition-colors" title="Esquecer Magia">
                                                                                 <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-4v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                                                                             </button>
                                                                         </div>
@@ -2205,189 +2411,252 @@ export default function CharacterSheetPage() {
                 </main>
 
                 {/* Modais */}
-                {
-                    isFeatModalOpen && (
-                        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
-                            <div className="bg-rpg-panel border-2 border-purple-500/30 rounded-lg max-w-2xl w-full max-h-[80vh] flex flex-col overflow-hidden shadow-[0_0_50px_-10px_rgba(168,85,247,0.4)]">
-                                <div className="p-6 border-b border-purple-500/20 bg-purple-900/10 flex justify-between items-center">
-                                    <div>
-                                        <h3 className="text-xl font-bold font-cinzel text-purple-200 uppercase tracking-widest">Biblioteca de Talentos</h3>
-                                        <p className="text-[10px] text-purple-400 uppercase font-black">Escolha uma nova perícia heróica</p>
+                <>
+                    {
+                        isFeatModalOpen && (
+                            <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
+                                <div className="bg-rpg-panel border-2 border-purple-500/30 rounded-lg max-w-2xl w-full max-h-[80vh] flex flex-col overflow-hidden shadow-[0_0_50px_-10px_rgba(168,85,247,0.4)]">
+                                    <div className="p-6 border-b border-purple-500/20 bg-purple-900/10 flex justify-between items-center">
+                                        <div>
+                                            <h3 className="text-xl font-bold font-cinzel text-purple-200 uppercase tracking-widest">Biblioteca de Talentos</h3>
+                                            <p className="text-[10px] text-purple-400 uppercase font-black">Escolha uma nova perícia heróica</p>
+                                        </div>
+                                        <button onClick={() => setIsFeatModalOpen(false)} className="text-purple-400 hover:text-white transition-colors text-2xl">×</button>
                                     </div>
-                                    <button onClick={() => setIsFeatModalOpen(false)} className="text-purple-400 hover:text-white transition-colors text-2xl">×</button>
-                                </div>
-                                <div className="p-6 overflow-y-auto space-y-4 custom-scrollbar bg-rpg-dark/50">
-                                    {availableFeats.length === 0 ? (
-                                        <div className="text-center py-10 text-rpg-grey italic">Nenhum talento sincronizado. Vá até a Biblioteca para sincronizar.</div>
-                                    ) : (
-                                        availableFeats.map((feat, idx) => {
-                                            const isSelected = character.features?.some(f => f.name === feat.name);
-                                            return (
-                                                <button
-                                                    key={idx}
-                                                    disabled={isSelected}
-                                                    onClick={() => {
-                                                        const level = parseInt(prompt(`Em qual nível você adquiriu "${feat.name}"?`) || "0");
-                                                        updateCharacter(prev => ({
-                                                            ...prev,
-                                                            features: [...(prev.features || []), {
-                                                                ...feat,
-                                                                type: 'feat',
-                                                                level: level > 0 ? level : undefined
-                                                            }]
-                                                        }));
-                                                        setIsFeatModalOpen(false);
-                                                    }}
-                                                    className={`w-full text-left p-4 rounded-lg border transition-all flex justify-between items-center group/feat-row ${isSelected
-                                                        ? 'bg-purple-900/10 border-purple-500/10 opacity-50 cursor-not-allowed'
-                                                        : 'bg-rpg-panel border-rpg-gold/5 hover:border-purple-500/40 hover:bg-purple-900/5'}`}
-                                                >
-                                                    <div className="flex-grow">
-                                                        <h4 className="font-bold text-rpg-parchment group-hover/feat-row:text-purple-200 transition-colors uppercase text-sm tracking-wider">{feat.name}</h4>
-                                                        <p className="text-xs text-rpg-grey mt-1 line-clamp-2">{feat.description}</p>
-                                                    </div>
-                                                    <div className={`w-8 h-8 rounded-full border flex items-center justify-center transition-all ${isSelected ? 'border-purple-500 bg-purple-500/20 text-purple-200' : 'border-rpg-gold/20 text-rpg-gold'}`}>
-                                                        {isSelected ? '✓' : '+'}
-                                                    </div>
-                                                </button>
-                                            );
-                                        })
-                                    )}
-                                </div>
-                                <div className="p-4 bg-black/40 border-t border-purple-500/10 text-center">
-                                    <p className="text-[10px] text-rpg-grey italic">Talentos são escolhas poderosas que definem seu herói.</p>
+                                    <div className="p-6 overflow-y-auto space-y-4 custom-scrollbar bg-rpg-dark/50">
+                                        {availableFeats.length === 0 ? (
+                                            <div className="text-center py-10 text-rpg-grey italic">Nenhum talento sincronizado. Vá até a Biblioteca para sincronizar.</div>
+                                        ) : (
+                                            availableFeats.map((feat, idx) => {
+                                                const isSelected = character.features?.some(f => f.name === feat.name);
+                                                return (
+                                                    <button
+                                                        key={idx}
+                                                        disabled={isSelected}
+                                                        onClick={() => {
+                                                            const level = parseInt(prompt(`Em qual nível você adquiriu "${feat.name}"?`) || "0");
+                                                            updateCharacter(prev => ({
+                                                                ...prev,
+                                                                features: [...(prev.features || []), {
+                                                                    ...feat,
+                                                                    type: 'feat',
+                                                                    level: level > 0 ? level : undefined
+                                                                }]
+                                                            }));
+                                                            setIsFeatModalOpen(false);
+                                                        }}
+                                                        className={`w-full text-left p-4 rounded-lg border transition-all flex justify-between items-center group/feat-row ${isSelected
+                                                            ? 'bg-purple-900/10 border-purple-500/10 opacity-50 cursor-not-allowed'
+                                                            : 'bg-rpg-panel border-rpg-gold/5 hover:border-purple-500/40 hover:bg-purple-900/5'}`}
+                                                    >
+                                                        <div className="flex-grow">
+                                                            <h4 className="font-bold text-rpg-parchment group-hover/feat-row:text-purple-200 transition-colors uppercase text-sm tracking-wider">{feat.name}</h4>
+                                                            <p className="text-xs text-rpg-grey mt-1 line-clamp-2">{feat.description}</p>
+                                                        </div>
+                                                        <div className={`w-8 h-8 rounded-full border flex items-center justify-center transition-all ${isSelected ? 'border-purple-500 bg-purple-500/20 text-purple-200' : 'border-rpg-gold/20 text-rpg-gold'}`}>
+                                                            {isSelected ? '✓' : '+'}
+                                                        </div>
+                                                    </button>
+                                                );
+                                            })
+                                        )}
+                                    </div>
+                                    <div className="p-4 bg-black/40 border-t border-purple-500/10 text-center">
+                                        <p className="text-[10px] text-rpg-grey italic">Talentos são escolhas poderosas que definem seu herói.</p>
+                                    </div>
                                 </div>
                             </div>
-                        </div>
-                    )
-                }
-                <SelectionModal isOpen={isSelectionModalOpen} onClose={() => setSelectionModalOpen(false)} title={modalConfig?.title || ''} items={modalConfig?.type === 'class' ? classes : (modalConfig?.type === 'race' ? races : weapons.map(w => w.name))} onSelectItem={handleSelectItem} isLoading={isDbDataLoading} />
-                <WeaponModal isOpen={isWeaponModalOpen} onClose={() => setWeaponModalOpen(false)} onSave={handleSaveWeapon} weaponToEdit={weaponToEdit} />
-                <EquipmentModal isOpen={isEquipmentModalOpen} onClose={() => setEquipmentModalOpen(false)} onSave={handleSaveEquipment} allEquipment={allEquipment} onAddNewGlobalItem={handleAddNewGlobalItem} itemToEdit={equipmentToEdit} />
-                <SpellSelectModal isOpen={isSpellSelectOpen} onClose={() => setSpellSelectOpen(false)} onSelect={handleSaveSpell} onCreate={() => { setSpellSelectOpen(false); setSpellToEdit(null); setSpellModalOpen(true); }} />
-                <SpellModal isOpen={isSpellModalOpen} onClose={() => { setSpellModalOpen(false); setSpellToEdit(null); }} onSave={handleSaveSpell} spellToEdit={spellToEdit} />
-                 <SubclassModal
-                    isOpen={isSubclassModalOpen}
-                    onClose={() => setIsSubclassModalOpen(false)}
-                    character={character}
-                    onSelect={handleSelectSubclass}
-                />
-                <LevelUpModal
-                    isOpen={isLevelUpModalOpen}
-                    onClose={() => setLevelUpModalOpen(false)}
-                    onApply={handleApplyLevelUp}
-                    level={character.level}
-                    charClassName={character.class}
-                    progression={classProgression?.[character.level]}
-                    currentSpells={character.spells}
-                    currentAttributes={character.attributes}
-                />
+                        )
+                    }
+                    <SelectionModal isOpen={isSelectionModalOpen} onClose={() => setSelectionModalOpen(false)} title={modalConfig?.title || ''} items={modalConfig?.type === 'class' ? classes : (modalConfig?.type === 'race' ? races : weapons.map(w => w.name))} onSelectItem={handleSelectItem} isLoading={isDbDataLoading} />
+                    <WeaponModal isOpen={isWeaponModalOpen} onClose={() => setWeaponModalOpen(false)} onSave={handleSaveWeapon} weaponToEdit={weaponToEdit} />
+                    <EquipmentModal isOpen={isEquipmentModalOpen} onClose={() => setEquipmentModalOpen(false)} onSave={handleSaveEquipment} allEquipment={allEquipment} onAddNewGlobalItem={handleAddNewGlobalItem} itemToEdit={equipmentToEdit} />
+                    <SpellSelectModalWithLevel
+                        isOpen={isSpellSelectOpen}
+                        onClose={() => setSpellSelectOpen(false)}
+                        onSelect={handleSaveSpell}
+                        onCreate={() => { setSpellSelectOpen(false); setSpellToEdit(null); setSpellModalOpen(true); }}
+                        characterClass={character.class}
+                        characterLevel={character.level}
+                    />
+                    <SpellModal isOpen={isSpellModalOpen} onClose={() => { setSpellModalOpen(false); setSpellToEdit(null); }} onSave={handleSaveSpell} spellToEdit={spellToEdit} characterClass={character.class} characterLevel={character.level} />
+                    <SubclassModal
+                        isOpen={isSubclassModalOpen}
+                        onClose={() => setIsSubclassModalOpen(false)}
+                        character={character}
+                        onSelect={handleSelectSubclass}
+                    />
+                    <LevelUpModal
+                        isOpen={isLevelUpModalOpen}
+                        onClose={() => setLevelUpModalOpen(false)}
+                        onApply={handleApplyLevelUp}
+                        level={character.level}
+                        charClassName={character.class}
+                        progression={classProgression?.[character.level]}
+                        currentSpells={character.spells}
+                        currentAttributes={character.attributes}
+                    />
 
-                {/* CASTER ALERT MODAL */}
+                    {/* CASTER ALERT MODAL */}
+                    <Modal
+                        isOpen={casterAlertModal}
+                        onClose={() => {
+                            setCasterAlertModal(false);
+                            setLevelUpModalOpen(true);
+                        }}
+                        title="✨ Caminho da Magia"
+                    >
+                        <div className="text-center p-4">
+                            <div className="text-5xl mb-4">🔮</div>
+                            <h3 className="text-xl font-cinzel text-rpg-gold mb-2">Poder Arcano Detectado</h3>
+                            <p className="text-rpg-parchment mb-6 leading-relaxed">
+                                Como <strong className="text-purple-300">{character?.class}</strong>, você possui o dom da magia.
+                                Agora você deve escolher seus truques e magias iniciais para completar seu grimório.
+                            </p>
+                            <button
+                                onClick={() => {
+                                    setCasterAlertModal(false);
+                                    setLevelUpModalOpen(true);
+                                }}
+                                className="bg-purple-600 hover:bg-purple-500 text-white font-bold py-3 px-8 rounded-lg shadow-glow-purple/50 transition-all transform hover:scale-105 font-cinzel tracking-wider border border-white/20"
+                            >
+                                Abrir Grimório
+                            </button>
+                        </div>
+                    </Modal>
+
+
+                    <StartingProficienciesModal
+                        isOpen={isProficiencyModalOpen}
+                        onClose={() => setIsProficiencyModalOpen(false)}
+                        className={selectedClassForProficiency}
+                        onConfirm={(skills) => {
+                            updateCharacter(char => {
+                                // Skills é Record<string, boolean>
+                                const newSkills = { ...(char.skills || {}) } as any;
+                                skills.forEach(skill => {
+                                    // Garantir tipo seguro
+                                    newSkills[skill] = true;
+                                });
+                                return { ...char, skills: newSkills };
+                            });
+                            setIsProficiencyModalOpen(false);
+                            // Abre modal de equipamento após as proficiências
+                            setIsEquipmentStartModalOpen(true);
+                        }}
+                    />
+                    <StartingEquipmentModal
+                        isOpen={isEquipmentStartModalOpen}
+                        onClose={() => setIsEquipmentStartModalOpen(false)}
+                        className={character?.class || ''}
+                        background={character?.background || ''}
+                        onConfirm={(newItems) => {
+                            updateCharacter(char => {
+                                const currentInv = { ...char.inventory };
+                                const weapons = [...(currentInv.weapons || [])];
+                                const otherEquip = [...(currentInv.otherEquipment || [])];
+
+                                newItems.forEach(item => {
+                                    if (item.type === 'weapon') {
+                                        weapons.push({
+                                            id: Math.random().toString(36).substr(2, 9),
+                                            name: item.name,
+                                            quantity: item.quantity,
+                                            isEquipped: false,
+                                            weight: 0,
+                                            damage: '1d6',
+                                            damageType: 'cortante',
+                                            properties: []
+                                        } as any);
+                                    } else {
+                                        otherEquip.push({
+                                            id: Math.random().toString(36).substr(2, 9),
+                                            name: item.name,
+                                            quantity: item.quantity,
+                                            weight: 0,
+                                            type: item.type === 'armor' ? 'armor' : item.type === 'shield' ? 'shield' : 'other',
+                                            description: '',
+                                            equipped: false
+                                        } as any);
+                                    }
+                                });
+
+                                return {
+                                    ...char,
+                                    inventory: {
+                                        ...currentInv,
+                                        weapons,
+                                        otherEquipment: otherEquip
+                                    }
+                                };
+                            });
+                            setIsEquipmentStartModalOpen(false);
+                        }}
+                    />
+                </>
+
+                {/* Modal de Adicionar XP */}
                 <Modal
-                    isOpen={casterAlertModal}
-                    onClose={() => {
-                        setCasterAlertModal(false);
-                        setLevelUpModalOpen(true);
-                    }}
-                    title="✨ Caminho da Magia"
+                    isOpen={isXPModalOpen}
+                    onClose={() => setIsXPModalOpen(false)}
+                    title="Adicionar Experiência"
                 >
-                    <div className="text-center p-4">
-                        <div className="text-5xl mb-4">🔮</div>
-                        <h3 className="text-xl font-cinzel text-rpg-gold mb-2">Poder Arcano Detectado</h3>
-                        <p className="text-rpg-parchment mb-6 leading-relaxed">
-                            Como <strong className="text-purple-300">{character?.class}</strong>, você possui o dom da magia. 
-                            Agora você deve escolher seus truques e magias iniciais para completar seu grimório.
-                        </p>
-                        <button
-                            onClick={() => {
-                                setCasterAlertModal(false);
-                                setLevelUpModalOpen(true);
-                            }}
-                            className="bg-purple-600 hover:bg-purple-500 text-white font-bold py-3 px-8 rounded-lg shadow-glow-purple/50 transition-all transform hover:scale-105 font-cinzel tracking-wider border border-white/20"
-                        >
-                            Abrir Grimório
-                        </button>
+                    <div className="p-2 space-y-6">
+                        <div className="text-center">
+                            <p className="text-rpg-grey text-xs uppercase font-cinzel tracking-widest mb-4">Insira a quantidade adquirida</p>
+                            <div className="relative group">
+                                <input
+                                    type="number"
+                                    inputMode="numeric"
+                                    value={xpAmountToAdd}
+                                    onChange={(e) => setXpAmountToAdd(e.target.value)}
+                                    className="w-full bg-black/40 border-2 border-rpg-gold/20 rounded-xl px-4 py-6 text-4xl font-medieval text-rpg-gold text-center focus:border-rpg-gold outline-none transition-all shadow-inner"
+                                    autoFocus
+                                    onKeyDown={(e) => {
+                                        if (e.key === 'Enter') {
+                                            const amount = parseInt(xpAmountToAdd);
+                                            if (!isNaN(amount)) {
+                                                handleFieldChange('experience', (character.experience || 0) + amount);
+                                                setIsXPModalOpen(false);
+                                            }
+                                        }
+                                    }}
+                                />
+                                <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 bg-rpg-gold text-rpg-dark text-[10px] font-black px-3 py-0.5 rounded shadow-lg uppercase tracking-wider">XP</div>
+                            </div>
+                        </div>
+
+                        <div className="flex gap-3 pt-2">
+                            <button
+                                onClick={() => setIsXPModalOpen(false)}
+                                className="flex-1 py-4 px-4 bg-rpg-red/10 border border-rpg-red/20 text-rpg-red rounded-xl font-cinzel text-xs font-bold hover:bg-rpg-red/20 transition-all uppercase tracking-widest"
+                            >
+                                Cancelar
+                            </button>
+                            <button
+                                onClick={() => {
+                                    const amount = parseInt(xpAmountToAdd);
+                                    if (!isNaN(amount)) {
+                                        handleFieldChange('experience', (character.experience || 0) + amount);
+                                        setIsXPModalOpen(false);
+                                    }
+                                }}
+                                className="flex-1 py-4 px-4 bg-rpg-gold hover:bg-yellow-400 text-rpg-dark rounded-xl font-cinzel text-xs font-bold transition-all shadow-lg hover:shadow-rpg-gold/40 active:scale-95 uppercase tracking-widest"
+                            >
+                                Adicionar
+                            </button>
+                        </div>
                     </div>
                 </Modal>
 
-
-                <StartingProficienciesModal
-                    isOpen={isProficiencyModalOpen}
-                    onClose={() => setIsProficiencyModalOpen(false)}
-                    className={selectedClassForProficiency}
-                    onConfirm={(skills) => {
-                        updateCharacter(char => {
-                            // Skills é Record<string, boolean>
-                            const newSkills = { ...(char.skills || {}) } as any;
-                            skills.forEach(skill => {
-                                // Garantir tipo seguro
-                                newSkills[skill] = true;
-                            });
-                            return { ...char, skills: newSkills };
-                        });
-                        setIsProficiencyModalOpen(false);
-                        // Abre modal de equipamento após as proficiências
-                        setIsEquipmentStartModalOpen(true);
-                    }}
-                />
-                <StartingEquipmentModal
-                    isOpen={isEquipmentStartModalOpen}
-                    onClose={() => setIsEquipmentStartModalOpen(false)}
-                    className={character?.class || ''}
-                    background={character?.background || ''}
-                    onConfirm={(newItems) => {
-                        updateCharacter(char => {
-                            const currentInv = { ...char.inventory };
-                            const weapons = [...(currentInv.weapons || [])];
-                            const otherEquip = [...(currentInv.otherEquipment || [])];
-
-                            newItems.forEach(item => {
-                                if (item.type === 'weapon') {
-                                    weapons.push({
-                                        id: Math.random().toString(36).substr(2, 9),
-                                        name: item.name,
-                                        quantity: item.quantity,
-                                        isEquipped: false,
-                                        weight: 0,
-                                        damage: '1d6',
-                                        damageType: 'cortante',
-                                        properties: []
-                                    } as any);
-                                } else {
-                                    otherEquip.push({
-                                        id: Math.random().toString(36).substr(2, 9),
-                                        name: item.name,
-                                        quantity: item.quantity,
-                                        weight: 0,
-                                        type: item.type === 'armor' ? 'armor' : item.type === 'shield' ? 'shield' : 'other',
-                                        description: '',
-                                        equipped: false
-                                    } as any);
-                                }
-                            });
-
-                            return {
-                                ...char,
-                                inventory: {
-                                    ...currentInv,
-                                    weapons,
-                                    otherEquipment: otherEquip
-                                }
-                            };
-                        });
-                        setIsEquipmentStartModalOpen(false);
-                    }}
-                />
-
                 {/* Modal de Efeitos */}
-                <Modal 
-                    isOpen={isEffectModalOpen} 
+                <Modal
+                    isOpen={isEffectModalOpen}
                     onClose={() => {
                         setIsEffectModalOpen(false);
                         setEffectTab('all');
                         setEffectSearchQuery('');
-                    }} 
+                    }}
                     title={`Efeitos • ${character.name}`}
                 >
                     <div className="space-y-3">
@@ -2397,7 +2666,7 @@ export default function CharacterSheetPage() {
 
                             // Obter condições globais
                             const globalConditions = getCategorizedGlobalConditions();
-                            
+
                             // Combinar efeitos de classe com condições globais
                             const classEffectsWithType = availableEffects.map(fx => ({ ...fx, type: 'class' as const }));
                             const globalBenefitsWithType = globalConditions.benefits.map(c => ({ id: c.id, name: c.name, duration: 1, category: 'benefit' as const, type: 'global' as const }));
@@ -2406,23 +2675,23 @@ export default function CharacterSheetPage() {
                             // Categorizar todos os efeitos (classe + globais)
                             const benefitIds = ['rage', 'reckless', 'inspiration', 'counter-charm', 'bless', 'sanctuary', 'shield-faith', 'wild-shape', 'barkskin', 'action-surge', 'second-wind', 'indomitable', 'evasion', 'uncanny-dodge', 'flurry', 'patient-defense', 'lay-hands', 'divine-smite', 'aura-protection', 'hunters-mark', 'favored-foe', 'metamagic', 'tides-chaos', 'invocation', 'arcane-recovery', 'spell-mastery', 'sneak-attack', 'armor-agathys', 'multiattack', 'mirror-image'];
                             const debuffIds = ['stunning-strike', 'hex', 'curse', 'entangle', 'knocked-down', 'paralyzed-ki', 'wrathful-smite', 'wild-surge', 'hypnotic-pattern'];
-                            
+
                             const allEffects = [...classEffectsWithType, ...globalBenefitsWithType, ...globalDebuffsWithType];
                             const benefits = allEffects.filter(fx => (benefitIds.includes(fx.id)) || (fx.type === 'global' && fx.category === 'benefit'));
                             const debuffs = allEffects.filter(fx => (debuffIds.includes(fx.id)) || (fx.type === 'global' && fx.category === 'debuff'));
-                            
+
                             // Aplicar filtro de busca
                             const normalizeSearch = (text: string) => text.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
                             const searchTerm = normalizeSearch(effectSearchQuery);
-                            
+
                             const filterEffects = (effects: any[]) => {
                                 if (!searchTerm) return effects;
-                                return effects.filter(fx => 
+                                return effects.filter(fx =>
                                     normalizeSearch(fx.name).includes(searchTerm) ||
                                     normalizeSearch(fx.id).includes(searchTerm)
                                 );
                             };
-                            
+
                             const filteredBenefits = filterEffects(benefits);
                             const filteredDebuffs = filterEffects(debuffs);
                             const displayedEffects = effectTab === 'benefits' ? filteredBenefits : effectTab === 'debuffs' ? filteredDebuffs : filterEffects(allEffects);
@@ -2445,31 +2714,28 @@ export default function CharacterSheetPage() {
                                     <div className="flex gap-1 mb-3 border-b border-white/10">
                                         <button
                                             onClick={() => setEffectTab('all')}
-                                            className={`flex-1 px-3 py-2 text-[10px] font-cinzel tracking-wider uppercase transition-all border-b-2 ${
-                                                effectTab === 'all'
-                                                    ? 'border-rpg-gold text-rpg-gold'
-                                                    : 'border-transparent text-rpg-grey hover:text-rpg-parchment'
-                                            }`}
+                                            className={`flex-1 px-3 py-2 text-[10px] font-cinzel tracking-wider uppercase transition-all border-b-2 ${effectTab === 'all'
+                                                ? 'border-rpg-gold text-rpg-gold'
+                                                : 'border-transparent text-rpg-grey hover:text-rpg-parchment'
+                                                }`}
                                         >
                                             🎭 Todos ({filterEffects(allEffects).length})
                                         </button>
                                         <button
                                             onClick={() => setEffectTab('benefits')}
-                                            className={`flex-1 px-3 py-2 text-[10px] font-cinzel tracking-wider uppercase transition-all border-b-2 ${
-                                                effectTab === 'benefits'
-                                                    ? 'border-green-500 text-green-400'
-                                                    : 'border-transparent text-rpg-grey hover:text-rpg-parchment'
-                                            }`}
+                                            className={`flex-1 px-3 py-2 text-[10px] font-cinzel tracking-wider uppercase transition-all border-b-2 ${effectTab === 'benefits'
+                                                ? 'border-green-500 text-green-400'
+                                                : 'border-transparent text-rpg-grey hover:text-rpg-parchment'
+                                                }`}
                                         >
                                             ✦ Benef. ({filteredBenefits.length})
                                         </button>
                                         <button
                                             onClick={() => setEffectTab('debuffs')}
-                                            className={`flex-1 px-3 py-2 text-[10px] font-cinzel tracking-wider uppercase transition-all border-b-2 ${
-                                                effectTab === 'debuffs'
-                                                    ? 'border-red-500 text-red-400'
-                                                    : 'border-transparent text-rpg-grey hover:text-rpg-parchment'
-                                            }`}
+                                            className={`flex-1 px-3 py-2 text-[10px] font-cinzel tracking-wider uppercase transition-all border-b-2 ${effectTab === 'debuffs'
+                                                ? 'border-red-500 text-red-400'
+                                                : 'border-transparent text-rpg-grey hover:text-rpg-parchment'
+                                                }`}
                                         >
                                             ⚠ Malef. ({filteredDebuffs.length})
                                         </button>
@@ -2485,7 +2751,7 @@ export default function CharacterSheetPage() {
                                             displayedEffects.map(fx => {
                                                 const isBenefit = benefits.some(b => b.id === fx.id);
                                                 const alreadyActive = (character.activeEffects || []).includes(fx.id) || (character.conditions || []).includes(fx.id);
-                                                
+
                                                 return (
                                                     <button
                                                         key={fx.id}
@@ -2495,11 +2761,10 @@ export default function CharacterSheetPage() {
                                                             setIsEffectModalOpen(false);
                                                         }}
                                                         disabled={alreadyActive}
-                                                        className={`p-3 rounded-lg border text-left transition-all ${
-                                                            isBenefit 
-                                                                ? 'bg-green-900/10 border-green-600/30 hover:bg-green-900/20 hover:border-green-500' 
-                                                                : 'bg-red-900/10 border-red-600/30 hover:bg-red-900/20 hover:border-red-500'
-                                                        } ${alreadyActive ? 'opacity-40 cursor-not-allowed' : ''}`}
+                                                        className={`p-3 rounded-lg border text-left transition-all ${isBenefit
+                                                            ? 'bg-green-900/10 border-green-600/30 hover:bg-green-900/20 hover:border-green-500'
+                                                            : 'bg-red-900/10 border-red-600/30 hover:bg-red-900/20 hover:border-red-500'
+                                                            } ${alreadyActive ? 'opacity-40 cursor-not-allowed' : ''}`}
                                                     >
                                                         <div className={`font-cinzel text-xs font-bold ${isBenefit ? 'text-green-100' : 'text-red-100'}`}>
                                                             {fx.name}
@@ -2518,10 +2783,112 @@ export default function CharacterSheetPage() {
                         })()}
                     </div>
                 </Modal>
+                {/* Toast Notification */}
+                {
+                    toast && (
+                        <Toast
+                            toast={toast}
+                            onClose={() => setToast(null)}
+                        />
+                    )
+                }
+            </div >
+        </div >
+    );
+}
+
+// --- Sub-componentes Auxiliares ---
+const TabButton = ({ activeTab, tabName, onClick }: { activeTab: string, tabName: string, onClick: (tab: any) => void }) => {
+    const isActive = activeTab === tabName;
+    return (
+        <button
+            onClick={() => onClick(tabName)}
+            className={`px-6 sm:px-8 py-4 sm:py-5 text-sm sm:text-base font-cinzel font-bold uppercase tracking-[0.1em] sm:tracking-[0.2em] transition-all relative outline-none whitespace-nowrap snap-start ${isActive
+                ? 'text-rpg-gold bg-gradient-to-t from-rpg-gold/20 to-transparent'
+                : 'text-rpg-grey hover:text-rpg-parchment'
+                }`}
+        >
+            {tabName}
+            {isActive && (
+                <div className="absolute bottom-0 left-1 right-1 h-[2px] bg-rpg-gold shadow-[0_0_12px_rgba(212,175,55,0.8)] z-10" />
+            )}
+        </button>
+    );
+};
+
+const AttributeInput = ({ label, value, onChange, disabled }: { label: string, value: number, onChange: (val: number) => void, disabled?: boolean }) => {
+    const modifier = Math.floor((value - 10) / 2);
+    return (
+        <div className="flex flex-col items-center p-4 sm:p-5 bg-rpg-panel border-b-2 border-rpg-gold/20 rounded-t-lg min-w-[100px] sm:min-w-[110px] transition-all hover:bg-rpg-gold/5 group relative shadow-md">
+            <div className="absolute top-0 left-0 w-full h-[1px] bg-white/5"></div>
+            <span className="text-[11px] sm:text-xs font-black text-rpg-gold uppercase mb-2 tracking-widest font-cinzel">{label}</span>
+            <input
+                type="number"
+                inputMode="numeric"
+                disabled={disabled}
+                value={value}
+                onChange={(e) => onChange(parseInt(e.target.value) || 0)}
+                className="w-14 sm:w-16 text-3xl sm:text-3xl font-bold text-center bg-transparent text-rpg-parchment focus:outline-none font-medieval"
+            />
+            <div className="text-sm sm:text-sm text-rpg-gold mt-2 sm:mt-3 font-bold font-medieval border border-rpg-gold/30 px-4 sm:px-4 py-1.5 rounded shadow-sm bg-black/40 group-hover:bg-rpg-gold/10 transition-colors">
+                {modifier >= 0 ? `+${modifier}` : modifier}
             </div>
         </div>
     );
-}
+};
+
+const StatBlock = ({ label, value, subLabel }: { label: string, value: any, subLabel?: string }) => (
+    <div className="p-4 sm:p-5 bg-rpg-panel border border-rpg-gold/10 rounded-lg shadow-lg text-center flex flex-col justify-center items-center backdrop-blur-md group hover:border-rpg-gold/30 transition-all min-h-[110px] sm:min-h-[120px] relative overflow-hidden text-balance">
+        <div className="absolute top-0 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-rpg-gold/20 to-transparent"></div>
+        <h4 className="text-[9px] sm:text-[11px] font-bold text-rpg-gold uppercase mb-2 sm:mb-3 tracking-[0.15em] sm:tracking-[0.2em] font-cinzel leading-tight h-5 flex items-center justify-center text-center">{label}</h4>
+        <div className="text-3xl sm:text-4xl font-bold text-rpg-parchment font-medieval drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)] mb-1">
+            {value}
+        </div>
+        {subLabel && <span className="text-[8px] sm:text-[9px] text-rpg-grey uppercase tracking-[0.1em] font-sans opacity-60 font-bold">{subLabel}</span>}
+        <div className="w-10 sm:w-12 h-[1px] bg-rpg-gold/20 mt-4 group-hover:w-20 transition-all"></div>
+    </div>
+);
+
+const SkillCheckbox = ({
+    skillKey,
+    displayName,
+    attribute,
+    isProficient,
+    proficiencyBonus,
+    attributeMod,
+    onChange,
+    disabled
+}: {
+    skillKey: string,
+    displayName: string,
+    attribute: string,
+    isProficient: boolean,
+    proficiencyBonus: number,
+    attributeMod: number,
+    onChange: (k: string, v: boolean) => void,
+    disabled?: boolean
+}) => {
+    const total = attributeMod + (isProficient ? proficiencyBonus : 0);
+    return (
+        <label className={`flex items-center justify-between p-3.5 sm:p-3 rounded-md transition-all ${disabled ? 'opacity-70' : 'hover:bg-white/5 cursor-pointer active:scale-[0.98]'}`}>
+            <div className="flex items-center gap-4 sm:gap-4">
+                <input
+                    type="checkbox"
+                    disabled={disabled}
+                    checked={isProficient}
+                    onChange={(e) => onChange(skillKey, e.target.checked)}
+                    className="w-6 h-6 sm:w-6 sm:h-6 rounded border-rpg-gold/30 bg-rpg-dark text-rpg-gold focus:ring-rpg-gold/50 cursor-pointer"
+                />
+                <span className={`text-lg sm:text-lg font-medieval ${isProficient ? 'text-rpg-gold font-bold underline decoration-rpg-gold/20' : 'text-rpg-parchment'}`}>
+                    {displayName} <span className="text-xs text-rpg-grey uppercase ml-1.5 opacity-60 italic">({attribute.slice(0, 3)})</span>
+                </span>
+            </div>
+            <div className={`px-3 py-1.5 rounded text-base sm:text-base font-bold font-medieval border shadow-inner ${isProficient ? 'bg-rpg-gold/10 border-rpg-gold/30 text-rpg-gold' : 'bg-black/20 border-white/5 text-rpg-grey'}`}>
+                {total >= 0 ? `+${total}` : total}
+            </div>
+        </label>
+    );
+};
 
 // --- Sub-componentes do Modal ---
 

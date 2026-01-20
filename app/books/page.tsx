@@ -23,15 +23,22 @@ export default function BookPage() {
     };
 
     return (
-        <div className="min-h-screen bg-rpg-dark text-rpg-parchment flex flex-col bg-[url('https://www.transparenttextures.com/patterns/dark-matter.png')]">
+        <div 
+          className="min-h-screen text-rpg-parchment flex flex-col"
+          style={{
+            background: 'linear-gradient(160deg, rgba(10, 14, 40, 0.95), rgba(12, 8, 22, 0.94))',
+            backgroundImage: 'url("https://www.transparenttextures.com/patterns/dark-matter.png")',
+            backgroundAttachment: 'fixed'
+          }}
+        >
             {/* Cabeçalho Reutilizado */}
             <header className="bg-rpg-panel p-4 shadow-lg border-b-2 border-rpg-gold/30 sticky top-0 z-20 backdrop-blur-sm">
                 <div className="container mx-auto flex justify-between items-center">
-                    <Link href="/">
-                        <h1 className="text-2xl font-bold font-cinzel text-rpg-gold cursor-pointer hover:text-rpg-gold-light transition-colors text-shadow-sm">D&D Campaign Manager</h1>
+                    <Link href="/home">
+                        <h1 className="text-2xl font-bold font-cinzel cursor-pointer transition-colors text-shadow-sm" style={{ color: 'rgb(255, 120, 72)' }}>D&D Campaign Manager</h1>
                     </Link>
                     <nav className="flex items-center gap-6">
-                        <Link href="/" className="text-rpg-parchment/80 hover:text-rpg-gold transition-colors font-bold font-cinzel text-lg flex items-center gap-2">
+                        <Link href="/home" className="hover:text-rpg-gold transition-colors font-bold font-cinzel text-lg flex items-center gap-2" style={{ color: 'rgb(255, 191, 120)' }}>
                             <span>←</span> Retornar à Taverna
                         </Link>
                         {user && (

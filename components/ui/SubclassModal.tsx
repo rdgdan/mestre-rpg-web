@@ -19,10 +19,10 @@ export default function SubclassModal({ isOpen, onClose, character, onSelect }: 
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm animate-fade-in p-4">
-            <div className="bg-rpg-panel border border-rpg-gold w-full max-w-2xl rounded-xl shadow-[0_0_30px_rgba(218,165,32,0.2)] flex flex-col max-h-[90vh]">
-                <div className="p-6 border-b border-rpg-gold/20 flex justify-between items-center">
+            <div className="modal-theme-c border w-full max-w-2xl rounded-xl shadow-[0_0_30px_rgba(255,120,72,0.2)] flex flex-col max-h-[90vh]">
+                <div className="p-6 modal-header-theme-c border-b flex justify-between items-center">
                     <div>
-                        <h2 className="text-2xl font-cinzel text-rpg-gold">Escolha seu Caminho</h2>
+                        <h2 className="text-2xl font-cinzel modal-title-theme-c">Escolha seu Caminho</h2>
                         <p className="text-sm text-rpg-grey font-medieval">Selecione uma subclasse para {character.class}</p>
                     </div>
                     <button onClick={onClose} className="text-rpg-grey hover:text-red-400 text-2xl font-bold">&times;</button>

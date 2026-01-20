@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { getMaxSpellSlots } from '@/lib/spell-slots';
 
 interface Spell {
   name: string;
@@ -7,6 +8,9 @@ interface Spell {
   range: string;
   duration: string;
   description: string;
+  school?: string;
+  concentration?: boolean;
+  ritual?: boolean;
 }
 
 interface SpellModalProps {
@@ -14,19 +18,30 @@ interface SpellModalProps {
   onClose: () => void;
   onSave: (spell: Spell) => void;
   spellToEdit?: Spell | null;
+  characterClass?: string;
+  characterLevel?: number;
 }
 
 const defaultSpell: Spell = {
   name: '',
-  level: 1,
+  level: 0,
   castingTime: '',
   range: '',
   duration: '',
   description: '',
+  school: 'Evocação',
+  concentration: false,
+  ritual: false,
 };
 
-const SpellModal: React.FC<SpellModalProps> = ({ isOpen, onClose, onSave, spellToEdit }) => {
+const SpellModal: React.FC<SpellModalProps> = ({ isOpen, onClose, onSave, spellToEdit, characterClass, characterLevel = 1 }) => {
   const [spell, setSpell] = useState<Spell>(defaultSpell);
+
+  // Obter níveis disponíveis para o personagem
+  const availableLevels = characterClass ? [0, 1, 2, 3, 4, 5, 6, 7, 8, 9].filter(level => {
+    if (level === 0) return true;
+    return getMaxSpellSlots(characterClass, characterLevel, level) > 0;
+  }) : [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
 
   useEffect(() => {
     if (spellToEdit) {
@@ -46,9 +61,14 @@ const SpellModal: React.FC<SpellModalProps> = ({ isOpen, onClose, onSave, spellT
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
-      <div className="bg-rpg-panel border border-rpg-gold/20 rounded-lg p-6 w-full max-w-lg shadow-2xl">
-        <h2 className="text-xl font-bold text-rpg-gold mb-4 font-cinzel">{spellToEdit ? 'Editar Magia' : 'Adicionar Magia'}</h2>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+      <div className="bg-rpg-panel border border-rpg-gold/20 rounded-lg p-6 w-full max-w-lg shadow-2xl max-h-[90vh] overflow-y-auto">
+        <h2 className="text-xl font-bold text-rpg-gold mb-2 font-cinzel">{spellToEdit ? 'Editar Magia' : 'Criar Magia Customizada'}</h2>
+        {characterClass && characterLevel && (
+          <p className="text-xs text-rpg-grey/70 mb-4 bg-purple-900/30 border border-purple-500/20 rounded p-2">
+            ✨ {characterClass} nível {characterLevel} — Níveis disponíveis: <span className="text-purple-300 font-bold">{availableLevels.join(', ')}</span>
+          </p>
+        )}
         <form
           onSubmit={e => {
             e.preventDefault();
@@ -74,12 +94,28 @@ const SpellModal: React.FC<SpellModalProps> = ({ isOpen, onClose, onSave, spellT
           </div>
           <div className="grid grid-cols-2 gap-2">
             <div>
-              <label className="block text-xs font-bold text-rpg-gold mb-1">Alcance</label>
-              <input type="text" className="w-full p-2 rounded bg-rpg-slate border border-rpg-gold/10 text-rpg-parchment" value={spell.range} onChange={e => setSpell(s => ({ ...s, range: e.target.value }))} />
+              <label className="block text-xs font-bold text-rpg-gold mb-1">Escola</label>
+              <select className="w-full p-2 rounded bg-rpg-slate border border-rpg-gold/10 text-rpg-parchment" value={spell.school || 'Evocação'} onChange={e => setSpell(s => ({ ...s, school: e.target.value }))}>
+                <option>Abjuração</option>
+                <option>Adivinhação</option>
+                <option>Alteração</option>
+                <option>Convocação</option>
+                <option>Encantamento</option>
+                <option>Evocação</option>
+                <option>Ilusão</option>
+                <option>Necromancia</option>
+                <option>Transmutação</option>
+              </select>
             </div>
-            <div>
-              <label className="block text-xs font-bold text-rpg-gold mb-1">Duração</label>
-              <input type="text" className="w-full p-2 rounded bg-rpg-slate border border-rpg-gold/10 text-rpg-parchment" value={spell.duration} onChange={e => setSpell(s => ({ ...s, duration: e.target.value }))} />
+            <div className="flex items-end gap-2">
+              <label className="flex items-center gap-2 text-xs font-bold text-rpg-gold cursor-pointer">
+                <input type="checkbox" className="w-4 h-4" checked={spell.concentration || false} onChange={e => setSpell(s => ({ ...s, concentration: e.target.checked }))} />
+                Concentração
+              </label>
+              <label className="flex items-center gap-2 text-xs font-bold text-rpg-gold cursor-pointer">
+                <input type="checkbox" className="w-4 h-4" checked={spell.ritual || false} onChange={e => setSpell(s => ({ ...s, ritual: e.target.checked }))} />
+                Ritual
+              </label>
             </div>
           </div>
           <div>

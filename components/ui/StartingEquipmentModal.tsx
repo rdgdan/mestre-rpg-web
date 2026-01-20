@@ -111,7 +111,7 @@ export const StartingEquipmentModal: React.FC<StartingEquipmentModalProps> = ({ 
 
     return (
         <div className="fixed inset-0 z-[260] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in overflow-hidden">
-            <div className="bg-rpg-panel border-2 border-rpg-gold/30 rounded-lg max-w-2xl w-full shadow-[0_0_50px_-10px_rgba(234,179,8,0.3)] max-h-[90vh] flex flex-col overflow-hidden">
+            <div className="modal-theme-c border-2 rounded-lg max-w-2xl w-full shadow-[0_0_50px_-10px_rgba(255,120,72,0.3)] max-h-[90vh] flex flex-col overflow-hidden">
                 <div className="p-6 border-b border-rpg-gold/20 bg-black/20 flex-shrink-0">
                     <h3 className="text-xl font-bold font-cinzel text-rpg-gold uppercase tracking-widest text-center">
                         Equipamento Inicial: {className}

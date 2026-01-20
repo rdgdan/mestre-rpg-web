@@ -59,12 +59,12 @@ export default function CampaignDetailsPage() {
                     const data = docSnap.data();
                     if (data.ownerId !== user.uid) {
                         alert("Você não tem permissão para ver esta campanha.");
-                        router.push('/');
+                        router.push('/home');
                         return;
                     }
                     setCampaign({ id: docSnap.id, ...data } as Campaign);
                 } else {
-                    router.push('/');
+                    router.push('/home');
                 }
             } catch (error) {
                 console.error("Erro ao carregar campanha:", error);
@@ -140,12 +140,19 @@ export default function CampaignDetailsPage() {
     };
 
     if (!user && !isLoading) {
-        return <div className="min-h-screen bg-rpg-dark flex items-center justify-center text-rpg-gold">Acesso Negado.</div>;
+        return <div className="min-h-screen flex items-center justify-center text-rpg-gold" style={{ background: 'linear-gradient(160deg, rgba(10, 14, 40, 0.95), rgba(12, 8, 22, 0.94))' }}>Acesso Negado.</div>;
     }
 
     if (isLoading) {
         return (
-            <div className="min-h-screen bg-rpg-dark flex items-center justify-center">
+            <div 
+              className="min-h-screen flex items-center justify-center"
+              style={{
+                background: 'linear-gradient(160deg, rgba(10, 14, 40, 0.95), rgba(12, 8, 22, 0.94))',
+                backgroundImage: 'url("https://www.transparenttextures.com/patterns/dark-matter.png")',
+                backgroundAttachment: 'fixed'
+              }}
+            >
                 <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-rpg-gold"></div>
             </div>
         );
@@ -154,21 +161,28 @@ export default function CampaignDetailsPage() {
     if (!campaign) return null;
 
     return (
-        <div className="min-h-screen bg-rpg-dark text-rpg-parchment flex flex-col bg-[url('https://www.transparenttextures.com/patterns/dark-matter.png')]">
+        <div 
+          className="min-h-screen text-rpg-parchment flex flex-col"
+          style={{
+            background: 'linear-gradient(160deg, rgba(10, 14, 40, 0.95), rgba(12, 8, 22, 0.94))',
+            backgroundImage: 'url("https://www.transparenttextures.com/patterns/dark-matter.png")',
+            backgroundAttachment: 'fixed'
+          }}
+        >
 
             {/* Header Simplificado */}
             <header className="bg-rpg-panel p-3 border-b border-rpg-gold/20 sticky top-0 z-[100] shadow-lg">
                 <div className="container mx-auto flex justify-between items-center">
                     <div className="flex items-center gap-3">
-                        <Link href="/" className="text-rpg-grey hover:text-rpg-gold transition-colors font-cinzel text-sm">
+                        <Link href="/home" className="text-rpg-grey hover:text-rpg-gold transition-colors font-cinzel text-sm">
                             &larr; Voltar
                         </Link>
                         <div className="max-w-[200px] sm:max-w-md">
                             <EditableField
                                 initialValue={campaign.name}
                                 onSave={(val) => handleUpdateCampaign('name', val)}
-                                valueClassName="text-lg sm:text-xl font-bold font-cinzel text-rpg-gold uppercase tracking-wider"
-                                editClassName="font-cinzel font-bold text-lg"
+                                valueClassName="text-lg sm:text-xl font-bold font-cinzel uppercase tracking-wider text-orange-400" 
+                                editClassName="font-cinzel font-bold text-lg text-orange-400"
                             />
                         </div>
                     </div>

@@ -36,8 +36,15 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="pt-br" className={`${inter.variable} ${cinzel.variable} ${lato.variable} ${medieval.variable}`}>
-      <body className="bg-rpg-dark text-rpg-parchment antialiased">
+    <html lang="pt-br" className={`${inter.variable} ${cinzel.variable} ${lato.variable} ${medieval.variable}`} style={{
+      backgroundImage: 'linear-gradient(160deg, rgba(10, 14, 40, 0.95), rgba(12, 8, 22, 0.94)), url("https://www.transparenttextures.com/patterns/dark-matter.png")',
+      backgroundAttachment: 'fixed',
+      minHeight: '100vh'
+    }}>
+      <body style={{
+        background: 'transparent',
+        minHeight: '100vh'
+      }} className="text-rpg-parchment antialiased">
         <AuthProvider>
           {children}
         </AuthProvider>

@@ -88,8 +88,8 @@ const EquipmentModal: React.FC<EquipmentModalProps> = ({
 
     return (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex justify-center items-center z-50 p-4">
-            <div className="bg-rpg-panel border-2 border-rpg-gold/30 rounded-lg shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto custom-scrollbar">
-                <div className="p-6 border-b border-rpg-gold/20 flex justify-between items-center bg-black/20">
+            <div className="modal-theme-c border-2 rounded-lg shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto custom-scrollbar">
+                <div className="p-6 modal-header-theme-c border-b flex justify-between items-center bg-black/20">
                     <h2 className="text-2xl font-bold text-rpg-gold font-cinzel">
                         {itemToEdit ? 'Editar Equipamento' : 'Novo Equipamento'}
                     </h2>

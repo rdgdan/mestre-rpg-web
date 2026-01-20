@@ -41,6 +41,7 @@ export interface Character {
     id: string;
     ownerId: string;
     campaignId?: string; // ID da campanha vinculada
+    activeEncounterId?: string; // ID do encontro ativo para logs/balõezinhos
     name: string;
     race: string;
     class: string;
@@ -82,7 +83,10 @@ export interface Character {
         attackBonus: number;
         slots: Record<string, { current: number; max: number }>;
     };
+    spellSlotsCurrent?: Record<number, number>; // Slots usados no combate: { 1: 2, 2: 1, 3: 0 } = 2 nível 1, 1 nível 2, 0 nível 3
     rageBonus?: number;
+    hitDiceCurrent?: number;
+    hitDiceMax?: number;
 }
 
 // --- REGRAS DO JOGO --- 
@@ -315,6 +319,9 @@ export function createBlankCharacter(ownerId: string): Character {
         spells: [],
         deathSaves: { successes: 0, failures: 0 },
         treasures: '',
+        spellSlotsCurrent: {},
+        hitDiceCurrent: 1,
+        hitDiceMax: 1,
     };
 
     return calculateComputedStats(blank);

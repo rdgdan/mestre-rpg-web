@@ -296,7 +296,7 @@ function GrimorioTab({ searchQuery, onAddSpell }: { searchQuery: string; onAddSp
 
 
     return (
-        <div>
+        <div className="min-h-screen">
             <div className="flex justify-between items-center mb-4">
                 <h2 className="text-2xl font-bold font-cinzel text-rpg-gold">✨ Grimório de Magias</h2>
                 <div className="flex gap-2">
@@ -685,7 +685,7 @@ function BestiarioTab({ searchQuery }: { searchQuery: string }) {
     const [confirmOverwriteMonsterModal, setConfirmOverwriteMonsterModal] = useState<{ open: boolean; monsterName: string | null }>({ open: false, monsterName: null });
     const [confirmDeleteMonsterModal, setConfirmDeleteMonsterModal] = useState<{ open: boolean; monsterName: string | null }>({ open: false, monsterName: null });
     const [monsterToDelete, setMonsterToDelete] = useState<string | null>(null);
-    
+
     const loadMetadata = useCallback(async () => {
         if (!user) return;
         try {
@@ -1236,12 +1236,12 @@ function ItensTab({ searchQuery, onAddItem }: { searchQuery: string; onAddItem?:
     const [newMetadataName, setNewMetadataName] = useState('');
 
     const [categoryFilter, setCategoryFilter] = useState('all');
-    
+
     // Modal States
     const [confirmOverwriteItemModal, setConfirmOverwriteItemModal] = useState<{ open: boolean; itemName: string | null }>({ open: false, itemName: null });
     const [confirmDeleteItemModal, setConfirmDeleteItemModal] = useState<{ open: boolean; itemId: string | null }>({ open: false, itemId: null });
     const [itemToDelete, setItemToDelete] = useState<string | null>(null);
-    
+
     const loadMetadata = useCallback(async () => {
         if (!user) return;
         try {
@@ -2219,7 +2219,7 @@ function NotasTab() {
     const [notes, setNotes] = useState<any[]>([]);
     const [selectedNote, setSelectedNote] = useState<any | null>(null);
     const [isSaving, setIsSaving] = useState(false);
-    
+
     // Estados para Modals - Notas
     const [confirmDeleteNoteModal, setConfirmDeleteNoteModal] = useState<{ open: boolean; noteId: string | null }>({ open: false, noteId: null });
     const [noteToDelete, setNoteToDelete] = useState<string | null>(null);
@@ -2392,7 +2392,7 @@ function ArquivistaTab() {
     const [isImportingAll, setIsImportingAll] = useState(false);
     const [importProgress, setImportProgress] = useState({ current: 0, total: 0, success: 0, failed: 0 });
     const { user } = useAuth();
-    
+
     // Estados para Modals - Arquivista
     const [confirmImportAllModal, setConfirmImportAllModal] = useState<{ open: boolean }>({ open: false });
 
@@ -2623,8 +2623,8 @@ function ArquivistaTab() {
                 </div>
             </div>
 
-             {/* Modals */}
-             <Modal
+            {/* Modals */}
+            <Modal
                 isOpen={confirmImportAllModal.open}
                 onClose={() => setConfirmImportAllModal({ open: false })}
                 title="Importar Registros?"
@@ -2665,7 +2665,7 @@ function NpcTab({ searchQuery }: { searchQuery: string }) {
         role: 'civilian',
         race: 'Humano'
     });
-    
+
     // Estados para Modals - NPCs
     const [confirmOverwriteNpcModal, setConfirmOverwriteNpcModal] = useState<{ open: boolean; npcName: string | null }>({ open: false, npcName: null });
     const [confirmDeleteNpcModal, setConfirmDeleteNpcModal] = useState<{ open: boolean; npcName: string | null }>({ open: false, npcName: null });
@@ -3055,7 +3055,7 @@ export default function BibliotecaPage() {
 
     if (!user) {
         return (
-            <div className="min-h-screen bg-rpg-dark flex items-center justify-center font-cinzel text-rpg-gold">
+            <div className="min-h-screen flex items-center justify-center font-cinzel text-rpg-gold">
                 <div className="text-center">
                     <h1 className="text-4xl font-bold mb-4">🔒 Acesso Restrito</h1>
                     <p className="text-rpg-parchment mb-8">Apenas membros da Guilda podem acessar a Grande Biblioteca.</p>
@@ -3068,17 +3068,17 @@ export default function BibliotecaPage() {
     }
 
     return (
-        <div className="min-h-screen bg-rpg-dark text-rpg-parchment bg-[url('https://www.transparenttextures.com/patterns/dark-matter.png')] font-lato">
+        <div className="min-h-screen text-rpg-parchment font-lato">
             {/* HEADER */}
             <header className="bg-rpg-panel p-4 shadow-lg border-b-2 border-rpg-gold/30 sticky top-0 z-30 backdrop-blur-sm">
                 <div className="container mx-auto flex justify-between items-center">
                     <div className="flex items-center gap-4">
-                        <Link href="/" className="text-rpg-gold hover:text-rpg-gold-light transition-all text-2xl flex items-center gap-2 group">
+                        <Link href="/home" className="hover:text-rpg-gold-light transition-all text-2xl flex items-center gap-2 group" style={{ color: 'rgb(255, 191, 120)' }}>
                             <span className="group-hover:-translate-x-1 transition-transform">←</span>
                             <span>⚔️</span>
                         </Link>
                         <div>
-                            <h1 className="text-2xl font-bold font-cinzel text-rpg-gold text-shadow-md">📚 A Grande Biblioteca</h1>
+                            <h1 className="text-2xl font-bold font-cinzel text-shadow-md" style={{ color: 'rgb(255, 120, 72)' }}>📚 A Grande Biblioteca</h1>
                             <p className="text-[10px] text-rpg-grey uppercase tracking-widest leading-none">Compêndio de Conhecimento Arcano</p>
                         </div>
                     </div>

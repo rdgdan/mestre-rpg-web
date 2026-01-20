@@ -11,19 +11,34 @@ import {
     updateDoc,
     setDoc,
     collection,
-    getDoc
+    getDoc,
+    query,
+    orderBy,
+    limit
 } from 'firebase/firestore';
 import Modal from '@/components/Modal';
 import { translateMonster } from '@/lib/monster-translator';
 import { dndMonsters, MonsterData } from '@/lib/monsters-data';
 import { npcTemplates } from '@/lib/npc-combatants-data';
 import { CLASS_EFFECTS as SHARED_CLASS_EFFECTS, COMMON_CONDITIONS as SHARED_CONDITIONS, getCategorizedGlobalConditions } from '@/lib/effects-conditions';
+import CombatNotifications from '@/components/CombatNotifications';
 
 // --- Interfaces ---
 interface StatusEffect {
     id: string;
     name: string;
     duration: number;
+}
+
+interface CombatNotification {
+    id: string;
+    timestamp: number;
+    characterName: string;
+    characterId: string;
+    type: 'spell-use' | 'rest-short' | 'rest-long' | 'ability-use' | 'effect-applied' | 'effect-removed';
+    message: string;
+    icon: string;
+    severity: 'info' | 'warning' | 'success' | 'alert';
 }
 
 interface Combatant {
@@ -42,6 +57,10 @@ interface Combatant {
     xp?: number;
     statusEffects: StatusEffect[];
     deathSaves?: { successes: number; failures: number };
+    class?: string; // Para cálculo de slots de magia
+    level?: number; // Para cálculo de slots de magia
+    spellSlotsCurrent?: Record<number, number>; // Slots usados
+    spells?: any[]; // Magias do combatente
 }
 
 // --- Mapeamento de IDs para Nomes Exibidos ---
@@ -102,6 +121,7 @@ export default function ConfrontoDetalhesPage() {
     const [turnIndex, setTurnIndex] = useState(0);
     const [loading, setLoading] = useState(true);
     const [encounterTitle, setEncounterTitle] = useState('Encontro');
+    const [combatNotifications, setCombatNotifications] = useState<CombatNotification[]>([]);
 
     // --- Modais ---
     const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -130,6 +150,7 @@ export default function ConfrontoDetalhesPage() {
     const [isOnline, setIsOnline] = useState(false);
     const [myCharacters, setMyCharacters] = useState<any[]>([]);
     const [customNpcs, setCustomNpcs] = useState<any[]>([]);
+    const [notificationsMap, setNotificationsMap] = useState<Record<string, CombatNotification>>({});
 
     // --- NEW: Carregar monstros do Firestore ---
     const [dbMonsters, setDbMonsters] = useState<any[]>([]);
@@ -159,6 +180,21 @@ export default function ConfrontoDetalhesPage() {
 
     // Usar efeitos compartilhados do arquivo centralizado
     const CLASS_EFFECTS = SHARED_CLASS_EFFECTS;
+
+    // Função para adicionar notificação
+    const addNotification = (notif: Omit<CombatNotification, 'id' | 'timestamp'>) => {
+        const newNotif: CombatNotification = {
+            ...notif,
+            id: `notif_${Date.now()}`,
+            timestamp: Date.now()
+        };
+        setCombatNotifications(prev => [...prev, newNotif]);
+
+        // Remover notificação após 10 segundos
+        setTimeout(() => {
+            setCombatNotifications(prev => prev.filter(n => n.id !== newNotif.id));
+        }, 10000);
+    };
 
     useEffect(() => {
         // 1. Monstros
@@ -280,6 +316,8 @@ export default function ConfrontoDetalhesPage() {
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
 
+    const isRemoteUpdate = useRef(false);
+
     // --- Carregar Dados do Firestore ---
     useEffect(() => {
         if (authLoading) return;
@@ -292,12 +330,16 @@ export default function ConfrontoDetalhesPage() {
         const unsubscribe = onSnapshot(docRef, (docSnap) => {
             if (docSnap.exists()) {
                 const data = docSnap.data();
+                isRemoteUpdate.current = true; // Marca como atualização remota
+
+                // Evita re-render loops verificando se realmente mudou algo crítico se necessário, 
+                // mas a flag isRemoteUpdate já deve segurar o write-back.
                 setEncounterTitle(data.title || 'Encontro');
-                setCombatants(dedupeCombatants(data.combatants || []));
                 setPhase(data.phase || 'preparation');
                 setRound(data.round || 1);
                 setTurnIndex(data.turnIndex || 0);
                 setIsOnline(data.isOnline || false);
+                setCombatants(dedupeCombatants(data.combatants || []));
             } else {
                 console.error("Confronto não encontrado");
                 router.push('/confrontos');
@@ -319,25 +361,33 @@ export default function ConfrontoDetalhesPage() {
         const unsubscribe = onSnapshot(arenaRef, (arenaSnap) => {
             if (arenaSnap.exists()) {
                 const arenaCombatants = arenaSnap.data().combatants || [];
-                
+                isRemoteUpdate.current = true; // Marca como atualização remota
+
                 // Mescla combatentes: mantém os da encounters, mas atualiza/adiciona os de arenas_online
                 setCombatants((currentCombatants) => {
                     const merged = [...currentCombatants];
-                    
+                    let hasChanges = false;
+
                     arenaCombatants.forEach((arenaComb: Combatant) => {
-                        const existingIndex = merged.findIndex(c => 
+                        const existingIndex = merged.findIndex(c =>
                             c.id === arenaComb.id || c.externalId === arenaComb.externalId
                         );
-                        
+
                         if (existingIndex > -1) {
                             // Atualiza existente com dados da arena (ex: HP, status)
-                            merged[existingIndex] = { ...merged[existingIndex], ...arenaComb };
+                            // Deep compare simples para evitar updates desnecessários
+                            if (JSON.stringify(merged[existingIndex]) !== JSON.stringify({ ...merged[existingIndex], ...arenaComb })) {
+                                merged[existingIndex] = { ...merged[existingIndex], ...arenaComb };
+                                hasChanges = true;
+                            }
                         } else {
                             // Adiciona novo (jogador que entrou via arena)
                             merged.push(arenaComb);
+                            hasChanges = true;
                         }
                     });
-                    
+
+                    if (!hasChanges) return currentCombatants;
                     return dedupeCombatants(merged);
                 });
             }
@@ -348,9 +398,46 @@ export default function ConfrontoDetalhesPage() {
         return () => unsubscribe();
     }, [id, isOnline]);
 
+    // --- Listener para Logs de Combate (Balõezinhos) ---
+    useEffect(() => {
+        if (!id) return;
+
+        const logsRef = collection(db, 'encounters', id, 'logs');
+        const q = query(logsRef, orderBy('timestamp', 'desc'), limit(20));
+
+        const unsubscribe = onSnapshot(q, (snapshot) => {
+            const logs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as CombatNotification[];
+            setCombatNotifications(logs);
+
+            // Criar mapa do último log por combatente para os balõezinhos
+            const latestByChar: Record<string, CombatNotification> = {};
+            // Como está ordenado desc, o primeiro que encontrarmos de cada char é o mais recente
+            logs.forEach(log => {
+                if (!latestByChar[log.characterId]) {
+                    // Só mostrar balão se for recente (ex: menos de 45 segundos)
+                    const isRecent = (Date.now() - log.timestamp) < 45000;
+                    if (isRecent) {
+                        latestByChar[log.characterId] = log;
+                    }
+                }
+            });
+            setNotificationsMap(latestByChar);
+        }, (err) => {
+            console.error("Erro ao ouvir logs de combate:", err);
+        });
+
+        return () => unsubscribe();
+    }, [id]);
+
     // --- Sincronização Proativa (Observador de Estado) ---
     useEffect(() => {
         if (!isOnline || !id || loading) return;
+
+        // Se a mudança veio de fora (Firestore), não resincroniza (previne loop)
+        if (isRemoteUpdate.current) {
+            isRemoteUpdate.current = false;
+            return;
+        }
 
         // Timer para evitar excesso de escritas (debounce simples)
         const timer = setTimeout(() => {
@@ -361,7 +448,7 @@ export default function ConfrontoDetalhesPage() {
                 combatants,
                 isOnline
             });
-        }, 500);
+        }, 1000); // Aumentado para 1s
 
         return () => clearTimeout(timer);
     }, [phase, round, turnIndex, combatants, isOnline]);
@@ -421,7 +508,7 @@ export default function ConfrontoDetalhesPage() {
 
         const fetchCharacterData = async () => {
             const newInfo: Record<string, { class: string; level: number }> = {};
-            
+
             for (const charId of missingIds) {
                 try {
                     const docRef = doc(db, 'personagens', charId);
@@ -494,11 +581,11 @@ export default function ConfrontoDetalhesPage() {
             // Função recursiva para sanitizar objetos profundos
             const deepSanitize = (obj: any): any => {
                 if (obj === null || obj === undefined) return null;
-                
+
                 if (Array.isArray(obj)) {
                     return obj.map(item => deepSanitize(item));
                 }
-                
+
                 if (typeof obj === 'object') {
                     const sanitized: any = {};
                     Object.keys(obj).forEach(key => {
@@ -509,7 +596,7 @@ export default function ConfrontoDetalhesPage() {
                     });
                     return sanitized;
                 }
-                
+
                 return obj;
             };
 
@@ -535,7 +622,7 @@ export default function ConfrontoDetalhesPage() {
                         const arenaCombatants = arenaSnap.data().combatants || [];
                         // Adiciona combatentes que só existem em arenas_online (jogadores que entraram via arena)
                         arenaCombatants.forEach((arenaComb: any) => {
-                            const exists = mergedCombatants.findIndex((c: any) => 
+                            const exists = mergedCombatants.findIndex((c: any) =>
                                 c.id === arenaComb.id || c.externalId === arenaComb.externalId
                             );
                             if (exists === -1) {
@@ -584,51 +671,63 @@ export default function ConfrontoDetalhesPage() {
     // --- Ações de Combate ---
     const handleAddCombatant = async (e: React.FormEvent) => {
         e.preventDefault();
-        const qty = Math.min(Math.max(Number(newCombatant.quantity) || 1, 1), 20);
-        const baseName = translateMonster(newCombatant.name) || 'Combatente';
-        const entries: Combatant[] = [];
+        try {
+            const qty = Math.min(Math.max(Number(newCombatant.quantity) || 1, 1), 20);
+            const baseName = translateMonster(newCombatant.name) || 'Combatente';
+            const entries: Combatant[] = [];
 
-        for (let i = 0; i < qty; i++) {
-            const suffix = qty > 1 ? ` ${i + 1}` : '';
-            const entry: Combatant = {
-                id: Math.random().toString(36).substr(2, 9),
-                name: `${baseName}${suffix}`.trim(),
-                type: newCombatant.type,
-                hp: Number(newCombatant.hp) || 1,
-                maxHp: Number(newCombatant.hp) || 1,
-                initiative: Number(newCombatant.initiative) || 0,
-                ac: Number(newCombatant.ac) || 10,
-                cr: newCombatant.cr || '0',
-                xp: newCombatant.xp === '' ? undefined : Number(newCombatant.xp) || newCombatant.xp,
-                status: 'active',
-                statusEffects: []
-            };
+            for (let i = 0; i < qty; i++) {
+                const suffix = qty > 1 ? ` ${i + 1}` : '';
+                const entry: Combatant = {
+                    id: Math.random().toString(36).substr(2, 9),
+                    name: `${baseName}${suffix}`.trim(),
+                    type: newCombatant.type,
+                    hp: Number(newCombatant.hp) || 1,
+                    maxHp: Number(newCombatant.hp) || 1,
+                    initiative: Number(newCombatant.initiative) || 0,
+                    ac: Number(newCombatant.ac) || 10,
+                    cr: newCombatant.cr || '0',
+                    xp: newCombatant.xp === '' ? undefined : Number(newCombatant.xp) || newCombatant.xp,
+                    status: 'active',
+                    statusEffects: []
+                };
 
-            if (newCombatant.externalId) entry.externalId = `${newCombatant.externalId}${qty > 1 ? `-${i + 1}` : ''}`;
-            if (newCombatant.ownerId) entry.ownerId = newCombatant.ownerId;
-            if (newCombatant.ownerName) entry.ownerName = newCombatant.ownerName;
+                if (newCombatant.externalId) entry.externalId = `${newCombatant.externalId}${qty > 1 ? `-${i + 1}` : ''}`;
+                if (newCombatant.ownerId) entry.ownerId = newCombatant.ownerId;
+                if (newCombatant.ownerName) entry.ownerName = newCombatant.ownerName;
 
-            entries.push(entry);
+                entries.push(entry);
+            }
+
+            const updated = [...combatants, ...entries];
+
+            // UI Otimista: Atualiza local e fecha modal IMEDIATAMENTE
+            setCombatants(updated);
+            setIsAddModalOpen(false);
+            setNewCombatant({
+                name: '',
+                hp: '' as any,
+                initiative: '' as any,
+                type: 'monster',
+                ac: '' as any,
+                cr: '0',
+                xp: '' as any,
+                quantity: 1,
+                externalId: '',
+                ownerId: '',
+                ownerName: ''
+            });
+            setMonsterSearch('');
+
+            // Tenta sincronizar em background (se falhar por quota, UI já respondeu)
+            await syncState({ combatants: updated });
+        } catch (err) {
+            console.error("Erro ao sincronizar novo combatente (Quota/Network):", err);
+            // Não bloqueamos o usuário com alert, pois a ação local funcionou
+        } finally {
+            // Garante fechamento (caso extremo)
+            setIsAddModalOpen(false);
         }
-
-        const updated = [...combatants, ...entries];
-        setCombatants(updated);
-        await syncState({ combatants: updated });
-        setIsAddModalOpen(false);
-        setNewCombatant({
-            name: '',
-            hp: '' as any,
-            initiative: '' as any,
-            type: 'monster',
-            ac: '' as any,
-            cr: '0',
-            xp: '' as any,
-            quantity: 1,
-            externalId: '',
-            ownerId: '',
-            ownerName: ''
-        });
-        setMonsterSearch('');
     };
 
     // Limpar efeitos da ficha quando personagem morre
@@ -659,7 +758,7 @@ export default function ConfrontoDetalhesPage() {
             return c;
         });
         setCombatants(updated);
-        await syncState({ combatants: updated });
+        syncState({ combatants: updated }).catch(err => console.error("Erro ao sincronizar HP:", err));
     };
 
     const startCombat = async () => {
@@ -683,12 +782,14 @@ export default function ConfrontoDetalhesPage() {
         setPhase('combat');
         setRound(1);
         setTurnIndex(0);
-        await syncState({
+
+        // Sincronização em background (não bloqueia a UI)
+        syncState({
             combatants: sorted,
             phase: 'combat',
             round: 1,
             turnIndex: 0
-        });
+        }).catch(err => console.error("Erro ao sincronizar início de combate:", err));
     };
 
     const nextTurn = async () => {
@@ -700,7 +801,9 @@ export default function ConfrontoDetalhesPage() {
         }
         setTurnIndex(newIdx);
         setRound(newRound);
-        await syncState({ turnIndex: newIdx, round: newRound });
+
+        // Sincronização em background
+        syncState({ turnIndex: newIdx, round: newRound }).catch(err => console.error("Erro ao sincronizar próximo turno:", err));
     };
 
     const resetCombat = async () => {
@@ -719,7 +822,7 @@ export default function ConfrontoDetalhesPage() {
             name: effect.name || effect.id,
             duration: effect.duration || 1
         };
-        
+
         const updated = combatants.map(c => {
             if (c.id !== combatantId) return c;
             const has = Array.isArray(c.statusEffects) && c.statusEffects.some(se => se.id === effectToApply.id);
@@ -727,8 +830,10 @@ export default function ConfrontoDetalhesPage() {
             return { ...c, statusEffects: [...(c.statusEffects || []), effectToApply] } as Combatant;
         });
         setCombatants(updated);
-        await syncState({ combatants: updated });
-        
+
+        // Sincronização em background
+        syncState({ combatants: updated }).catch(err => console.error("Erro ao sincronizar efeito:", err));
+
         // Sincronizar com a ficha do personagem se for vinculado
         const combatant = updated.find(c => c.id === combatantId);
         if (combatant?.externalId) {
@@ -757,8 +862,10 @@ export default function ConfrontoDetalhesPage() {
             } as Combatant;
         });
         setCombatants(updated);
-        await syncState({ combatants: updated });
-        
+
+        // Sincronização em background
+        syncState({ combatants: updated }).catch(err => console.error("Erro ao sincronizar remoção de efeito:", err));
+
         // Sincronizar com a ficha do personagem se for vinculado
         const combatant = combatants.find(c => c.id === combatantId);
         if (combatant?.externalId) {
@@ -781,9 +888,11 @@ export default function ConfrontoDetalhesPage() {
         const newStatus = !isOnline;
 
         try {
-            // 1. Atualizar o encontro local
-            await updateDoc(doc(db, 'encounters', id), { isOnline: newStatus });
+            // 1. Atualizar UI Otimista
             setIsOnline(newStatus);
+
+            // 2. Atualizar o encontro no banco
+            updateDoc(doc(db, 'encounters', id), { isOnline: newStatus }).catch(err => console.error("Erro ao salvar status online:", err));
 
             if (newStatus) {
                 // 2. Criar/Sincronizar com a arena online
@@ -816,14 +925,46 @@ export default function ConfrontoDetalhesPage() {
         }
     };
 
-    const handleCopyArenaLink = () => {
+    const handleCopyArenaLink = async () => {
+        // Força sincronização imediata para garantir que o documento exista
+        if (!isOnline) {
+            await toggleOnlineCombat();
+        } else {
+            // Se já estiver online, força um update para garantir que o documento arenas_online exista
+            await syncState({ isOnline: true });
+        }
+
         const url = `${window.location.origin}/arena/${id}`;
         navigator.clipboard.writeText(url);
-        alert("Link da Arena copiado! 🔗");
+        // Usa o Toast personalizado/notificação se possível, ou alert
+        // Como não temos Toast aqui fácil (está no layout?), alert serve por enquanto.
+        alert("Link da Arena copiado! 🔗\nA sessão online foi validada com sucesso.");
     };
 
     const handleExitArena = () => {
         router.push('/confrontos');
+    };
+
+    const handleDeleteEncounter = async () => {
+        if (!window.confirm("Tem certeza que deseja EXCLUIR permanentemente este encontro? Esta ação não pode ser desfeita.")) return;
+
+        try {
+            const { deleteDoc, doc } = await import('firebase/firestore');
+
+            // 1. Deletar encontro principal
+            await deleteDoc(doc(db, 'encounters', id));
+
+            // 2. Deletar sessão online se existir
+            if (isOnline) {
+                await deleteDoc(doc(db, 'arenas_online', id));
+            }
+
+            alert("Encontro excluído com sucesso.");
+            router.push('/confrontos');
+        } catch (err) {
+            console.error("Erro ao excluir encontro:", err);
+            alert("Erro ao excluir o encontro. Tente novamente.");
+        }
     };
 
     // --- Cálculos de XP ---
@@ -911,6 +1052,9 @@ export default function ConfrontoDetalhesPage() {
                 </div>
             </header>
 
+            {/* Notificações de Combate */}
+            <CombatNotifications notifications={combatNotifications} maxNotifications={5} />
+
             {phase === 'combat' && (
                 <div className="bg-rpg-gold/10 border-b border-rpg-gold/20 p-2 sm:p-3 flex justify-between items-center px-4 sm:px-6 sticky top-[61px] sm:top-[74px] z-30 backdrop-blur-sm">
                     <div className="font-cinzel text-[10px] sm:text-xs text-rpg-gold flex gap-3 sm:gap-6 items-baseline overflow-hidden">
@@ -936,7 +1080,7 @@ export default function ConfrontoDetalhesPage() {
                             if (fx.id === 'inspiration') return 'animate-inspiration';
                             return 'animate-effect-glow';
                         }).join(' ') : '';
-                        
+
                         // Detectar se tem ambos benefícios e malefícios
                         const benefitIds = ['rage', 'reckless', 'inspiration', 'counter-charm', 'bless', 'sanctuary', 'shield-faith', 'wild-shape', 'barkskin', 'action-surge', 'second-wind', 'indomitable', 'evasion', 'uncanny-dodge', 'flurry', 'patient-defense', 'lay-hands', 'divine-smite', 'aura-protection', 'invisivel', 'enfeiticado'];
                         const commonConditionIds = ['caido', 'envenenado', 'atordoado', 'amedrontado', 'agarrado', 'incapacitado', 'invisivel', 'paralisado', 'petrificado', 'preso', 'inconsciente', 'cego', 'surdo', 'aterrorizado', 'exaurido', 'cansado', 'queimado', 'enfraquecido', 'fome', 'sangrando', 'ebrio', 'amaldicoado'];
@@ -952,406 +1096,427 @@ export default function ConfrontoDetalhesPage() {
                         const isFallen = c.statusEffects.some(se => se.id === 'caido');
                         const isDefeated = c.hp === 0;
                         const isDead = c.status === 'dead';
-                        
+
                         return (
-                        <div
-                            key={c.id}
-                            style={isDead ? { opacity: 0.5, pointerEvents: 'none' } : {}}
-                            className={`
+                            <div
+                                key={c.id}
+                                style={isDead ? { opacity: 0.5, pointerEvents: 'none' } : {}}
+                                className={`
                                 relative p-3 sm:p-5 rounded-xl transition-all duration-300
                                 ${isDefeated ? 'border-2' : hasBothEffects ? 'border-l-[6px] border-l-green-500 border-r-[6px] border-r-red-500 border-t-2 border-b-2 border-t-purple-500/50 border-b-purple-500/50' : 'border-2'}
                                 ${isDefeated ? '' : hasUniqueEffects && !hasOnlyGlobalConditions ? 'effect-unique' : ''}
-                                ${phase === 'combat' && turnIndex === index && !isDefeated ? 'active-turn-animation bg-rpg-gold/15 border-rpg-gold scale-[1.01] z-10' : 
-                                  isDefeated ? 'bg-rpg-dark/80 border-gray-600/40 defeated-animation' :
-                                  hasBothEffects ? 'bg-gradient-to-r from-green-950/20 via-rpg-dark/50 to-red-950/20 shadow-lg' :
-                                  hasOnlyBenefits ? 'bg-green-950/20 border-green-500/50 shadow-lg shadow-green-900/20' :
-                                  hasOnlyDebuffs ? 'bg-orange-950/20 border-orange-500/50 shadow-lg shadow-orange-900/20' :
-                                  c.type === 'player' ? 'bg-blue-950/20 border-blue-500/30 shadow-lg shadow-blue-900/10' :
-                                  c.type === 'npc' ? 'bg-yellow-950/20 border-yellow-600/30 shadow-lg shadow-yellow-900/10' :
-                                  'bg-red-950/20 border-red-600/30 shadow-lg shadow-red-900/10'}
+                                ${phase === 'combat' && turnIndex === index && !isDefeated ? 'active-turn-animation bg-rpg-gold/15 border-rpg-gold scale-[1.01] z-10' :
+                                        isDefeated ? 'bg-rpg-dark/80 border-gray-600/40 defeated-animation' :
+                                            hasBothEffects ? 'bg-gradient-to-r from-green-950/20 via-rpg-dark/50 to-red-950/20 shadow-lg' :
+                                                hasOnlyBenefits ? 'bg-green-950/20 border-green-500/50 shadow-lg shadow-green-900/20' :
+                                                    hasOnlyDebuffs ? 'bg-orange-950/20 border-orange-500/50 shadow-lg shadow-orange-900/20' :
+                                                        c.type === 'player' ? 'bg-blue-950/20 border-blue-500/30 shadow-lg shadow-blue-900/10' :
+                                                            c.type === 'npc' ? 'bg-yellow-950/20 border-yellow-600/30 shadow-lg shadow-yellow-900/10' :
+                                                                'bg-red-950/20 border-red-600/30 shadow-lg shadow-red-900/10'}
                             `}
-                        >
-                            {/* Faixa MORTO quando status = dead */}
-                            {isDead && (
-                                <div className="absolute inset-0 flex items-center justify-center z-50 bg-black/60 rounded-xl">
-                                    <div className="transform -rotate-12">
-                                        <div className="bg-red-900 text-red-100 px-16 py-4 font-cinzel font-bold text-4xl tracking-widest border-4 border-red-700 shadow-2xl rounded-xl">
-                                            ☠️ MORTO ☠️
+                            >
+                                {/* Balão de Notificação (Destaque Player Action) */}
+                                {notificationsMap[c.externalId || c.id] && (
+                                    <div className="absolute -top-6 left-1/2 -translate-x-1/2 z-[60] animate-bubble-float pointer-events-none">
+                                        <div className="bg-rpg-gold text-rpg-dark font-bold text-[10px] sm:text-xs py-1.5 px-3 rounded-full shadow-[0_0_15px_rgba(212,175,55,0.6)] border-2 border-rpg-dark flex items-center gap-2 whitespace-nowrap">
+                                            <span className="text-base">{notificationsMap[c.externalId || c.id].icon}</span>
+                                            <span>{notificationsMap[c.externalId || c.id].message}</span>
                                         </div>
+                                        <div className="w-0 h-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-t-[8px] border-t-rpg-gold mx-auto" />
                                     </div>
-                                </div>
-                            )}
-                            
-                            {/* Overlay Centralizado quando HP = 0 */}
-                            {isDefeated && !isDead && (
-                                <div className="overlay-colorido absolute inset-0 flex flex-col items-center justify-center z-50 bg-black/20 rounded-xl">
-                                    <div className="flex flex-col items-center gap-4">
-                                        {/* Badge CAÍDO/MORTO */}
-                                        <div className="bg-red-900 text-red-100 px-8 py-3 rounded-full font-cinzel font-bold text-2xl tracking-wide border-4 border-red-700 shadow-2xl">
-                                            {c.type === 'monster' ? '💀 MORTO' : '⚰️ CAÍDO'}
-                                        </div>
-                                        
-                                        {/* Botões de Ação (apenas jogadores e NPCs) */}
-                                        {(c.type === 'player' || c.type === 'npc') && (
-                                            <div className="flex gap-3">
-                                                {/* Botão CURAR */}
-                                                <button
-                                                    onClick={() => setConfirmCureModal({ open: true, combatant: c })}
-                                                    style={{
-                                                        background: '#22c55e',
-                                                        border: '4px solid #86efac',
-                                                        color: '#ffffff',
-                                                        padding: '1rem 2rem',
-                                                        borderRadius: '0.75rem',
-                                                        fontSize: '1.125rem',
-                                                        fontWeight: '700',
-                                                        cursor: 'pointer',
-                                                        boxShadow: '0 0 30px rgba(34, 197, 94, 0.6), 0 25px 50px -12px rgba(0, 0, 0, 0.25)',
-                                                        transition: 'transform 0.2s',
-                                                        animation: 'pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite',
-                                                        filter: 'none'
-                                                    } as React.CSSProperties}
-                                                    onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.05)'}
-                                                    onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
-                                                    title={c.type === 'player' ? 'Curar com 1 HP' : 'Levantar com 1 HP'}
-                                                >
-                                                    ❤️ {c.type === 'player' ? 'CURAR' : 'LEVANTAR'}
-                                                </button>
-                                                
-                                                {/* Botão MATAR */}
-                                                <button
-                                                    onClick={async () => {
-                                                        try {
-                                                            console.log('MATAR clicked for:', c.name, c.id);
-                                                            const updated = combatants.map(comb => {
-                                                                if (comb.id !== c.id) return comb;
-                                                                console.log('Marking as dead:', comb.name);
-                                                                return { ...comb, status: 'dead' as const, hp: 0 };
-                                                            });
-                                                            console.log('Updated combatants:', updated);
-                                                            setCombatants(updated);
-                                                            await syncState({ combatants: updated });
-                                                            // Limpar efeitos da ficha quando morre
-                                                            await clearCharacterEffects(c);
-                                                            console.log('State synced');
-                                                        } catch (error) {
-                                                            console.error('Error in MATAR button:', error);
-                                                        }
-                                                    }}
-                                                    style={{
-                                                        background: '#dc2626',
-                                                        border: '4px solid #f87171',
-                                                        color: '#ffffff',
-                                                        padding: '1rem 2rem',
-                                                        borderRadius: '0.75rem',
-                                                        fontSize: '1.125rem',
-                                                        fontWeight: '700',
-                                                        cursor: 'pointer',
-                                                        boxShadow: '0 0 30px rgba(220, 38, 38, 0.6), 0 25px 50px -12px rgba(0, 0, 0, 0.25)',
-                                                        transition: 'transform 0.2s',
-                                                        filter: 'none'
-                                                    } as React.CSSProperties}
-                                                    onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.05)'}
-                                                    onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
-                                                    title="Matar permanentemente"
-                                                >
-                                                    ☠️ MATAR
-                                                </button>
+                                )}
+
+                                {/* Faixa MORTO quando status = dead */}
+                                {isDead && (
+                                    <div className="absolute inset-0 flex items-center justify-center z-50 bg-black/60 rounded-xl">
+                                        <div className="transform -rotate-12">
+                                            <div className="bg-red-900 text-red-100 px-16 py-4 font-cinzel font-bold text-4xl tracking-widest border-4 border-red-700 shadow-2xl rounded-xl">
+                                                ☠️ MORTO ☠️
                                             </div>
-                                        )}
+                                        </div>
                                     </div>
-                                </div>
-                            )}
-                            
-                            <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
-                                <div className="flex items-center gap-3 sm:gap-5 flex-1 w-full">
-                                    <div className="bg-rpg-dark border border-rpg-gold/30 w-10 h-10 sm:w-14 sm:h-14 rounded-lg flex items-center justify-center font-cinzel text-rpg-gold font-bold shrink-0 shadow-inner">
-                                        {c.initiative}
-                                    </div>
-                                    <div className="flex-1 overflow-hidden">
-                                        <h3 className="text-base sm:text-xl font-cinzel text-rpg-parchment leading-tight truncate group-hover:text-rpg-gold transition-colors">{c.name}</h3>
-                                        <div className="flex flex-wrap gap-2 text-[10px] sm:text-xs uppercase font-bold tracking-widest mt-1">
-                                            <span className={`px-1.5 py-0.5 rounded border ${
-                                                c.type === 'player' ? 'border-blue-500/50 text-blue-400 bg-blue-950/30' : 
-                                                c.type === 'npc' ? 'border-yellow-600/50 text-yellow-400 bg-yellow-950/30' :
-                                                'border-red-600/50 text-red-400 bg-red-950/30'
-                                            }`}>
-                                                {c.type === 'monster' ? '👹 MONSTRO' : c.type === 'player' ? '🛡️ JOGADOR' : '⚔️ NPC'}
-                                            </span>
-                                            {c.ac && <span className="bg-rpg-dark/50 px-1.5 py-0.5 rounded border border-white/5 text-rpg-grey">CA {c.ac}</span>}
-                                            {c.cr && <span className="bg-rpg-dark/50 px-1.5 py-0.5 rounded border border-white/5 text-rpg-grey">CR {c.cr}</span>}
-                                            {hasEffects && (
-                                                <span className="px-1.5 py-0.5 rounded border border-purple-500/50 text-purple-300 bg-purple-950/30 animate-pulse">
-                                                    ✨ {c.statusEffects.length} EFEITO{c.statusEffects.length > 1 ? 'S' : ''}
-                                                </span>
+                                )}
+
+                                {/* Overlay Centralizado quando HP = 0 */}
+                                {isDefeated && !isDead && (
+                                    <div className="overlay-colorido absolute inset-0 flex flex-col items-center justify-center z-50 bg-black/20 rounded-xl">
+                                        <div className="flex flex-col items-center gap-4">
+                                            {/* Badge CAÍDO/MORTO */}
+                                            <div className="bg-red-900 text-red-100 px-8 py-3 rounded-full font-cinzel font-bold text-2xl tracking-wide border-4 border-red-700 shadow-2xl">
+                                                {c.type === 'monster' ? '💀 MORTO' : '⚰️ CAÍDO'}
+                                            </div>
+
+                                            {/* Botões de Ação (apenas jogadores e NPCs) */}
+                                            {(c.type === 'player' || c.type === 'npc') && (
+                                                <div className="flex gap-3">
+                                                    {/* Botão CURAR */}
+                                                    <button
+                                                        onClick={() => setConfirmCureModal({ open: true, combatant: c })}
+                                                        style={{
+                                                            background: '#22c55e',
+                                                            border: '4px solid #86efac',
+                                                            color: '#ffffff',
+                                                            padding: '1rem 2rem',
+                                                            borderRadius: '0.75rem',
+                                                            fontSize: '1.125rem',
+                                                            fontWeight: '700',
+                                                            cursor: 'pointer',
+                                                            boxShadow: '0 0 30px rgba(34, 197, 94, 0.6), 0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+                                                            transition: 'transform 0.2s',
+                                                            animation: 'pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+                                                            filter: 'none'
+                                                        } as React.CSSProperties}
+                                                        onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.05)'}
+                                                        onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
+                                                        title={c.type === 'player' ? 'Curar com 1 HP' : 'Levantar com 1 HP'}
+                                                    >
+                                                        ❤️ {c.type === 'player' ? 'CURAR' : 'LEVANTAR'}
+                                                    </button>
+
+                                                    {/* Botão MATAR */}
+                                                    <button
+                                                        onClick={async () => {
+                                                            try {
+                                                                const updated = combatants.map(comb => {
+                                                                    if (comb.id !== c.id) return comb;
+                                                                    return { ...comb, status: 'dead' as const, hp: 0 };
+                                                                });
+
+                                                                // UI Otimista
+                                                                setCombatants(updated);
+
+                                                                // Sync em background
+                                                                syncState({ combatants: updated }).catch(err => console.error("Erro ao sincronizar morte:", err));
+
+                                                                // Limpar efeitos da ficha quando morre
+                                                                clearCharacterEffects(c).catch(err => console.error("Erro ao limpar efeitos da ficha:", err));
+
+                                                            } catch (error) {
+                                                                console.error('Error in MATAR button:', error);
+                                                            }
+                                                        }}
+                                                        style={{
+                                                            background: '#dc2626',
+                                                            border: '4px solid #f87171',
+                                                            color: '#ffffff',
+                                                            padding: '1rem 2rem',
+                                                            borderRadius: '0.75rem',
+                                                            fontSize: '1.125rem',
+                                                            fontWeight: '700',
+                                                            cursor: 'pointer',
+                                                            boxShadow: '0 0 30px rgba(220, 38, 38, 0.6), 0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+                                                            transition: 'transform 0.2s',
+                                                            filter: 'none'
+                                                        } as React.CSSProperties}
+                                                        onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.05)'}
+                                                        onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
+                                                        title="Matar permanentemente"
+                                                    >
+                                                        ☠️ MATAR
+                                                    </button>
+                                                </div>
                                             )}
                                         </div>
                                     </div>
-                                </div>
+                                )}
 
-                                <div className="flex flex-col gap-3 w-full pt-3 border-t border-white/5">
-                                    {/* Barra de Vida */}
-                                    <div className="w-full">
-                                        <div className="flex justify-between text-[10px] sm:text-xs font-bold mb-1.5 font-medieval tracking-widest">
-                                            <span className="text-rpg-grey">VIDA: <span className="text-rpg-parchment">{c.hp} / {c.maxHp}</span></span>
-                                            <span className={c.hp / c.maxHp < 0.3 ? 'text-red-500 animate-pulse' : 'text-rpg-grey'}>{Math.round((c.hp / c.maxHp) * 100)}%</span>
+                                <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
+                                    <div className="flex items-center gap-3 sm:gap-5 flex-1 w-full">
+                                        <div className="bg-rpg-dark border border-rpg-gold/30 w-10 h-10 sm:w-14 sm:h-14 rounded-lg flex items-center justify-center font-cinzel text-rpg-gold font-bold shrink-0 shadow-inner">
+                                            {c.initiative}
                                         </div>
-                                        <div className="h-2 sm:h-3 w-full bg-rpg-dark/50 rounded-full overflow-hidden border border-white/5 p-[1px]">
-                                            <div
-                                                className={`h-full transition-all duration-700 rounded-full ${c.hp / c.maxHp > 0.5 ? 'bg-gradient-to-r from-green-600 to-green-400' : c.hp / c.maxHp > 0.2 ? 'bg-gradient-to-r from-yellow-600 to-yellow-400' : 'bg-gradient-to-r from-red-600 to-red-400'}`}
-                                                style={{ width: `${(c.hp / c.maxHp) * 100}%` }}
-                                            />
+                                        <div className="flex-1 overflow-hidden">
+                                            <h3 className="text-base sm:text-xl font-cinzel text-rpg-parchment leading-tight truncate group-hover:text-rpg-gold transition-colors">{c.name}</h3>
+                                            <div className="flex flex-wrap gap-2 text-[10px] sm:text-xs uppercase font-bold tracking-widest mt-1">
+                                                <span className={`px-1.5 py-0.5 rounded border ${c.type === 'player' ? 'border-blue-500/50 text-blue-400 bg-blue-950/30' :
+                                                    c.type === 'npc' ? 'border-yellow-600/50 text-yellow-400 bg-yellow-950/30' :
+                                                        'border-red-600/50 text-red-400 bg-red-950/30'
+                                                    }`}>
+                                                    {c.type === 'monster' ? '👹 MONSTRO' : c.type === 'player' ? '🛡️ JOGADOR' : '⚔️ NPC'}
+                                                </span>
+                                                {c.externalId && (
+                                                    <Link
+                                                        href={`/personagem/${c.externalId}`}
+                                                        target="_blank"
+                                                        className="px-1.5 py-0.5 rounded border border-rpg-gold/50 text-rpg-gold bg-rpg-gold/10 hover:bg-rpg-gold/20 transition-all flex items-center gap-1"
+                                                    >
+                                                        👁️ FICHA
+                                                    </Link>
+                                                )}
+                                                {c.ac && <span className="bg-rpg-dark/50 px-1.5 py-0.5 rounded border border-white/5 text-rpg-grey">CA {c.ac}</span>}
+                                                {c.cr && <span className="bg-rpg-dark/50 px-1.5 py-0.5 rounded border border-white/5 text-rpg-grey">CR {c.cr}</span>}
+                                                {hasEffects && (
+                                                    <span className="px-1.5 py-0.5 rounded border border-purple-500/50 text-purple-300 bg-purple-950/30 animate-pulse">
+                                                        ✨ {c.statusEffects.length} EFEITO{c.statusEffects.length > 1 ? 'S' : ''}
+                                                    </span>
+                                                )}
+                                            </div>
                                         </div>
                                     </div>
 
-                                    {/* Exibição de Efeitos Ativos */}
-                                    {hasEffects && (
-                                        (() => {
-                                            const benefits = c.statusEffects.filter(se => {
-                                                const benefitIds = ['rage', 'reckless', 'inspiration', 'counter-charm', 'bless', 'sanctuary', 'shield-faith', 'wild-shape', 'barkskin', 'action-surge', 'second-wind', 'indomitable', 'evasion', 'uncanny-dodge', 'flurry', 'patient-defense', 'lay-hands', 'divine-smite', 'aura-protection', 'invisivel', 'enfeiticado'];
-                                                return benefitIds.includes(se.id) || (se as any).category === 'benefit';
-                                            });
-                                            const debuffs = c.statusEffects.filter(se => !benefits.includes(se));
-                                            
-                                            // Se houver ambos, exibir card split com metade verde e metade vermelha
-                                            if (benefits.length > 0 && debuffs.length > 0) {
-                                                return (
-                                                    <div className="w-full rounded-lg overflow-hidden border-2 border-purple-500/50">
-                                                        <div className="flex h-12">
-                                                            {/* Lado Esquerdo - Benefícios (Verde) */}
-                                                            <div className="flex-1 bg-gradient-to-br from-green-900/50 to-green-900/20 border-r border-green-600/50 px-2 py-1 overflow-y-auto flex flex-col justify-center">
-                                                                <div className="text-[9px] text-green-400 font-bold uppercase mb-0.5">✦ Ben.</div>
-                                                                <div className="space-y-0">
-                                                                    {benefits.map(se => (
-                                                                        <div key={se.id} className="text-[14px] text-green-300 font-bold truncate leading-tight">
-                                                                            {getEffectDisplayName(se.id, se.name)}
-                                                                        </div>
-                                                                    ))}
+                                    <div className="flex flex-col gap-3 w-full pt-3 border-t border-white/5">
+                                        {/* Barra de Vida */}
+                                        <div className="w-full">
+                                            <div className="flex justify-between text-[10px] sm:text-xs font-bold mb-1.5 font-medieval tracking-widest">
+                                                <span className="text-rpg-grey">VIDA: <span className="text-rpg-parchment">{c.hp} / {c.maxHp}</span></span>
+                                                <span className={c.hp / c.maxHp < 0.3 ? 'text-red-500 animate-pulse' : 'text-rpg-grey'}>{Math.round((c.hp / c.maxHp) * 100)}%</span>
+                                            </div>
+                                            <div className="h-2 sm:h-3 w-full bg-rpg-dark/50 rounded-full overflow-hidden border border-white/5 p-[1px]">
+                                                <div
+                                                    className={`h-full transition-all duration-700 rounded-full ${c.hp / c.maxHp > 0.5 ? 'bg-gradient-to-r from-green-600 to-green-400' : c.hp / c.maxHp > 0.2 ? 'bg-gradient-to-r from-yellow-600 to-yellow-400' : 'bg-gradient-to-r from-red-600 to-red-400'}`}
+                                                    style={{ width: `${(c.hp / c.maxHp) * 100}%` }}
+                                                />
+                                            </div>
+                                        </div>
+
+                                        {/* Exibição de Efeitos Ativos */}
+                                        {hasEffects && (
+                                            (() => {
+                                                const benefits = c.statusEffects.filter(se => {
+                                                    const benefitIds = ['rage', 'reckless', 'inspiration', 'counter-charm', 'bless', 'sanctuary', 'shield-faith', 'wild-shape', 'barkskin', 'action-surge', 'second-wind', 'indomitable', 'evasion', 'uncanny-dodge', 'flurry', 'patient-defense', 'lay-hands', 'divine-smite', 'aura-protection', 'invisivel', 'enfeiticado'];
+                                                    return benefitIds.includes(se.id) || (se as any).category === 'benefit';
+                                                });
+                                                const debuffs = c.statusEffects.filter(se => !benefits.includes(se));
+
+                                                // Se houver ambos, exibir card split com metade verde e metade vermelha
+                                                if (benefits.length > 0 && debuffs.length > 0) {
+                                                    return (
+                                                        <div className="w-full rounded-lg overflow-hidden border-2 border-purple-500/50">
+                                                            <div className="flex h-12">
+                                                                {/* Lado Esquerdo - Benefícios (Verde) */}
+                                                                <div className="flex-1 bg-gradient-to-br from-green-900/50 to-green-900/20 border-r border-green-600/50 px-2 py-1 overflow-y-auto flex flex-col justify-center">
+                                                                    <div className="text-[9px] text-green-400 font-bold uppercase mb-0.5">✦ Ben.</div>
+                                                                    <div className="space-y-0">
+                                                                        {benefits.map(se => (
+                                                                            <div key={se.id} className="text-[14px] text-green-300 font-bold truncate leading-tight">
+                                                                                {getEffectDisplayName(se.id, se.name)}
+                                                                            </div>
+                                                                        ))}
+                                                                    </div>
                                                                 </div>
-                                                            </div>
-                                                            
-                                                            {/* Lado Direito - Malefícios (Vermelho) */}
-                                                            <div className="flex-1 bg-gradient-to-br from-red-900/50 to-red-900/20 px-2 py-1 overflow-y-auto flex flex-col justify-center">
-                                                                <div className="text-[9px] text-red-400 font-bold uppercase mb-0.5">⚠ Mal.</div>
-                                                                <div className="space-y-0">
-                                                                    {debuffs.map(se => (
-                                                                        <div key={se.id} className="text-[14px] text-red-300 font-bold truncate leading-tight">
-                                                                            {getEffectDisplayName(se.id, se.name)}
-                                                                        </div>
-                                                                    ))}
+
+                                                                {/* Lado Direito - Malefícios (Vermelho) */}
+                                                                <div className="flex-1 bg-gradient-to-br from-red-900/50 to-red-900/20 px-2 py-1 overflow-y-auto flex flex-col justify-center">
+                                                                    <div className="text-[9px] text-red-400 font-bold uppercase mb-0.5">⚠ Mal.</div>
+                                                                    <div className="space-y-0">
+                                                                        {debuffs.map(se => (
+                                                                            <div key={se.id} className="text-[14px] text-red-300 font-bold truncate leading-tight">
+                                                                                {getEffectDisplayName(se.id, se.name)}
+                                                                            </div>
+                                                                        ))}
+                                                                    </div>
                                                                 </div>
                                                             </div>
                                                         </div>
-                                                    </div>
-                                                );
-                                            }
-                                            
-                                            // Se apenas benefícios
-                                            if (benefits.length > 0) {
+                                                    );
+                                                }
+
+                                                // Se apenas benefícios
+                                                if (benefits.length > 0) {
+                                                    return (
+                                                        <div className="w-full">
+                                                            <div className="text-[9px] text-rpg-gold font-cinzel tracking-wider uppercase mb-1.5 opacity-70">Efeitos Ativos</div>
+                                                            <div className="space-y-1">
+                                                                {benefits.map(se => (
+                                                                    <div key={se.id} className="p-2 rounded bg-gradient-to-r from-green-900/40 to-green-900/20 border border-green-600/50 text-green-300 text-[12px] font-bold truncate flex items-center gap-1.5">
+                                                                        <span>✦</span>
+                                                                        <span className="truncate">{getEffectDisplayName(se.id, se.name)}</span>
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                }
+
+                                                // Se apenas malefícios
                                                 return (
                                                     <div className="w-full">
                                                         <div className="text-[9px] text-rpg-gold font-cinzel tracking-wider uppercase mb-1.5 opacity-70">Efeitos Ativos</div>
                                                         <div className="space-y-1">
-                                                            {benefits.map(se => (
-                                                                <div key={se.id} className="p-2 rounded bg-gradient-to-r from-green-900/40 to-green-900/20 border border-green-600/50 text-green-300 text-[12px] font-bold truncate flex items-center gap-1.5">
-                                                                    <span>✦</span>
+                                                            {debuffs.map(se => (
+                                                                <div key={se.id} className="p-2 rounded bg-gradient-to-r from-red-900/40 to-red-900/20 border border-red-600/50 text-red-300 text-[12px] font-bold truncate flex items-center gap-1.5">
+                                                                    <span>⚠</span>
                                                                     <span className="truncate">{getEffectDisplayName(se.id, se.name)}</span>
                                                                 </div>
                                                             ))}
                                                         </div>
                                                     </div>
                                                 );
-                                            }
-                                            
-                                            // Se apenas malefícios
-                                            return (
-                                                <div className="w-full">
-                                                    <div className="text-[9px] text-rpg-gold font-cinzel tracking-wider uppercase mb-1.5 opacity-70">Efeitos Ativos</div>
-                                                    <div className="space-y-1">
-                                                        {debuffs.map(se => (
-                                                            <div key={se.id} className="p-2 rounded bg-gradient-to-r from-red-900/40 to-red-900/20 border border-red-600/50 text-red-300 text-[12px] font-bold truncate flex items-center gap-1.5">
-                                                                <span>⚠</span>
-                                                                <span className="truncate">{getEffectDisplayName(se.id, se.name)}</span>
-                                                            </div>
-                                                        ))}
-                                                    </div>
-                                                </div>
-                                            );
-                                        })()
-                                    )}
+                                            })()
+                                        )}
 
-                                    {/* Botões de Limpar Efeitos */}
-                                    {hasEffects && (
-                                        <div className="flex gap-2 items-center justify-start flex-wrap">
-                                            {hasBenefits && (
+                                        {/* Botões de Limpar Efeitos */}
+                                        {hasEffects && (
+                                            <div className="flex gap-2 items-center justify-start flex-wrap">
+                                                {hasBenefits && (
+                                                    <button
+                                                        onClick={async () => {
+                                                            const benefitIds = ['rage', 'reckless', 'inspiration', 'counter-charm', 'bless', 'sanctuary', 'shield-faith', 'wild-shape', 'barkskin', 'action-surge', 'second-wind', 'indomitable', 'evasion', 'uncanny-dodge', 'flurry', 'patient-defense', 'lay-hands', 'divine-smite', 'aura-protection', 'invisivel', 'enfeiticado'];
+                                                            const updated = combatants.map(comb => {
+                                                                if (comb.id !== c.id) return comb;
+                                                                return {
+                                                                    ...comb,
+                                                                    statusEffects: (comb.statusEffects || []).filter(se => !benefitIds.includes(se.id) && (se as any).category !== 'benefit')
+                                                                };
+                                                            });
+                                                            setCombatants(updated);
+                                                            syncState({ combatants: updated }).catch(err => console.error("Erro ao sincronizar limpeza de benefícios:", err));
+                                                        }}
+                                                        className="px-4 py-2.5 rounded-lg text-[11px] font-bold bg-green-900/20 border border-green-600/40 text-green-400 hover:bg-green-900/40 transition-all active:scale-95 shadow-sm"
+                                                        title="Limpar Benefícios"
+                                                    >
+                                                        🗑️ Benef.
+                                                    </button>
+                                                )}
+                                                {hasDebuffs && (
+                                                    <button
+                                                        onClick={async () => {
+                                                            const benefitIds = ['rage', 'reckless', 'inspiration', 'counter-charm', 'bless', 'sanctuary', 'shield-faith', 'wild-shape', 'barkskin', 'action-surge', 'second-wind', 'indomitable', 'evasion', 'uncanny-dodge', 'flurry', 'patient-defense', 'lay-hands', 'divine-smite', 'aura-protection', 'invisivel', 'enfeiticado'];
+                                                            const updated = combatants.map(comb => {
+                                                                if (comb.id !== c.id) return comb;
+                                                                return {
+                                                                    ...comb,
+                                                                    statusEffects: (comb.statusEffects || []).filter(se => benefitIds.includes(se.id) || (se as any).category === 'benefit')
+                                                                };
+                                                            });
+                                                            setCombatants(updated);
+                                                            syncState({ combatants: updated }).catch(err => console.error("Erro ao sincronizar limpeza de malefícios:", err));
+                                                        }}
+                                                        className="px-4 py-2.5 rounded-lg text-[11px] font-bold bg-red-900/20 border border-red-600/40 text-red-400 hover:bg-red-900/40 transition-all active:scale-95 shadow-sm"
+                                                        title="Limpar Malefícios"
+                                                    >
+                                                        🗑️ Malef.
+                                                    </button>
+                                                )}
                                                 <button
                                                     onClick={async () => {
-                                                        const benefitIds = ['rage', 'reckless', 'inspiration', 'counter-charm', 'bless', 'sanctuary', 'shield-faith', 'wild-shape', 'barkskin', 'action-surge', 'second-wind', 'indomitable', 'evasion', 'uncanny-dodge', 'flurry', 'patient-defense', 'lay-hands', 'divine-smite', 'aura-protection', 'invisivel', 'enfeiticado'];
                                                         const updated = combatants.map(comb => {
                                                             if (comb.id !== c.id) return comb;
-                                                            return {
-                                                                ...comb,
-                                                                statusEffects: (comb.statusEffects || []).filter(se => !benefitIds.includes(se.id) && (se as any).category !== 'benefit')
-                                                            };
+                                                            return { ...comb, statusEffects: [] };
                                                         });
                                                         setCombatants(updated);
                                                         await syncState({ combatants: updated });
                                                     }}
-                                                    className="px-4 py-2.5 rounded-lg text-[11px] font-bold bg-green-900/20 border border-green-600/40 text-green-400 hover:bg-green-900/40 transition-all active:scale-95 shadow-sm"
-                                                    title="Limpar Benefícios"
+                                                    className="px-4 py-2.5 rounded-lg text-[11px] font-bold bg-purple-900/20 border border-purple-600/40 text-purple-400 hover:bg-purple-900/40 transition-all active:scale-95 shadow-sm"
+                                                    title="Limpar Todos os Efeitos"
                                                 >
-                                                    🗑️ Benef.
+                                                    🗑️ Todos
                                                 </button>
-                                            )}
-                                            {hasDebuffs && (
-                                                <button
-                                                    onClick={async () => {
-                                                        const benefitIds = ['rage', 'reckless', 'inspiration', 'counter-charm', 'bless', 'sanctuary', 'shield-faith', 'wild-shape', 'barkskin', 'action-surge', 'second-wind', 'indomitable', 'evasion', 'uncanny-dodge', 'flurry', 'patient-defense', 'lay-hands', 'divine-smite', 'aura-protection', 'invisivel', 'enfeiticado'];
-                                                        const updated = combatants.map(comb => {
-                                                            if (comb.id !== c.id) return comb;
-                                                            return {
-                                                                ...comb,
-                                                                statusEffects: (comb.statusEffects || []).filter(se => benefitIds.includes(se.id) || (se as any).category === 'benefit')
-                                                            };
-                                                        });
-                                                        setCombatants(updated);
-                                                        await syncState({ combatants: updated });
-                                                    }}
-                                                    className="px-4 py-2.5 rounded-lg text-[11px] font-bold bg-red-900/20 border border-red-600/40 text-red-400 hover:bg-red-900/40 transition-all active:scale-95 shadow-sm"
-                                                    title="Limpar Malefícios"
-                                                >
-                                                    🗑️ Malef.
-                                                </button>
-                                            )}
-                                            <button
-                                                onClick={async () => {
-                                                    const updated = combatants.map(comb => {
-                                                        if (comb.id !== c.id) return comb;
-                                                        return { ...comb, statusEffects: [] };
-                                                    });
-                                                    setCombatants(updated);
-                                                    await syncState({ combatants: updated });
-                                                }}
-                                                className="px-4 py-2.5 rounded-lg text-[11px] font-bold bg-purple-900/20 border border-purple-600/40 text-purple-400 hover:bg-purple-900/40 transition-all active:scale-95 shadow-sm"
-                                                title="Limpar Todos os Efeitos"
-                                            >
-                                                🗑️ Todos
-                                            </button>
-                                        </div>
-                                    )}
+                                            </div>
+                                        )}
 
-                                    {/* Botões de Controle - Embaixo */}
-                                    <div className="flex flex-col gap-2">
-                                        {/* Primeira linha: Efeitos de Classe, +/-, Remover */}
-                                        <div className="flex gap-2 items-center justify-start">
-                                            {c.type === 'player' && (
-                                                <button
-                                                    onClick={() => {
-                                                        setClassFxTarget(c);
-                                                        setIsClassFxOpen(true);
-                                                    }}
-                                                    className="w-14 h-12 sm:w-16 sm:h-12 rounded-lg bg-indigo-900/20 border border-indigo-500/40 text-indigo-300 hover:bg-indigo-900/40 transition-all text-sm active:scale-95 shadow-sm flex items-center justify-center"
-                                                    title="Efeitos de Classe"
-                                                >
-                                                    ✨
-                                                </button>
-                                            )}
-                                            
-                                            <button
-                                                onClick={() => updateHP(c.id, -1)}
-                                                className="flex-1 h-12 rounded-lg bg-red-900/20 border border-red-500/40 text-red-400 hover:bg-red-900/40 transition-all font-bold text-lg active:scale-95 shadow-sm"
-                                            >
-                                                -
-                                            </button>
-                                            <button
-                                                onClick={() => updateHP(c.id, 1)}
-                                                className="flex-1 h-12 rounded-lg bg-green-900/20 border border-green-500/40 text-green-400 hover:bg-green-900/40 transition-all font-bold text-lg active:scale-95 shadow-sm"
-                                            >
-                                                +
-                                            </button>
-                                            <button
-                                                onClick={() => removeCombatant(c.id)}
-                                                className="w-14 h-12 sm:w-16 sm:h-12 rounded-lg bg-rpg-dark/50 border border-white/10 text-white/20 hover:text-red-500 hover:border-red-500/50 transition-all active:scale-95 flex items-center justify-center"
-                                                title="Remover"
-                                            >
-                                                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18" /><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" /><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" /><line x1="10" y1="11" x2="10" y2="17" /><line x1="14" y1="11" x2="14" y2="17" /></svg>
-                                            </button>
-                                        </div>
+                                        {/* Botões de Controle - Embaixo */}
+                                        <div className="flex flex-col gap-2">
+                                            {/* Primeira linha: Efeitos de Classe, +/-, Remover */}
+                                            <div className="flex gap-2 items-center justify-start">
+                                                {c.type === 'player' && (
+                                                    <button
+                                                        onClick={() => {
+                                                            setClassFxTarget(c);
+                                                            setIsClassFxOpen(true);
+                                                        }}
+                                                        className="w-14 h-12 sm:w-16 sm:h-12 rounded-lg bg-indigo-900/20 border border-indigo-500/40 text-indigo-300 hover:bg-indigo-900/40 transition-all text-sm active:scale-95 shadow-sm flex items-center justify-center"
+                                                        title="Efeitos de Classe"
+                                                    >
+                                                        ✨
+                                                    </button>
+                                                )}
 
-                                        {/* Segunda linha: Inputs de Dano e Cura lado a lado */}
-                                        <div className="flex gap-2 items-center">
-                                            {/* Input Dano Rápido */}
-                                            <div className="flex-1 flex gap-1 items-center bg-rpg-dark/30 rounded-lg border border-red-500/20 px-2 py-1.5">
-                                                <input
-                                                    type="number"
-                                                    inputMode="numeric"
-                                                    placeholder="Dano"
-                                                    value={hpAdjustmentValues[c.id] || ''}
-                                                    onChange={(e) => sethpAdjustmentValues(prev => ({ ...prev, [c.id]: e.target.value }))}
-                                                    onKeyDown={(e) => {
-                                                        if (e.key === 'Enter') {
+                                                <button
+                                                    onClick={() => updateHP(c.id, -1)}
+                                                    className="flex-1 h-12 rounded-lg bg-red-900/20 border border-red-500/40 text-red-400 hover:bg-red-900/40 transition-all font-bold text-lg active:scale-95 shadow-sm"
+                                                >
+                                                    -
+                                                </button>
+                                                <button
+                                                    onClick={() => updateHP(c.id, 1)}
+                                                    className="flex-1 h-12 rounded-lg bg-green-900/20 border border-green-500/40 text-green-400 hover:bg-green-900/40 transition-all font-bold text-lg active:scale-95 shadow-sm"
+                                                >
+                                                    +
+                                                </button>
+                                                <button
+                                                    onClick={() => removeCombatant(c.id)}
+                                                    className="w-14 h-12 sm:w-16 sm:h-12 rounded-lg bg-rpg-dark/50 border border-white/10 text-white/20 hover:text-red-500 hover:border-red-500/50 transition-all active:scale-95 flex items-center justify-center"
+                                                    title="Remover"
+                                                >
+                                                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18" /><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" /><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" /><line x1="10" y1="11" x2="10" y2="17" /><line x1="14" y1="11" x2="14" y2="17" /></svg>
+                                                </button>
+                                            </div>
+
+                                            {/* Segunda linha: Inputs de Dano e Cura lado a lado */}
+                                            <div className="flex gap-2 items-center">
+                                                {/* Input Dano Rápido */}
+                                                <div className="flex-1 flex gap-1 items-center bg-rpg-dark/30 rounded-lg border border-red-500/20 px-2 py-1.5">
+                                                    <input
+                                                        type="number"
+                                                        inputMode="numeric"
+                                                        placeholder="Dano"
+                                                        value={hpAdjustmentValues[c.id] || ''}
+                                                        onChange={(e) => sethpAdjustmentValues(prev => ({ ...prev, [c.id]: e.target.value }))}
+                                                        onKeyDown={(e) => {
+                                                            if (e.key === 'Enter') {
+                                                                const value = parseInt(hpAdjustmentValues[c.id] || '0');
+                                                                if (value) {
+                                                                    updateHP(c.id, -value);
+                                                                    sethpAdjustmentValues(prev => ({ ...prev, [c.id]: '' }));
+                                                                }
+                                                            }
+                                                        }}
+                                                        className="w-full h-10 bg-rpg-dark/50 border border-white/10 rounded px-2 text-sm text-center focus:border-rpg-gold outline-none font-medieval text-white font-bold"
+                                                    />
+                                                    <button
+                                                        onClick={() => {
                                                             const value = parseInt(hpAdjustmentValues[c.id] || '0');
                                                             if (value) {
                                                                 updateHP(c.id, -value);
                                                                 sethpAdjustmentValues(prev => ({ ...prev, [c.id]: '' }));
                                                             }
-                                                        }
-                                                    }}
-                                                    className="w-full h-10 bg-rpg-dark/50 border border-white/10 rounded px-2 text-sm text-center focus:border-rpg-gold outline-none font-medieval text-white font-bold"
-                                                />
-                                                <button
-                                                    onClick={() => {
-                                                        const value = parseInt(hpAdjustmentValues[c.id] || '0');
-                                                        if (value) {
-                                                            updateHP(c.id, -value);
-                                                            sethpAdjustmentValues(prev => ({ ...prev, [c.id]: '' }));
-                                                        }
-                                                    }}
-                                                    className="h-10 px-3 flex items-center justify-center text-red-400 hover:bg-red-900/40 transition-all font-bold text-sm rounded active:scale-95"
-                                                    title="Aplicar Dano"
-                                                >
-                                                    ✓
-                                                </button>
-                                            </div>
+                                                        }}
+                                                        className="h-10 px-3 flex items-center justify-center text-red-400 hover:bg-red-900/40 transition-all font-bold text-sm rounded active:scale-95"
+                                                        title="Aplicar Dano"
+                                                    >
+                                                        ✓
+                                                    </button>
+                                                </div>
 
-                                            {/* Input Cura Rápido */}
-                                            <div className="flex-1 flex gap-1 items-center bg-rpg-dark/30 rounded-lg border border-green-500/20 px-2 py-1.5">
-                                                <input
-                                                    type="number"
-                                                    inputMode="numeric"
-                                                    placeholder="Cura"
-                                                    value={healAdjustmentValues[c.id] || ''}
-                                                    onChange={(e) => setHealAdjustmentValues(prev => ({ ...prev, [c.id]: e.target.value }))}
-                                                    onKeyDown={(e) => {
-                                                        if (e.key === 'Enter') {
+                                                {/* Input Cura Rápido */}
+                                                <div className="flex-1 flex gap-1 items-center bg-rpg-dark/30 rounded-lg border border-green-500/20 px-2 py-1.5">
+                                                    <input
+                                                        type="number"
+                                                        inputMode="numeric"
+                                                        placeholder="Cura"
+                                                        value={healAdjustmentValues[c.id] || ''}
+                                                        onChange={(e) => setHealAdjustmentValues(prev => ({ ...prev, [c.id]: e.target.value }))}
+                                                        onKeyDown={(e) => {
+                                                            if (e.key === 'Enter') {
+                                                                const value = parseInt(healAdjustmentValues[c.id] || '0');
+                                                                if (value) {
+                                                                    updateHP(c.id, value);
+                                                                    setHealAdjustmentValues(prev => ({ ...prev, [c.id]: '' }));
+                                                                }
+                                                            }
+                                                        }}
+                                                        className="w-full h-10 bg-rpg-dark/50 border border-white/10 rounded px-2 text-sm text-center focus:border-rpg-gold outline-none font-medieval text-white font-bold"
+                                                    />
+                                                    <button
+                                                        onClick={() => {
                                                             const value = parseInt(healAdjustmentValues[c.id] || '0');
                                                             if (value) {
                                                                 updateHP(c.id, value);
                                                                 setHealAdjustmentValues(prev => ({ ...prev, [c.id]: '' }));
                                                             }
-                                                        }
-                                                    }}
-                                                    className="w-full h-10 bg-rpg-dark/50 border border-white/10 rounded px-2 text-sm text-center focus:border-rpg-gold outline-none font-medieval text-white font-bold"
-                                                />
-                                                <button
-                                                    onClick={() => {
-                                                        const value = parseInt(healAdjustmentValues[c.id] || '0');
-                                                        if (value) {
-                                                            updateHP(c.id, value);
-                                                            setHealAdjustmentValues(prev => ({ ...prev, [c.id]: '' }));
-                                                        }
-                                                    }}
-                                                    className="h-10 px-3 flex items-center justify-center text-green-400 hover:bg-green-900/40 transition-all font-bold text-sm rounded active:scale-95"
-                                                    title="Aplicar Cura"
-                                                >
-                                                    ✓
-                                                </button>
+                                                        }}
+                                                        className="h-10 px-3 flex items-center justify-center text-green-400 hover:bg-green-900/40 transition-all font-bold text-sm rounded active:scale-95"
+                                                        title="Aplicar Cura"
+                                                    >
+                                                        ✓
+                                                    </button>
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
                                 </div>
                             </div>
-                        </div>
                         );
                     })}
                 </div>
@@ -1631,16 +1796,22 @@ export default function ConfrontoDetalhesPage() {
                             {totalXP} <span className="text-2xl sm:text-3xl text-rpg-gold">XP</span>
                         </div>
                     </div>
-                    <div className="flex flex-col gap-4 px-4 sm:px-10">
+                    <div className="flex flex-col gap-3 px-4 sm:px-10">
                         <button
                             onClick={handleExitArena}
-                            className="w-full bg-rpg-gold text-rpg-dark px-8 py-5 rounded-2xl font-bold font-cinzel hover:bg-rpg-gold-light transition-all transform active:scale-95 shadow-glow-gold/20 tracking-widest text-sm"
+                            className="w-full bg-rpg-gold text-rpg-dark px-8 py-4 rounded-xl font-bold font-cinzel hover:bg-rpg-gold-light transition-all transform active:scale-95 shadow-glow-gold/20 tracking-widest text-sm"
                         >
-                            COLHER LOOT & VOLTAR AO LOBBY
+                            SALVAR E VOLTAR AO LOBBY
+                        </button>
+                        <button
+                            onClick={handleDeleteEncounter}
+                            className="w-full bg-red-900/40 border border-red-500/50 text-red-200 px-8 py-3 rounded-xl font-cinzel hover:bg-red-900/60 transition-all active:scale-95 tracking-widest text-xs"
+                        >
+                            🗑️ EXCLUIR ENCONTRO DEFINITIVAMENTE
                         </button>
                         <button
                             onClick={() => setIsXPModalOpen(false)}
-                            className="w-full bg-rpg-panel border border-white/10 text-rpg-parchment px-8 py-4 rounded-2xl font-cinzel hover:bg-white/5 transition-all active:scale-95 tracking-widest text-xs"
+                            className="w-full bg-rpg-panel border border-white/10 text-rpg-parchment px-8 py-3 rounded-xl font-cinzel hover:bg-white/5 transition-all active:scale-95 tracking-widest text-[10px] opacity-70"
                         >
                             PERMANECER NA ARENA
                         </button>
@@ -1649,14 +1820,14 @@ export default function ConfrontoDetalhesPage() {
             </Modal>
 
             {/* Modal Efeitos de Classe (Individual) */}
-            <Modal 
-                isOpen={isClassFxOpen} 
+            <Modal
+                isOpen={isClassFxOpen}
                 onClose={() => {
                     setIsClassFxOpen(false);
                     setClassFxTarget(null);
                     setEffectTab('all');
                     setEffectSearchQuery('');
-                }} 
+                }}
                 title={`Efeitos • ${classFxTarget?.name || ''}`}
             >
                 <div className="space-y-3">
@@ -1667,7 +1838,7 @@ export default function ConfrontoDetalhesPage() {
 
                         // Obter condições globais
                         const globalConditions = getCategorizedGlobalConditions();
-                        
+
                         // Combinar efeitos de classe com condições globais
                         const classEffectsWithType = availableEffects.map(fx => ({ ...fx, type: 'class' as const }));
                         const globalBenefitsWithType = globalConditions.benefits.map(c => ({ id: c.id, name: c.name, duration: 1, category: 'benefit' as const, type: 'global' as const }));
@@ -1676,23 +1847,23 @@ export default function ConfrontoDetalhesPage() {
                         // Categorizar todos os efeitos (classe + globais)
                         const benefitIds = ['rage', 'reckless', 'inspiration', 'counter-charm', 'bless', 'sanctuary', 'shield-faith', 'wild-shape', 'barkskin', 'action-surge', 'second-wind', 'indomitable', 'evasion', 'uncanny-dodge', 'flurry', 'patient-defense', 'lay-hands', 'divine-smite', 'aura-protection', 'hunters-mark', 'favored-foe', 'metamagic', 'tides-chaos', 'invocation', 'arcane-recovery', 'spell-mastery', 'sneak-attack', 'armor-agathys', 'multiattack', 'mirror-image'];
                         const debuffIds = ['stunning-strike', 'hex', 'curse', 'entangle', 'knocked-down', 'paralyzed-ki', 'wrathful-smite', 'wild-surge', 'hypnotic-pattern'];
-                        
+
                         const allEffects = [...classEffectsWithType, ...globalBenefitsWithType, ...globalDebuffsWithType];
                         const benefits = allEffects.filter(fx => (benefitIds.includes(fx.id)) || (fx.type === 'global' && fx.category === 'benefit'));
                         const debuffs = allEffects.filter(fx => (debuffIds.includes(fx.id)) || (fx.type === 'global' && fx.category === 'debuff'));
-                        
+
                         // Aplicar filtro de busca
                         const normalizeSearch = (text: string) => text.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
                         const searchTerm = normalizeSearch(effectSearchQuery);
-                        
+
                         const filterEffects = (effects: any[]) => {
                             if (!searchTerm) return effects;
-                            return effects.filter(fx => 
+                            return effects.filter(fx =>
                                 normalizeSearch(fx.name).includes(searchTerm) ||
                                 normalizeSearch(fx.id).includes(searchTerm)
                             );
                         };
-                        
+
                         const filteredBenefits = filterEffects(benefits);
                         const filteredDebuffs = filterEffects(debuffs);
                         const displayedEffects = effectTab === 'benefits' ? filteredBenefits : effectTab === 'debuffs' ? filteredDebuffs : filterEffects(allEffects);
@@ -1719,31 +1890,28 @@ export default function ConfrontoDetalhesPage() {
                                 <div className="flex gap-1 mb-3 border-b border-white/10">
                                     <button
                                         onClick={() => setEffectTab('all')}
-                                        className={`flex-1 px-3 py-2 text-[10px] font-cinzel tracking-wider uppercase transition-all border-b-2 ${
-                                            effectTab === 'all'
-                                                ? 'border-rpg-gold text-rpg-gold'
-                                                : 'border-transparent text-rpg-grey hover:text-rpg-parchment'
-                                        }`}
+                                        className={`flex-1 px-3 py-2 text-[10px] font-cinzel tracking-wider uppercase transition-all border-b-2 ${effectTab === 'all'
+                                            ? 'border-rpg-gold text-rpg-gold'
+                                            : 'border-transparent text-rpg-grey hover:text-rpg-parchment'
+                                            }`}
                                     >
                                         🎭 Todos ({filterEffects(allEffects).length})
                                     </button>
                                     <button
                                         onClick={() => setEffectTab('benefits')}
-                                        className={`flex-1 px-3 py-2 text-[10px] font-cinzel tracking-wider uppercase transition-all border-b-2 ${
-                                            effectTab === 'benefits'
-                                                ? 'border-green-500 text-green-400'
-                                                : 'border-transparent text-rpg-grey hover:text-rpg-parchment'
-                                        }`}
+                                        className={`flex-1 px-3 py-2 text-[10px] font-cinzel tracking-wider uppercase transition-all border-b-2 ${effectTab === 'benefits'
+                                            ? 'border-green-500 text-green-400'
+                                            : 'border-transparent text-rpg-grey hover:text-rpg-parchment'
+                                            }`}
                                     >
                                         ✦ Benef. ({filteredBenefits.length})
                                     </button>
                                     <button
                                         onClick={() => setEffectTab('debuffs')}
-                                        className={`flex-1 px-3 py-2 text-[10px] font-cinzel tracking-wider uppercase transition-all border-b-2 ${
-                                            effectTab === 'debuffs'
-                                                ? 'border-red-500 text-red-400'
-                                                : 'border-transparent text-rpg-grey hover:text-rpg-parchment'
-                                        }`}
+                                        className={`flex-1 px-3 py-2 text-[10px] font-cinzel tracking-wider uppercase transition-all border-b-2 ${effectTab === 'debuffs'
+                                            ? 'border-red-500 text-red-400'
+                                            : 'border-transparent text-rpg-grey hover:text-rpg-parchment'
+                                            }`}
                                     >
                                         ⚠ Malef. ({filteredDebuffs.length})
                                     </button>
@@ -1762,15 +1930,15 @@ export default function ConfrontoDetalhesPage() {
                                         const isGlobal = fx.type === 'global';
                                         const isBenefit = fx.category === 'benefit';
                                         const isDebuff = fx.category === 'debuff';
-                                        
+
                                         // Estilos baseados na categoria
-                                        const cardClasses = isBenefit 
-                                            ? 'bg-gradient-to-br from-green-900/30 to-green-900/10 border-green-600/50 hover:border-green-500 shadow-lg shadow-green-900/20' 
+                                        const cardClasses = isBenefit
+                                            ? 'bg-gradient-to-br from-green-900/30 to-green-900/10 border-green-600/50 hover:border-green-500 shadow-lg shadow-green-900/20'
                                             : 'bg-gradient-to-br from-red-900/30 to-red-900/10 border-red-600/50 hover:border-red-500 shadow-lg shadow-red-900/20';
-                                        
+
                                         const icon = isBenefit ? '✦' : '⚠';
                                         const iconColor = isBenefit ? 'text-green-400' : 'text-red-400';
-                                        
+
                                         return (
                                             <div key={fx.id} className={`p-3 rounded-lg border transition-all ${cardClasses}`}>
                                                 <div className="flex justify-between items-start mb-2">
@@ -1792,13 +1960,12 @@ export default function ConfrontoDetalhesPage() {
                                                             setEffectSearchQuery('');
                                                         }}
                                                         disabled={hasEffect}
-                                                        className={`flex-1 px-2 py-1.5 rounded text-[10px] font-bold transition-all active:scale-95 ${
-                                                            hasEffect 
-                                                                ? 'bg-gray-700 text-gray-400 cursor-not-allowed opacity-50'
-                                                                : isBenefit
+                                                        className={`flex-1 px-2 py-1.5 rounded text-[10px] font-bold transition-all active:scale-95 ${hasEffect
+                                                            ? 'bg-gray-700 text-gray-400 cursor-not-allowed opacity-50'
+                                                            : isBenefit
                                                                 ? 'bg-green-700 text-white hover:bg-green-600 shadow-glow-green/30'
                                                                 : 'bg-red-700 text-white hover:bg-red-600 shadow-glow-red/30'
-                                                        }`}
+                                                            }`}
                                                     >
                                                         {hasEffect ? 'Ativo' : 'Aplicar'}
                                                     </button>
@@ -1821,7 +1988,7 @@ export default function ConfrontoDetalhesPage() {
                                         );
                                     })}
                                 </div>
-                                
+
                                 {/* Criar Efeito Customizado */}
                                 <div className="mt-4 pt-4 border-t border-white/10">
                                     <div className="text-rpg-gold font-cinzel text-[10px] tracking-wider uppercase mb-2 opacity-70">Criar Efeito Customizado</div>
@@ -1881,8 +2048,8 @@ export default function ConfrontoDetalhesPage() {
             </Modal>
 
             {/* Modal de Confirmação CURAR */}
-            <Modal 
-                isOpen={confirmCureModal.open} 
+            <Modal
+                isOpen={confirmCureModal.open}
                 onClose={() => setConfirmCureModal({ open: false, combatant: null })}
                 title={confirmCureModal.combatant?.type === 'player' ? '❤️ Curar Personagem' : '❤️ Levantar Combatente'}
             >
@@ -1902,9 +2069,14 @@ export default function ConfrontoDetalhesPage() {
                                         statusEffects: (comb.statusEffects || []).filter(se => se.id !== 'caido')
                                     };
                                 });
+                                // UI Otimista
                                 setCombatants(updated);
-                                await syncState({ combatants: updated });
                                 setConfirmCureModal({ open: false, combatant: null });
+                                try {
+                                    await syncState({ combatants: updated });
+                                } catch (err) {
+                                    console.error("Erro ao sincronizar cura:", err);
+                                }
                             }}
                             className="px-6 py-3 bg-green-600 hover:bg-green-500 text-white font-bold rounded-lg transition-colors"
                         >
@@ -1921,8 +2093,8 @@ export default function ConfrontoDetalhesPage() {
             </Modal>
 
             {/* Modal de Confirmação REMOVER COMBATENTE */}
-            <Modal 
-                isOpen={confirmRemoveModal.open} 
+            <Modal
+                isOpen={confirmRemoveModal.open}
                 onClose={() => setConfirmRemoveModal({ open: false, combatantId: null, combatantName: null })}
                 title="⚠️ Remover Combatente"
             >
@@ -1935,9 +2107,14 @@ export default function ConfrontoDetalhesPage() {
                             onClick={async () => {
                                 if (!confirmRemoveModal.combatantId) return;
                                 const updated = combatants.filter(c => c.id !== confirmRemoveModal.combatantId);
+                                // UI Otimista
                                 setCombatants(updated);
-                                await syncState({ combatants: updated });
                                 setConfirmRemoveModal({ open: false, combatantId: null, combatantName: null });
+                                try {
+                                    await syncState({ combatants: updated });
+                                } catch (err) {
+                                    console.error("Erro ao sincronizar remoção:", err);
+                                }
                             }}
                             className="px-6 py-3 bg-red-600 hover:bg-red-500 text-white font-bold rounded-lg transition-colors"
                         >
@@ -1954,8 +2131,8 @@ export default function ConfrontoDetalhesPage() {
             </Modal>
 
             {/* Modal de Confirmação RESETAR COMBATE */}
-            <Modal 
-                isOpen={confirmResetModal} 
+            <Modal
+                isOpen={confirmResetModal}
                 onClose={() => setConfirmResetModal(false)}
                 title="⚠️ Resetar Combate"
             >
@@ -1966,11 +2143,16 @@ export default function ConfrontoDetalhesPage() {
                     <div className="flex gap-4 justify-center">
                         <button
                             onClick={async () => {
+                                // UI Otimista
                                 setPhase('preparation');
                                 setRound(1);
                                 setTurnIndex(0);
-                                await syncState({ phase: 'preparation', round: 1, turnIndex: 0 });
                                 setConfirmResetModal(false);
+                                try {
+                                    await syncState({ phase: 'preparation', round: 1, turnIndex: 0 });
+                                } catch (err) {
+                                    console.error("Erro ao sincronizar reset:", err);
+                                }
                             }}
                             className="px-6 py-3 bg-yellow-600 hover:bg-yellow-500 text-white font-bold rounded-lg transition-colors"
                         >
