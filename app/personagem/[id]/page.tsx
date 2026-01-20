@@ -31,7 +31,7 @@ import LevelUpModal from '@/components/ui/LevelUpModal';
 import SpellSlotsDisplay from '@/components/ui/SpellSlotsDisplay';
 import UseSpellModal from '@/components/ui/UseSpellModal';
 import { CombatNotification } from '@/components/CombatNotifications';
-import { getMaxSpellSlotsForCharacter, useSpell, restLongSpells, restShortSpells, canUseSpell } from '@/lib/spell-usage';
+import { getMaxSpellSlotsForCharacter, consumeSpellSlot, restLongSpells, restShortSpells, canUseSpell } from '@/lib/spell-usage';
 import {
     fetchClassFeaturesFromFirestore,
     fetchRaceFeaturesFromFirestore,
@@ -317,7 +317,7 @@ export default function CharacterSheetPage() {
             return;
         }
 
-        const newSlots = useSpell(character.spellSlotsCurrent || {}, spell);
+        const newSlots = consumeSpellSlot(character.spellSlotsCurrent || {}, spell);
         updateCharacter(char => ({
             ...char,
             spellSlotsCurrent: newSlots

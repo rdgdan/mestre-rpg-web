@@ -92,7 +92,7 @@ export function getMaxSpellSlotsForCharacter(
 
   const slots = classSlots[characterLevel];
   const result: Record<number, number> = { 0: Infinity }; // Truques sempre infinitos
-  
+
   slots.forEach((count, idx) => {
     result[idx + 1] = count;
   });
@@ -101,7 +101,7 @@ export function getMaxSpellSlotsForCharacter(
 }
 
 // Usar uma magia e descontar slots
-export function useSpell(
+export function consumeSpellSlot(
   spellSlotsCurrent: Record<number, number>,
   spell: Spell,
   slotsCost: number = 1
@@ -158,10 +158,10 @@ export function canUseSpell(
   spell: Spell
 ): boolean {
   if (spell.level === 0) return true; // Truques sempre podem
-  
+
   const cost = getSpellSlotsCost(spell);
   const available = spellSlotsCurrent[spell.level] || 0;
-  
+
   return available >= cost;
 }
 
