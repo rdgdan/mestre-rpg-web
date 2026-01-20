@@ -45,6 +45,7 @@ import { StartingEquipmentModal } from '@/components/ui/StartingEquipmentModal';
 import { CLASS_PROFICIENCIES } from '@/lib/class-proficiencies';
 import Modal from '@/components/Modal';
 import { CLASS_EFFECTS, COMMON_CONDITIONS, getCategorizedGlobalConditions, getEffectStyle } from '@/lib/effects-conditions';
+import { getXPForNextLevel, getXPProgress } from '@/lib/xp-progression';
 
 // Lodash debounce import
 function debounce<T extends (...args: any[]) => any>(fn: T, delay: number): T {
@@ -1482,11 +1483,8 @@ export default function CharacterSheetPage() {
                                     <div className="flex justify-between items-center mb-1">
                                         <span className="text-[10px] text-rpg-grey font-cinzel truncate">
                                             {(() => {
-                                                try {
-                                                    const { getXPForNextLevel } = require('@/lib/xp-progression');
-                                                    const nextXP = getXPForNextLevel(character.level);
-                                                    return character.level >= 20 ? 'Max' : `${character.experience} / ${nextXP} XP`;
-                                                } catch (e) { return `${character.experience} XP`; }
+                                                const nextXP = getXPForNextLevel(character.level);
+                                                return character.level >= 20 ? 'Max' : `${character.experience} / ${nextXP} XP`;
                                             })()}
                                         </span>
                                         {!isReadOnly && (
@@ -1507,12 +1505,7 @@ export default function CharacterSheetPage() {
                                             <div
                                                 className="h-full bg-gradient-to-r from-rpg-gold/60 to-rpg-gold transition-all duration-500 shadow-[0_0_8px_rgba(212,175,55,0.4)]"
                                                 style={{
-                                                    width: `${(() => {
-                                                        try {
-                                                            const { getXPProgress } = require('@/lib/xp-progression');
-                                                            return getXPProgress(character.level, character.experience);
-                                                        } catch (e) { return 0; }
-                                                    })()}%`
+                                                    width: `${getXPProgress(character.level, character.experience)}%`
                                                 }}
                                             />
                                         </div>
