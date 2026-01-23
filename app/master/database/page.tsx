@@ -37,10 +37,12 @@ export default function DatabaseManagementPage() {
     const [formData, setFormData] = useState<any>({});
     const [searchQuery, setSearchQuery] = useState('');
 
-    // Redireciona se não estiver logado (idealmente checar role 'master')
+    // Redireciona se não for o Mestre (ID específico)
     useEffect(() => {
-        if (!user && !isLoading) {
-            router.push('/login');
+        if (!isLoading) {
+            if (!user || user.uid !== 'cynl59ZjdlgUJbuzs8lkufCWI0W2') {
+                router.push('/home');
+            }
         }
     }, [user, isLoading, router]);
 
@@ -145,8 +147,8 @@ export default function DatabaseManagementPage() {
                             key={cat.id}
                             onClick={() => setActiveTab(cat.id)}
                             className={`flex items-center gap-2 px-6 py-3 rounded-lg font-cinzel font-bold transition-all ${activeTab === cat.id
-                                    ? 'bg-rpg-gold text-rpg-dark shadow-glow-gold scale-105'
-                                    : 'hover:bg-white/10 text-rpg-grey'
+                                ? 'bg-rpg-gold text-rpg-dark shadow-glow-gold scale-105'
+                                : 'hover:bg-white/10 text-rpg-grey'
                                 }`}
                         >
                             <span>{cat.icon}</span>
