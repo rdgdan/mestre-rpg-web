@@ -7,7 +7,8 @@ import { dndMonsters } from '@/lib/monsters-data';
 import { RACES } from '@/lib/races-data'; // Agora disponível
 import { addDoc, collection, deleteDoc, doc, getDocs, onSnapshot, query, serverTimestamp, updateDoc } from 'firebase/firestore';
 import { useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
+import { firestoreCache } from '@/lib/cache-service';
 
 type CollectionType = 'magias' | 'armas' | 'itens' | 'armaduras' | 'escudos' | 'monsters' | 'npcs' | 'classes' | 'races';
 
@@ -20,6 +21,7 @@ interface Category {
 const CATEGORIES: Category[] = [
     { id: 'magias', label: 'Magias', icon: '✨' },
     { id: 'armas', label: 'Armas', icon: '⚔️' },
+    { id: 'armaduras', label: 'Armaduras', icon: '🦺' },
     { id: 'escudos', label: 'Escudos', icon: '🛡️' },
     { id: 'itens', label: 'Equipamentos', icon: '🎒' },
     { id: 'monsters', label: 'Bestiário', icon: '🐉' },
@@ -29,6 +31,7 @@ const CATEGORIES: Category[] = [
 ];
 
 export default function DatabaseManagementPage() {
+    const [forceReload, setForceReload] = useState(false);
     const { user } = useAuth();
     const router = useRouter();
     const [activeTab, setActiveTab] = useState<CollectionType>('magias');
@@ -41,7 +44,21 @@ export default function DatabaseManagementPage() {
     const [initialCollection, setInitialCollection] = useState<CollectionType | null>(null);
     const [registrationType, setRegistrationType] = useState<CollectionType>('magias');
     const [formData, setFormData] = useState<any>({});
+    const [duplicateWarning, setDuplicateWarning] = useState<string | null>(null);
+    const [duplicateItem, setDuplicateItem] = useState<any | null>(null);
     const [searchQuery, setSearchQuery] = useState('');
+
+    // Bloquear scroll do body quando o modal estiver aberto
+    useEffect(() => {
+        if (isModalOpen) {
+            document.body.style.overflow = 'hidden';
+        } else {
+            document.body.style.overflow = '';
+        }
+        return () => {
+            document.body.style.overflow = '';
+        };
+    }, [isModalOpen]);
 
     // Redireciona se não for o Mestre (ID específico)
     useEffect(() => {
@@ -53,43 +70,50 @@ export default function DatabaseManagementPage() {
     }, [user, isLoading, router]);
 
     useEffect(() => {
-        // Limpa lista e ativa loading ao trocar de aba
-        setItems([]);
-        setIsLoading(true);
-        // Define a coleção base para cada aba
-        let collectionName = activeTab;
-        if (activeTab === 'escudos' || activeTab === 'armas' || activeTab === 'armaduras' || activeTab === 'itens') {
-            collectionName = 'itens';
-        }
-        // Corrige nomes para coleções monsters/races/npcs
-        if (activeTab === 'monsters') {
-            collectionName = 'monsters';
-        }
-        if (activeTab === 'npcs') {
-            collectionName = 'npcs';
-        }
-        if (activeTab === 'races') {
-            collectionName = 'races';
-        }
-        const q = query(collection(db, collectionName));
-        const unsubscribe = onSnapshot(q, (snapshot) => {
-            const data = snapshot.docs.map(doc => {
-                const docData = { id: doc.id, ...doc.data() };
-                // Debug: logar todos os campos do documento
-                if (activeTab === 'monsters' || activeTab === 'races' || activeTab === 'npcs') {
-                    console.log('Doc:', docData);
+        let cancelled = false;
+        async function fetchData() {
+            setIsLoading(true);
+            const cachedData = firestoreCache.get(activeTab);
+            if (cachedData && !forceReload) {
+                setItems(cachedData);
+                setIsLoading(false);
+                return;
+            }
+            // Define a coleção base para cada aba
+            let collectionName = activeTab;
+            if (activeTab === 'escudos' || activeTab === 'armas' || activeTab === 'armaduras' || activeTab === 'itens') {
+                collectionName = 'itens';
+            }
+            if (activeTab === 'monsters') collectionName = 'monsters';
+            if (activeTab === 'npcs') collectionName = 'npcs';
+            if (activeTab === 'races') collectionName = 'races';
+            try {
+                const q = query(collection(db, collectionName));
+                const snapshot = await getDocs(q);
+                const data = snapshot.docs.map(doc => {
+                    const docData = { id: doc.id, ...doc.data() };
+                    if (activeTab === 'monsters' || activeTab === 'races' || activeTab === 'npcs') {
+                        console.log('Doc:', docData);
+                    }
+                    return docData;
+                });
+                if (!cancelled) {
+                    firestoreCache.set(activeTab, data);
+                    setItems(data);
+                    setIsLoading(false);
                 }
-                return docData;
-            });
-            setItems(data);
-            setIsLoading(false);
-        }, (error) => {
-            console.error("Erro ao carregar dados:", error);
-            setItems([]);
-            setIsLoading(false);
-        });
-        return () => unsubscribe();
-    }, [activeTab]);
+            } catch (error) {
+                if (!cancelled) {
+                    console.error("Erro ao carregar dados:", error);
+                    setItems([]);
+                    setIsLoading(false);
+                }
+            }
+        }
+        fetchData();
+        setForceReload(false);
+        return () => { cancelled = true; };
+    }, [activeTab, forceReload]);
 
     // Filtro por aba (aplicado após buscar os dados da coleção base)
     let filteredItems = items.filter(item => {
@@ -127,6 +151,9 @@ export default function DatabaseManagementPage() {
     }
 
     const openModal = (item?: any) => {
+        // Sempre recarrega do banco ao salvar/editar
+        setDuplicateWarning(null);
+        setDuplicateItem(null);
         if (item) {
             setEditingId(item.id);
             setInitialCollection(activeTab);
@@ -134,7 +161,10 @@ export default function DatabaseManagementPage() {
             setFormData({
                 ...item,
                 requirements: item.requirements || { level: 0, classes: '', races: '' },
-                attributes: item.attributes || { str: 10, dex: 10, con: 10, int: 10, wis: 10, cha: 10 }
+                attributes: item.attributes || { str: 10, dex: 10, con: 10, int: 10, wis: 10, cha: 10 },
+                noFabrication: item.noFabrication || false,
+                noWeight: item.noWeight || false,
+                noPrice: item.noPrice || false,
             });
         } else {
             setEditingId(null);
@@ -144,7 +174,10 @@ export default function DatabaseManagementPage() {
                 name: '',
                 description: '',
                 requirements: { level: 0, classes: '', races: '' },
-                attributes: { str: 10, dex: 10, con: 10, int: 10, wis: 10, cha: 10 }
+                attributes: { str: 10, dex: 10, con: 10, int: 10, wis: 10, cha: 10 },
+                noFabrication: false,
+                noWeight: false,
+                noPrice: false,
             });
         }
         setIsModalOpen(true);
@@ -153,6 +186,27 @@ export default function DatabaseManagementPage() {
     const handleSave = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!formData.name && !formData.title) return;
+
+        // Validação de duplicidade por tradução (name ou title)
+        const translation = (formData.translation || '').trim().toLowerCase();
+        const nameToCheck = (formData.name || formData.title || '').trim().toLowerCase();
+        let duplicate = null;
+        if (translation) {
+            duplicate = items.find(item =>
+                (item.translation || '').trim().toLowerCase() === translation &&
+                (!editingId || item.id !== editingId)
+            );
+        } else if (nameToCheck) {
+            duplicate = items.find(item =>
+                ((item.translation || item.name || item.title || '').trim().toLowerCase() === nameToCheck) &&
+                (!editingId || item.id !== editingId)
+            );
+        }
+        if (duplicate) {
+            setDuplicateWarning('Já existe um registro com a mesma tradução ou nome. Deseja sobrescrever ou cancelar?');
+            setDuplicateItem(duplicate);
+            return;
+        }
 
         try {
             const dataToSave = {
@@ -193,9 +247,44 @@ export default function DatabaseManagementPage() {
             setIsModalOpen(false);
             setFormData({});
             setEditingId(null);
+            // Limpa cache global para forçar reload
+            firestoreCache.invalidate(registrationType);
+            setForceReload(true);
         } catch (error) {
             console.error("Erro ao salvar:", error);
             alert("Erro ao salvar no banco de dados.");
+        }
+    };
+
+    // Ação para sobrescrever duplicata
+    const handleOverwriteDuplicate = async () => {
+        if (!duplicateItem) return;
+        try {
+            const dataToSave = {
+                ...formData,
+                updatedAt: serverTimestamp(),
+            };
+            let targetCollection = registrationType;
+            if (
+                registrationType === 'escudos' ||
+                registrationType === 'armas' ||
+                registrationType === 'armaduras' ||
+                registrationType === 'itens'
+            ) {
+                targetCollection = 'itens';
+            }
+            await updateDoc(doc(db, targetCollection, duplicateItem.id), dataToSave);
+            setIsModalOpen(false);
+            setFormData({});
+            setEditingId(null);
+            setDuplicateWarning(null);
+            setDuplicateItem(null);
+            // Limpa cache global para forçar reload
+            firestoreCache.invalidate(registrationType);
+            setForceReload(true);
+        } catch (error) {
+            console.error("Erro ao sobrescrever duplicata:", error);
+            alert("Erro ao sobrescrever duplicata.");
         }
     };
 
@@ -203,6 +292,9 @@ export default function DatabaseManagementPage() {
         if (confirm(`Tem certeza que deseja excluir "${name}"?`)) {
             try {
                 await deleteDoc(doc(db, activeTab, id));
+                // Limpa cache global para forçar reload
+                firestoreCache.invalidate(activeTab);
+                setForceReload(true);
             } catch (error) {
                 console.error("Erro ao excluir:", error);
             }
@@ -246,6 +338,15 @@ export default function DatabaseManagementPage() {
             </header>
 
             <main className="container mx-auto p-4 sm:p-8 flex-grow">
+                <div className="flex justify-end mb-4">
+                    <button
+                        onClick={() => setForceReload(true)}
+                        className="bg-rpg-gold hover:bg-rpg-gold-light text-rpg-dark px-4 py-2 rounded-lg font-cinzel font-bold shadow-glow-gold transition-all"
+                        title="Atualizar dados do banco"
+                    >
+                        🔄 Atualizar
+                    </button>
+                </div>
                 {/* Tabs */}
                 <div className="flex flex-wrap gap-2 mb-8 bg-black/20 p-2 rounded-xl border border-white/5">
                     {CATEGORIES.map(cat => (
@@ -281,44 +382,70 @@ export default function DatabaseManagementPage() {
                             Consultando os pergaminhos antigos...
                         </div>
                     ) : filteredItems.length > 0 ? (
-                        filteredItems.map(item => (
-                            <div
-                                key={item.id}
-                                className="bg-rpg-panel border border-rpg-gold/10 p-5 rounded-2xl hover:border-rpg-gold/40 transition-all group relative overflow-hidden"
-                            >
-                                <div className="absolute top-0 right-0 p-2 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                    <button onClick={() => openModal(item)} className="p-2 bg-blue-600/20 hover:bg-blue-600/40 rounded-lg text-blue-400">✏️</button>
-                                    <button onClick={() => handleDelete(item.id, item.name || item.title)} className="p-2 bg-red-600/20 hover:bg-red-600/40 rounded-lg text-red-400">🗑️</button>
-                                </div>
-                                <h3 className="text-xl font-bold font-cinzel text-rpg-gold mb-2">{sanitizeField(item.name) || sanitizeField(item.title)}</h3>
-                                <p className="text-sm text-rpg-parchment/70 font-medieval line-clamp-3">
-                                    {(() => {
-                                        if (typeof item.description === 'string') return item.description;
-                                        if (item.description && typeof item.description === 'object') {
-                                            if (Array.isArray(item.description)) return item.description.join(', ');
-                                            return JSON.stringify(item.description);
-                                        }
-                                        if (typeof item.type === 'string') return item.type;
-                                        if (item.type && typeof item.type === 'object') {
-                                            if (Array.isArray(item.type)) return item.type.join(', ');
-                                            if (item.type.type && typeof item.type.type === 'string') return item.type.type;
-                                            return JSON.stringify(item.type);
-                                        }
-                                        if (activeTab === 'magias') return `Círculo ${sanitizeField(item.level)}`;
-                                        return 'Sem descrição adicional.';
-                                    })()}
-                                </p>
-                                {(activeTab === 'monsters' || activeTab === 'npcs') && (
-                                    <div className="mt-3 flex flex-wrap gap-3 text-xs font-bold text-rpg-grey">
-                                        <span>❤️ {sanitizeField(item.hp) ?? '-'} HP</span>
-                                        <span>🛡️ {sanitizeField(item.ac) ?? '-'} CA</span>
-                                        <span>🎲 CR {sanitizeField(item.challenge) ?? '-'}</span>
-                                        {item.type && <span>🧬 {sanitizeField(item.type)}</span>}
-                                        {item.npcType && <span>👤 {sanitizeField(item.npcType)}</span>}
+                        filteredItems.map(item => {
+                            // Validação de campos obrigatórios e descrição genérica
+                            let faltando = false;
+                            // Nome/título e descrição são sempre obrigatórios
+                            if (!item.name && !item.title) faltando = true;
+                            if (!item.description || (typeof item.description === 'string' && item.description.trim() === '')) faltando = true;
+                            // Descrição genérica
+                            const desc = (item.description || '').toLowerCase();
+                            if (desc.includes('no mundo de d&d') || desc.includes('descrição') || desc.length < 10) faltando = true;
+
+                            // Campos extras por tipo
+                            if (["magias", "armas", "armaduras", "escudos", "itens"].includes(activeTab)) {
+                                // Peso
+                                if (!item.noWeight && (item.weight === undefined || item.weight === '' || item.weight === null)) faltando = true;
+                                // Preço
+                                if (!item.noPrice && (item.price === undefined || item.price === '' || item.price === null)) faltando = true;
+                                // Fabricação (apenas para magias)
+                                if (activeTab === 'magias' && !item.noFabrication && (item.fabrication === undefined || item.fabrication === '' || item.fabrication === null)) faltando = true;
+                            }
+
+                            // Não exigir requisitos (nível, classes, raças) para exibição geral
+
+                            return (
+                                <div
+                                    key={item.id}
+                                    className={`bg-rpg-panel border p-5 rounded-2xl transition-all group relative overflow-hidden ${faltando ? 'border-red-600 shadow-glow-red animate-pulse' : 'border-rpg-gold/10 hover:border-rpg-gold/40'}`}
+                                >
+                                    <div className="absolute top-0 right-0 p-2 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                        <button onClick={() => openModal(item)} className="p-2 bg-blue-600/20 hover:bg-blue-600/40 rounded-lg text-blue-400">✏️</button>
+                                        <button onClick={() => handleDelete(item.id, item.name || item.title)} className="p-2 bg-red-600/20 hover:bg-red-600/40 rounded-lg text-red-400">🗑️</button>
                                     </div>
-                                )}
-                            </div>
-                        ))
+                                    <h3 className="text-xl font-bold font-cinzel text-rpg-gold mb-2">{sanitizeField(item.name) || sanitizeField(item.title)}</h3>
+                                    <p className={`text-sm font-medieval line-clamp-3 ${faltando ? 'text-red-400 font-bold' : 'text-rpg-parchment/70'}`}>
+                                        {(() => {
+                                            if (typeof item.description === 'string') return item.description;
+                                            if (item.description && typeof item.description === 'object') {
+                                                if (Array.isArray(item.description)) return item.description.join(', ');
+                                                return JSON.stringify(item.description);
+                                            }
+                                            if (typeof item.type === 'string') return item.type;
+                                            if (item.type && typeof item.type === 'object') {
+                                                if (Array.isArray(item.type)) return item.type.join(', ');
+                                                if (item.type.type && typeof item.type.type === 'string') return item.type.type;
+                                                return JSON.stringify(item.type);
+                                            }
+                                            if (activeTab === 'magias') return `Círculo ${sanitizeField(item.level)}`;
+                                            return 'Sem descrição adicional.';
+                                        })()}
+                                    </p>
+                                    {faltando && (
+                                        <div className="mt-2 text-xs text-red-500 font-bold">⚠️ Registro incompleto ou genérico</div>
+                                    )}
+                                    {(activeTab === 'monsters' || activeTab === 'npcs') && (
+                                        <div className="mt-3 flex flex-wrap gap-3 text-xs font-bold text-rpg-grey">
+                                            <span>❤️ {sanitizeField(item.hp) ?? '-'} HP</span>
+                                            <span>🛡️ {sanitizeField(item.ac) ?? '-'} CA</span>
+                                            <span>🎲 CR {sanitizeField(item.challenge) ?? '-'}</span>
+                                            {item.type && <span>🧬 {sanitizeField(item.type)}</span>}
+                                            {item.npcType && <span>👤 {sanitizeField(item.npcType)}</span>}
+                                        </div>
+                                    )}
+                                </div>
+                            );
+                        })
                     ) : (
                         <div className="col-span-full py-20 text-center text-rpg-grey font-medieval">
                             Nenhum registro encontrado nesta coleção.
@@ -333,6 +460,15 @@ export default function DatabaseManagementPage() {
                 onClose={() => setIsModalOpen(false)}
                 title={editingId ? `Editar Registro` : `Novo Registro Arcano`}
             >
+                {duplicateWarning && (
+                    <div className="bg-red-900/80 border border-red-500 text-red-200 p-4 rounded-xl mb-4 flex flex-col gap-2">
+                        <span className="font-bold">{duplicateWarning}</span>
+                        <div className="flex gap-2">
+                            <button type="button" onClick={handleOverwriteDuplicate} className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg font-bold">Sobrescrever</button>
+                            <button type="button" onClick={() => { setDuplicateWarning(null); setDuplicateItem(null); }} className="bg-gray-700 hover:bg-gray-800 text-white px-4 py-2 rounded-lg font-bold">Cancelar</button>
+                        </div>
+                    </div>
+                )}
                 <form onSubmit={handleSave} className="space-y-6 max-h-[75vh] overflow-y-auto pr-4 custom-scrollbar">
                     {/* Seletor de Tipo Dinâmico */}
                     <div className="bg-black/30 p-4 rounded-xl border border-rpg-gold/20">
@@ -349,94 +485,105 @@ export default function DatabaseManagementPage() {
                     </div>
 
                     <div className="grid grid-cols-1 gap-6">
-                        <InputField label="Nome / Título" value={formData.name || formData.title} onChange={v => updateField('name', v)} required />
-                        <InputField label="Descrição Geral" value={formData.description} onChange={v => updateField('description', v)} textarea />
+                        <InputField label="Nome / Título" value={formData.name || formData.title} onChange={(v: any) => updateField('name', v)} required />
+                        <InputField label="Descrição Geral" value={formData.description} onChange={(v: any) => updateField('description', v)} textarea />
 
                         {/* Campos de Requisitos (Geral) */}
                         {registrationType !== 'monsters' && registrationType !== 'races' && (
                             <div className="bg-white/5 p-4 rounded-xl space-y-4 border border-white/5">
                                 <h4 className="text-xs font-cinzel text-rpg-gold/60 uppercase tracking-widest">Requisitos e Restrições</h4>
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                    <InputField label="Nível Mínimo" type="number" value={formData.requirements?.level} onChange={v => updateNestedField('requirements', 'level', parseInt(v))} />
-                                    <InputField label="Classes Permitidas" value={formData.requirements?.classes} onChange={v => updateNestedField('requirements', 'classes', v)} placeholder="Guerreiro, Mago..." />
+                                    <InputField label="Nível Mínimo" type="number" value={formData.requirements?.level} onChange={(v: any) => updateNestedField('requirements', 'level', parseInt(v))} />
+                                    <InputField label="Classes Permitidas" value={formData.requirements?.classes} onChange={(v: any) => updateNestedField('requirements', 'classes', v)} placeholder="Guerreiro, Mago..." />
                                 </div>
-                                <InputField label="Raças Permitidas" value={formData.requirements?.races} onChange={v => updateNestedField('requirements', 'races', v)} placeholder="Elfo, Anão... (Vazio para todas)" />
+                                <InputField label="Raças Permitidas" value={formData.requirements?.races} onChange={(v: any) => updateNestedField('requirements', 'races', v)} placeholder="Elfo, Anão... (Vazio para todas)" />
                             </div>
                         )}
 
                         {/* Magias */}
                         {registrationType === 'magias' && (
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                <InputField label="Círculo (Nível)" type="number" value={formData.level} onChange={v => updateField('level', parseInt(v))} />
-                                <InputField label="Escola" value={formData.school} onChange={v => updateField('school', v)} placeholder="Evocação, Necromancia..." />
-                                <InputField label="Tempo de Conjuração" value={formData.castingTime} onChange={v => updateField('castingTime', v)} placeholder="1 ação, 10 minutos..." />
-                                <InputField label="Alcance" value={formData.range} onChange={v => updateField('range', v)} placeholder="9 metros, Toque..." />
-                                <InputField label="Componentes" value={formData.components} onChange={v => updateField('components', v)} placeholder="V, S, M (ouro)..." />
-                                <InputField label="Duração" value={formData.duration} onChange={v => updateField('duration', v)} placeholder="Instantânea, 1 hora..." />
+                                <InputField label="Círculo (Nível)" type="number" value={formData.level} onChange={(v: any) => updateField('level', parseInt(v))} required />
+                                <InputField label="Escola" value={formData.school} onChange={(v: any) => updateField('school', v)} placeholder="Evocação, Necromancia..." required />
+                                <InputField label="Tempo de Conjuração" value={formData.castingTime} onChange={(v: any) => updateField('castingTime', v)} placeholder="1 ação, 10 minutos..." required />
+                                <InputField label="Alcance" value={formData.range} onChange={(v: any) => updateField('range', v)} placeholder="9 metros, Toque..." required />
+                                <InputField label="Componentes" value={formData.components} onChange={(v: any) => updateField('components', v)} placeholder="V, S, M (ouro)..." required />
+                                <InputField label="Duração" value={formData.duration} onChange={(v: any) => updateField('duration', v)} placeholder="Instantânea, 1 hora..." required />
                             </div>
                         )}
 
-                        {/* Armas */}
-                        {registrationType === 'armas' && (
+                        {/* Armaduras */}
+                        {registrationType === 'armaduras' && (
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                <InputField label="Dano" value={formData.damage} onChange={v => updateField('damage', v)} placeholder="1d8 + FOR" />
-                                <InputField label="Tipo de Dano" value={formData.damageType} onChange={v => updateField('damageType', v)} placeholder="Cortante, Impacto..." />
-                                <InputField label="Peso (kg)" value={formData.weight} onChange={v => updateField('weight', v)} placeholder="1.5" />
-                                <InputField label="Categoria" value={formData.category} onChange={v => updateField('category', v)} placeholder="Simples, Marcial..." />
-                                <div className="sm:col-span-2">
-                                    <InputField label="Propriedades" value={formData.properties} onChange={v => updateField('properties', v)} placeholder="Acuidade, Versátil, Arremesso..." />
+                                <InputField label="Tipo de Armadura" value={formData.armorType} onChange={(v: any) => updateField('armorType', v)} placeholder="Leve, Média, Pesada..." required />
+                                <InputField label="Classe de Armadura (CA)" type="number" value={formData.ac} onChange={(v: any) => updateField('ac', parseInt(v))} required />
+                                <InputField label="Bônus de Destreza Máximo" type="number" value={formData.maxDex} onChange={(v: any) => updateField('maxDex', parseInt(v))} placeholder="Deixe vazio para ilimitado" />
+                                <InputField label="Força Mínima" type="number" value={formData.minStr} onChange={(v: any) => updateField('minStr', parseInt(v))} placeholder="0 para nenhuma" />
+
+                                <div className="flex items-center gap-2 mt-2">
+                                    <input
+                                        type="checkbox"
+                                        checked={formData.stealthDisadvantage || false}
+                                        onChange={e => updateField('stealthDisadvantage', e.target.checked)}
+                                        id="stealthDisadvantage"
+                                        className="w-4 h-4 rounded border-gray-300 text-rpg-gold focus:ring-rpg-gold"
+                                    />
+                                    <label htmlFor="stealthDisadvantage" className="text-sm font-cinzel text-rpg-gold">Desvantagem em Furtividade</label>
                                 </div>
                             </div>
                         )}
 
-                        {/* Escudos */}
-                        {registrationType === 'escudos' && (
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                <InputField label="Bônus na CA" type="number" value={formData.armorClass} onChange={v => updateField('armorClass', parseInt(v))} placeholder="2" />
-                                <InputField label="Peso (kg)" value={formData.weight} onChange={v => updateField('weight', v)} placeholder="3.0" />
-                                <div className="sm:col-span-2">
-                                    <InputField label="Propriedades Especiais" value={formData.properties} onChange={v => updateField('properties', v)} placeholder="Escudo de Madeira, Resistência a Fogo..." />
-                                </div>
-                            </div>
-                        )}
-
-                        {/* Bestiário (Monstros) */}
-                        {registrationType === 'monsters' && (
+                        {/* Atributos (Monstros/NPCs) */}
+                        {(registrationType === 'monsters' || registrationType === 'npcs') && (
                             <>
-                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                                    <InputField label="Pontos de Vida (HP)" type="number" value={formData.hp} onChange={v => updateField('hp', parseInt(v))} />
-                                    <InputField label="Classe de Armadura (CA)" type="number" value={formData.ac} onChange={v => updateField('ac', parseInt(v))} />
-                                    <InputField label="ND (Challenge Rating)" value={formData.challenge} onChange={v => updateField('challenge', v)} placeholder="1/4, 5, 20..." />
-                                </div>
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                    <InputField label="Tipo" value={formData.type} onChange={v => updateField('type', v)} placeholder="Morto-vivo, Aberração..." />
-                                    <InputField label="Velocidade" value={formData.speed} onChange={v => updateField('speed', v)} placeholder="9m, voo 18m..." />
+                                    <InputField label="HP" type="number" value={formData.hp} onChange={(v: any) => updateField('hp', parseInt(v))} />
+                                    <InputField label="CA" type="number" value={formData.ac} onChange={(v: any) => updateField('ac', parseInt(v))} />
+                                    <InputField label="CR (Desafio)" type="number" value={formData.challenge} onChange={(v: any) => updateField('challenge', v)} />
+                                    <InputField label="Tipo de Criatura" value={formData.type} onChange={(v: any) => updateField('type', v)} placeholder="Morto-vivo, Humanoide..." />
                                 </div>
-
-                                {/* Atributos do Monstro */}
                                 <div className="bg-black/20 p-4 rounded-xl border border-white/5">
                                     <h4 className="text-xs font-cinzel text-rpg-gold/60 uppercase tracking-widest mb-4 text-center">Atributos Primários</h4>
                                     <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
-                                        <MiniInputField label="FOR" value={formData.attributes?.str} onChange={v => updateNestedField('attributes', 'str', parseInt(v))} />
-                                        <MiniInputField label="DES" value={formData.attributes?.dex} onChange={v => updateNestedField('attributes', 'dex', parseInt(v))} />
-                                        <MiniInputField label="CON" value={formData.attributes?.con} onChange={v => updateNestedField('attributes', 'con', parseInt(v))} />
-                                        <MiniInputField label="INT" value={formData.attributes?.int} onChange={v => updateNestedField('attributes', 'int', parseInt(v))} />
-                                        <MiniInputField label="SAB" value={formData.attributes?.wis} onChange={v => updateNestedField('attributes', 'wis', parseInt(v))} />
-                                        <MiniInputField label="CAR" value={formData.attributes?.cha} onChange={v => updateNestedField('attributes', 'cha', parseInt(v))} />
+                                        <MiniInputField label="FOR" value={formData.attributes?.str} onChange={(v: any) => updateNestedField('attributes', 'str', parseInt(v))} />
+                                        <MiniInputField label="DES" value={formData.attributes?.dex} onChange={(v: any) => updateNestedField('attributes', 'dex', parseInt(v))} />
+                                        <MiniInputField label="CON" value={formData.attributes?.con} onChange={(v: any) => updateNestedField('attributes', 'con', parseInt(v))} />
+                                        <MiniInputField label="INT" value={formData.attributes?.int} onChange={(v: any) => updateNestedField('attributes', 'int', parseInt(v))} />
+                                        <MiniInputField label="SAB" value={formData.attributes?.wis} onChange={(v: any) => updateNestedField('attributes', 'wis', parseInt(v))} />
+                                        <MiniInputField label="CAR" value={formData.attributes?.cha} onChange={(v: any) => updateNestedField('attributes', 'cha', parseInt(v))} />
                                     </div>
                                 </div>
-
-                                <InputField label="Ações e Habilidades Especiais" value={formData.actions} onChange={v => updateField('actions', v)} textarea placeholder="Resistência Lendária, Mordida (2d6)..." />
+                                <InputField label="Ações e Habilidades Especiais" value={formData.actions} onChange={(v: any) => updateField('actions', v)} textarea placeholder="Resistência Lendária, Mordida (2d6)..." />
                             </>
                         )}
 
-                        {/* Outros Equipamentos */}
-                        {registrationType === 'itens' && (
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                <InputField label="Peso (kg)" value={formData.weight} onChange={v => updateField('weight', v)} />
-                                <InputField label="Custo (PO)" value={formData.value} onChange={v => updateField('value', v)} />
-                                <InputField label="Raridade" value={formData.rarity} onChange={v => updateField('rarity', v)} placeholder="Comum, Raro, Lendário..." />
-                                <InputField label="Tipo de Item" value={formData.itemType} onChange={v => updateField('itemType', v)} placeholder="Poção, Armadura, Ferramenta..." />
+                        {/* Campos de Itens/Equipamentos (Preço, Peso, Fabricação) */}
+                        {['armaduras', 'armas', 'escudos', 'itens', 'magias'].includes(registrationType) && (
+                            <div className="bg-white/5 p-4 rounded-xl space-y-4 border border-white/5">
+                                <h4 className="text-xs font-cinzel text-rpg-gold/60 uppercase tracking-widest">Informações Adicionais</h4>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                    <div>
+                                        <InputField label="Preço (po)" type="number" value={formData.price} onChange={(v: any) => updateField('price', parseFloat(v))} disabled={formData.noPrice} />
+                                        <div className="flex items-center gap-2 mt-2">
+                                            <input type="checkbox" checked={formData.noPrice} onChange={e => updateField('noPrice', e.target.checked)} id="noPrice" />
+                                            <label htmlFor="noPrice" className="text-xs text-rpg-grey">Grátis / Sem preço</label>
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <InputField label="Peso (kg)" type="number" value={formData.weight} onChange={(v: any) => updateField('weight', parseFloat(v))} disabled={formData.noWeight} />
+                                        <div className="flex items-center gap-2 mt-2">
+                                            <input type="checkbox" checked={formData.noWeight} onChange={e => updateField('noWeight', e.target.checked)} id="noWeight" />
+                                            <label htmlFor="noWeight" className="text-xs text-rpg-grey">Sem peso / Insignificante</label>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div className="mt-4">
+                                    <InputField label="Requisitos de Fabricação" value={formData.fabrication} onChange={(v: any) => updateField('fabrication', v)} placeholder="Materiais, tempo, perícia..." disabled={formData.noFabrication} />
+                                    <div className="flex items-center gap-2 mt-2">
+                                        <input type="checkbox" checked={formData.noFabrication} onChange={e => updateField('noFabrication', e.target.checked)} id="noFabrication" />
+                                        <label htmlFor="noFabrication" className="text-xs text-rpg-grey">Não requer fabricação</label>
+                                    </div>
+                                </div>
                             </div>
                         )}
                     </div>
@@ -468,7 +615,7 @@ export default function DatabaseManagementPage() {
                     background: rgba(218, 165, 32, 0.5);
                 }
             `}</style>
-        </div>
+        </div >
     );
 }
 
@@ -518,10 +665,10 @@ function sanitizeField(val: any): string {
     if (typeof val === 'string' || typeof val === 'number') return String(val);
     if (Array.isArray(val)) return val.map(sanitizeField).join(', ');
     if (typeof val === 'object') {
-        // Se for um objeto com campo 'type' string, retorna ele
         if (typeof val.type === 'string') return val.type;
-        // Se for objeto simples, retorna JSON
+        if (typeof val.name === 'string') return val.name;
+        if (typeof val.value === 'string') return val.value;
         return JSON.stringify(val);
     }
-    return '';
+    return String(val);
 }

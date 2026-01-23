@@ -129,9 +129,14 @@ export function parseDamageString(damage: string) {
     };
 }
 
+import { firestoreCache } from './cache-service';
+
 // Buscar itens globais do Firestore
 export async function fetchGlobalItems() {
     try {
+        const cached = firestoreCache.get('itens');
+        if (cached) return cached;
+
         const itemsRef = collection(db, 'itens');
         const querySnapshot = await getDocs(itemsRef);
         const items: any[] = [];
@@ -143,6 +148,8 @@ export async function fetchGlobalItems() {
                 name: data.name || doc.id
             });
         });
+
+        firestoreCache.set('itens', items);
         return items;
     } catch (error) {
         console.error('Erro ao carregar itens globais:', error);

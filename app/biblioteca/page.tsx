@@ -23,6 +23,7 @@ import {
 import { searchNpcs, npcTemplates, NPCTemplate } from '@/lib/npc-combatants-data';
 import { ArchiveStorage } from '@/lib/archive-storage';
 import { ParsedMechanic } from '@/lib/dnd-parser';
+import { firestoreCache } from '@/lib/cache-service';
 
 type TabType = 'grimorio' | 'bestiario' | 'itens' | 'regras' | 'notas' | 'npcs' | 'arquivista';
 
@@ -1260,6 +1261,9 @@ function ItensTab({ searchQuery, onAddItem }: { searchQuery: string; onAddItem?:
 
     const loadGlobalItems = useCallback(async () => {
         try {
+            const cached = firestoreCache.get('itens');
+            if (cached) return cached;
+
             const { collection, getDocs, query, orderBy } = await import('firebase/firestore');
             const itemsRef = collection(db, 'itens');
             const q = query(itemsRef, orderBy('name'));
@@ -1268,6 +1272,8 @@ function ItensTab({ searchQuery, onAddItem }: { searchQuery: string; onAddItem?:
             querySnapshot.forEach((doc) => {
                 items.push({ id: doc.id, ...doc.data() });
             });
+
+            firestoreCache.set('itens', items);
             return items;
         } catch (error) {
             console.error('Erro ao carregar itens globais:', error);

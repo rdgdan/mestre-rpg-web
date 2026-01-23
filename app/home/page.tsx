@@ -295,6 +295,9 @@ export default function HomePage() {
               <Link href="/biblioteca" className="text-rpg-parchment/80 hover:text-rpg-gold transition-colors font-bold font-cinzel text-sm sm:text-lg flex items-center gap-1 sm:gap-2 border-b-2 border-transparent hover:border-rpg-gold text-shadow-sm">
                 <span className="text-xl sm:text-2xl">📚</span> Biblioteca
               </Link>
+              <Link href="/armaduras" className="text-blue-300 hover:text-blue-200 transition-colors font-bold font-cinzel text-sm sm:text-lg flex items-center gap-1 sm:gap-2 border-b-2 border-transparent hover:border-blue-300 text-shadow-sm">
+                <span className="text-xl sm:text-2xl">🛡️</span> Armaduras
+              </Link>
               {user && (
                 <div className="flex items-center gap-3 sm:gap-4 border-l border-rpg-gold/20 pl-3 sm:pl-4">
                   <div className="flex items-center font-medieval">

@@ -46,6 +46,7 @@ import { CLASS_PROFICIENCIES } from '@/lib/class-proficiencies';
 import Modal from '@/components/Modal';
 import { CLASS_EFFECTS, COMMON_CONDITIONS, getCategorizedGlobalConditions, getEffectStyle } from '@/lib/effects-conditions';
 import { getXPForNextLevel, getXPProgress } from '@/lib/xp-progression';
+import { firestoreCache } from '@/lib/cache-service';
 
 // Lodash debounce import
 function debounce<T extends (...args: any[]) => any>(fn: T, delay: number): T {
@@ -368,10 +369,12 @@ export default function CharacterSheetPage() {
             setIsDbDataLoading(true);
             try {
                 const populateCollection = async (collectionName: string, defaultData: any[], sortField = 'name') => {
+                    const cached = firestoreCache.get(collectionName);
+                    if (cached) return cached;
+
                     const collectionRef = collection(db, collectionName);
                     const snapshot = await getDocs(collectionRef);
-
-                    // Criar mapa com dados existentes do banco (normalizado)
+                    // ... resto da lógica de merge (mantida para robustez) ...
                     const existingMap = new Map<string, any>();
                     snapshot.docs.forEach(docSnap => {
                         const data = docSnap.data();
@@ -381,7 +384,6 @@ export default function CharacterSheetPage() {
                         }
                     });
 
-                    // Mesclar com dados do código (código tem prioridade para regras oficiais)
                     const mergedMap = new Map<string, any>();
                     defaultData.forEach(item => {
                         const normalizedName = item.name?.toLowerCase().trim();
@@ -389,41 +391,38 @@ export default function CharacterSheetPage() {
                             const existing = existingMap.get(normalizedName);
                             mergedMap.set(normalizedName, {
                                 ...item,
-                                _docId: existing?._docId // Preserva ID se já existir
+                                _docId: existing?._docId
                             });
                         }
                     });
 
-                    // Adicionar itens do banco que não estão no código (customizados)
                     existingMap.forEach((item, key) => {
                         if (!mergedMap.has(key)) {
                             mergedMap.set(key, item);
                         }
                     });
 
-                    // Atualizar banco com versão consolidada (apenas se houver mudanças)
                     if (mergedMap.size > 0) {
                         const batch = writeBatch(db);
                         let batchCount = 0;
-
                         mergedMap.forEach((item) => {
                             const { _docId, ...dataToSave } = item;
                             const docRef = _docId ? doc(collectionRef, _docId) : doc(collectionRef);
                             batch.set(docRef, dataToSave, { merge: true });
                             batchCount++;
                         });
-
                         if (batchCount > 0) {
                             await batch.commit();
-                            console.log(`✅ ${collectionName}: ${batchCount} itens consolidados (${defaultData.length} do código + ${existingMap.size - defaultData.length} customizados)`);
                         }
                     }
 
-                    // Retornar dados consolidados
                     const finalSnapshot = await getDocs(collectionRef);
-                    return finalSnapshot.docs
+                    const finalData = finalSnapshot.docs
                         .map(doc => ({ ...doc.data() as any, id: doc.id }))
                         .sort((a, b) => a[sortField]?.localeCompare(b[sortField]));
+
+                    firestoreCache.set(collectionName, finalData);
+                    return finalData;
                 };
 
                 const [classData, raceData, allItemsData] = await Promise.all([

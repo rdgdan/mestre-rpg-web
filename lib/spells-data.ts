@@ -554,9 +554,14 @@ export const spellsDatabase: Spell[] = [
     }
 ];
 
+import { firestoreCache } from './cache-service';
+
 // Função para buscar magias do Firestore
 export async function fetchGlobalSpells(): Promise<Spell[]> {
     try {
+        const cachedSpells = firestoreCache.get('magias');
+        if (cachedSpells) return cachedSpells as Spell[];
+
         const spellsRef = collection(db, 'magias');
         const q = query(spellsRef, orderBy('name'));
         const snapshot = await getDocs(q);
@@ -567,19 +572,15 @@ export async function fetchGlobalSpells(): Promise<Spell[]> {
         } as Spell));
 
         // Mesclar com spellsDatabase (hardcoded)
-        // Preferência para o DB em caso de conflito de ID, mas garantindo que todos existam
         const spellMap = new Map<string, Spell>();
-
-        // 1. Adicionar Hardcoded
         spellsDatabase.forEach(spell => spellMap.set(spell.id, spell));
-
-        // 2. Adicionar/Sobrescrever com DB
         dbSpells.forEach(spell => spellMap.set(spell.id, spell));
 
-        return Array.from(spellMap.values());
+        const finalSpells = Array.from(spellMap.values());
+        firestoreCache.set('magias', finalSpells);
+        return finalSpells;
     } catch (error) {
         console.error('Erro ao buscar magias globais:', error);
-        // Fallback para hardcoded em caso de erro
         return spellsDatabase;
     }
 }
