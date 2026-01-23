@@ -1,15 +1,15 @@
 'use client';
 
-import { useState, useEffect, FormEvent } from 'react';
-import Link from 'next/link';
+import Modal from '@/components/Modal';
 import { useAuth } from '@/context/AuthContext';
 import { auth, db } from '@/lib/firebase';
-import { signOut, updateProfile } from 'firebase/auth';
-import { useRouter } from 'next/navigation';
-import { addDoc, collection, query, where, onSnapshot, doc, updateDoc, deleteDoc } from 'firebase/firestore';
-import Modal from '@/components/Modal';
-import { Campaign } from '@/types/campaign';
 import { fetchNpcTraitsFromFirestore, syncNpcTraitsToFirestore } from '@/lib/npc-traits-sync';
+import { Campaign } from '@/types/campaign';
+import { signOut, updateProfile } from 'firebase/auth';
+import { addDoc, collection, deleteDoc, doc, onSnapshot, query, updateDoc, where } from 'firebase/firestore';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { FormEvent, useEffect, useState } from 'react';
 
 // Tipos
 type NPC = {
@@ -363,6 +363,12 @@ export default function HomePage() {
                   >
                     + Nova Campanha
                   </button>
+                  <Link
+                    href="/master/database"
+                    className="bg-purple-900/60 border border-purple-400/30 text-rpg-parchment px-4 sm:px-6 py-2.5 rounded-lg font-cinzel font-bold text-sm hover:border-purple-400 hover:shadow-glow-purple transition-all active:scale-95 flex items-center gap-2 shadow-lg"
+                  >
+                    <span className="text-lg">📂</span> Banco de Dados
+                  </Link>
                   <button
                     onClick={() => { setGeneratedNpcs([]); setIsNpcModalOpen(true); }}
                     className="bg-rpg-slate/70 border border-rpg-gold/30 text-rpg-parchment px-4 sm:px-5 py-2.5 rounded-lg font-cinzel text-sm hover:border-rpg-gold hover:shadow-glow-ember transition-all active:scale-95 flex items-center gap-2"
