@@ -42,6 +42,7 @@ export interface Character {
     ownerId: string;
     campaignId?: string; // ID da campanha vinculada
     activeEncounterId?: string; // ID do encontro ativo para logs/balõezinhos
+    createdAt?: string;
     name: string;
     race: string;
     class: string;

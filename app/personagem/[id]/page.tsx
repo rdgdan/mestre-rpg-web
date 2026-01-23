@@ -40,9 +40,11 @@ import {
 } from '@/lib/class-features-sync';
 import { SUBCLASSES, SUBCLASS_CHOICE_LEVELS } from '@/lib/class-features';
 import Toast, { ToastMessage } from '@/components/ui/Toast';
+import { CLASS_PROFICIENCIES } from '@/lib/class-proficiencies';
 import { StartingProficienciesModal } from '@/components/ui/StartingProficienciesModal';
 import { StartingEquipmentModal } from '@/components/ui/StartingEquipmentModal';
-import { CLASS_PROFICIENCIES } from '@/lib/class-proficiencies';
+import { StartingAttributesModal } from '@/components/ui/StartingAttributesModal';
+import { RACE_BONUSES } from '@/lib/race-bonuses';
 import Modal from '@/components/Modal';
 import { CLASS_EFFECTS, COMMON_CONDITIONS, getCategorizedGlobalConditions, getEffectStyle } from '@/lib/effects-conditions';
 import { getXPForNextLevel, getXPProgress } from '@/lib/xp-progression';
@@ -128,6 +130,8 @@ export default function CharacterSheetPage() {
     const [isProficiencyModalOpen, setIsProficiencyModalOpen] = useState(false);
     const [casterAlertModal, setCasterAlertModal] = useState(false);
     const [isEquipmentStartModalOpen, setIsEquipmentStartModalOpen] = useState(false);
+    const [isStartingAttributesModalOpen, setIsStartingAttributesModalOpen] = useState(false);
+    const [creationStep, setCreationStep] = useState<number>(0); // 0: None, 1: Race, 2: Class, 3: Attributes, 4: Proficiencies, 5: Equipment, 6: Spells (if applicable)
     const [selectedClassForProficiency, setSelectedClassForProficiency] = useState<string>('');
 
     // Modais e Estados de Dados
@@ -478,8 +482,8 @@ export default function CharacterSheetPage() {
             setIsLoading(true);
             try {
                 if (id === 'novo') {
-                    setCharacter(createBlankCharacter(user.uid));
-                    characterLoaded.current = true;
+                    router.push('/personagem/criar');
+                    return;
                 } else {
                     const docRef = doc(db, 'personagens', id);
                     const docSnap = await getDoc(docRef);
@@ -1067,7 +1071,30 @@ export default function CharacterSheetPage() {
         setSelectionModalOpen(false);
 
         if (modalConfig.type === 'class') {
+            const isChangingClass = character.class && character.class !== item;
+
+            if (isChangingClass) {
+                const msg = `Atenção: Multiclasse no Nível 1 não é permitida pelas regras padrão do D&D 5e. \n\nDeseja SUBSTITUIR totalmente sua classe "${character.class}" por "${item}"?\n\n(Isso removerá habilidades e equipamentos da classe antiga para manter o balanceamento).`;
+                const confirmChange = confirm(msg);
+                if (!confirmChange) return;
+            }
+
             handleFieldChange('class', item);
+
+            // Wipe logic if class changes
+            if (isChangingClass) {
+                updateCharacter(char => {
+                    const lostItems = [...char.inventory.weapons, ...char.inventory.otherEquipment].map(i => i.name).filter(Boolean).join(', ');
+                    if (lostItems) showToast(`Itens removidos: ${lostItems}`, 'info');
+
+                    return {
+                        ...char,
+                        features: char.features.filter(f => f.type !== 'class'),
+                        skills: createBlankCharacter('').skills, // Reset skills correctly
+                        inventory: { ...char.inventory, weapons: [], otherEquipment: [] } as any // Reset items
+                    };
+                });
+            }
 
             // Automação: Carregar Features de Nível 1
             setIsLoading(true);
@@ -1104,13 +1131,15 @@ export default function CharacterSheetPage() {
                 const profData = CLASS_PROFICIENCIES[item];
 
                 if (profData) {
-                    // 1. Aplicar Salvaguardas Automaticamente (assumindo que existe um campo ou apenas lógica interna)
-                    // Como não identificamos um campo explícito de "savingThrows" no Character, vamos pular a persistência direta 
-                    // a menos que encontremos onde isso fica. Mas abriremos o modal de skills.
-
-                    // 2. Abrir Modal de Skills
                     setSelectedClassForProficiency(item);
+                    setCreationStep(4);
                     setIsProficiencyModalOpen(true);
+                }
+
+                // Após classe (se estiver no wizard), abrir raça se não houver
+                if (creationStep === 1) {
+                    setCreationStep(2);
+                    setTimeout(() => openSelectionModal('race'), 500);
                 }
 
                 // Automação: Verificar Magias (Abrir Modal se for Conjurador)
@@ -1132,8 +1161,28 @@ export default function CharacterSheetPage() {
             }
 
         } else if (modalConfig.type === 'race') {
+            const isChangingRace = character.race && character.race !== item;
+
+            if (isChangingRace) {
+                const confirmChange = confirm(`Mudar para ${item}? Os bônus de atributo e habilidades de sua raça atual (${character.race}) serão resetados.`);
+                if (!confirmChange) return;
+            }
+
             handleFieldChange(modalConfig.type, item);
-            // Automação de Raça (pode ser feita similarmente depois)
+
+            if (isChangingRace) {
+                updateCharacter(char => ({
+                    ...char,
+                    features: char.features.filter(f => f.type !== 'race'),
+                    attributes: createBlankCharacter('').attributes // Reset level 1 base attributes
+                }));
+            }
+
+            // Automação de Raça: Se for nível 1, abre o modal de atributos
+            if ((character.level || 1) === 1) {
+                setCreationStep(3);
+                setTimeout(() => setIsStartingAttributesModalOpen(true), 500);
+            }
         } else if (modalConfig.type === 'weapon') {
             const base = weapons.find(w => w.name === item);
             if (base) {
@@ -1627,11 +1676,43 @@ export default function CharacterSheetPage() {
 
                 {/* Tabs Navigation */}
                 <div className="mb-6 border-b-2 border-purple-500/20 bg-gradient-to-r from-purple-900/10 via-transparent to-purple-900/10 rounded-t-lg overflow-hidden">
-                    <div className="flex overflow-x-auto no-scrollbar gap-0.5 px-2 snap-x">
-                        {(['Principal', 'Equipamento', 'Habilidades', 'Magias', 'Personalidade'] as const).map(tab => (
-                            <TabButton key={tab} activeTab={activeTab} tabName={tab} onClick={setActiveTab} />
-                        ))}
-                    </div>
+                    {creationStep > 0 && id === 'novo' ? (
+                        <div className="flex justify-around items-center p-4 bg-rpg-dark/60">
+                            {[
+                                { step: 1, label: 'Classe', modal: 'class' },
+                                { step: 2, label: 'Raça', modal: 'race' },
+                                { step: 3, label: 'Atributos', modal: 'attributes' },
+                                { step: 4, label: 'Perícias', modal: 'proficiencies' },
+                                { step: 5, label: 'Equipamento', modal: 'equipment' }
+                            ].map((s) => (
+                                <button
+                                    key={s.step}
+                                    onClick={() => {
+                                        if (s.step <= creationStep) {
+                                            if (s.modal === 'class') openSelectionModal('class');
+                                            else if (s.modal === 'race') openSelectionModal('race');
+                                            else if (s.modal === 'attributes') setIsStartingAttributesModalOpen(true);
+                                            else if (s.modal === 'proficiencies') setIsProficiencyModalOpen(true);
+                                            else if (s.modal === 'equipment') setIsEquipmentStartModalOpen(true);
+                                            setCreationStep(s.step);
+                                        }
+                                    }}
+                                    className={`flex flex-col items-center gap-1 transition-all ${creationStep === s.step ? 'scale-110' : creationStep > s.step ? 'opacity-100' : 'opacity-30'}`}
+                                >
+                                    <div className={`w-8 h-8 rounded-full flex items-center justify-center border-2 font-bold text-xs ${creationStep === s.step ? 'border-rpg-gold text-rpg-gold bg-rpg-gold/10' : creationStep > s.step ? 'border-green-500 text-green-500 bg-green-500/10' : 'border-rpg-grey text-rpg-grey'}`}>
+                                        {creationStep > s.step ? '✓' : s.step}
+                                    </div>
+                                    <span className={`text-[9px] uppercase font-cinzel tracking-tighter ${creationStep === s.step ? 'text-rpg-gold' : 'text-rpg-grey'}`}>{s.label}</span>
+                                </button>
+                            ))}
+                        </div>
+                    ) : (
+                        <div className="flex overflow-x-auto no-scrollbar gap-0.5 px-2 snap-x">
+                            {(['Principal', 'Equipamento', 'Habilidades', 'Magias', 'Personalidade'] as const).map(tab => (
+                                <TabButton key={tab} activeTab={activeTab} tabName={tab} onClick={setActiveTab} />
+                            ))}
+                        </div>
+                    )}
                 </div>
 
                 <main className="max-w-5xl mx-auto bg-gradient-to-b from-purple-950/20 via-transparent to-purple-900/10 rounded-b-lg p-3 sm:p-6 border border-t-0 border-purple-500/20 shadow-lg">
@@ -1639,12 +1720,22 @@ export default function CharacterSheetPage() {
                     {activeTab === 'Principal' && (
                         <div className="space-y-6 animate-fade-in">
                             {/* Grid de Atributos - Heroic Row with Horizontal Scroll */}
-                            <div className="flex gap-2 overflow-x-auto pb-4 no-scrollbar -mx-2 px-2 snap-x sm:justify-center sm:overflow-visible">
-                                {ATTRIBUTE_KEYS.map((key) => (
-                                    <div key={key} className="snap-center">
-                                        <AttributeInput label={ATTRIBUTE_DISPLAY_NAMES[key].slice(0, 3)} value={character.attributes[key]} onChange={(val) => handleNestedChange(`attributes.${key}`, val)} disabled={isReadOnly} />
-                                    </div>
-                                ))}
+                            <div className="flex flex-col items-center gap-4 mb-4">
+                                <div className="flex gap-2 overflow-x-auto pb-4 no-scrollbar -mx-2 px-2 snap-x sm:justify-center sm:overflow-visible">
+                                    {ATTRIBUTE_KEYS.map((key) => (
+                                        <div key={key} className="snap-center">
+                                            <AttributeInput label={ATTRIBUTE_DISPLAY_NAMES[key].slice(0, 3)} value={character.attributes[key]} onChange={(val) => handleNestedChange(`attributes.${key}`, val)} disabled={isReadOnly} />
+                                        </div>
+                                    ))}
+                                </div>
+                                {!isReadOnly && character.level === 1 && (
+                                    <button
+                                        onClick={() => setIsStartingAttributesModalOpen(true)}
+                                        className="text-[10px] bg-rpg-gold/10 text-rpg-gold border border-rpg-gold/30 px-4 py-2 rounded-full hover:bg-rpg-gold hover:text-rpg-dark transition-all font-bold uppercase tracking-widest shadow-lg animate-pulse"
+                                    >
+                                        ⚙️ Configurar Atributos (Padrão)
+                                    </button>
+                                )}
                             </div>
 
                             {/* Vitality Center - Unified Health Management */}
@@ -2517,6 +2608,26 @@ export default function CharacterSheetPage() {
                         </div>
                     </Modal>
 
+                    <StartingAttributesModal
+                        isOpen={isStartingAttributesModalOpen}
+                        onClose={() => setIsStartingAttributesModalOpen(false)}
+                        race={character?.race || ''}
+                        onConfirm={(newAttrs) => {
+                            updateCharacter(char => ({
+                                ...char,
+                                attributes: newAttrs
+                            }));
+                            setIsStartingAttributesModalOpen(false);
+                            showToast("Atributos configurados com sucesso!", "success");
+
+                            // Avançar para Proficiências no Wizard
+                            if (creationStep === 3) {
+                                setCreationStep(4);
+                                setTimeout(() => setIsProficiencyModalOpen(true), 500);
+                            }
+                        }}
+                    />
+
 
                     <StartingProficienciesModal
                         isOpen={isProficiencyModalOpen}
@@ -2533,8 +2644,15 @@ export default function CharacterSheetPage() {
                                 return { ...char, skills: newSkills };
                             });
                             setIsProficiencyModalOpen(false);
-                            // Abre modal de equipamento após as proficiências
-                            setIsEquipmentStartModalOpen(true);
+
+                            // Avançar para Equipamento no Wizard
+                            if (creationStep === 4) {
+                                setCreationStep(5);
+                                setTimeout(() => setIsEquipmentStartModalOpen(true), 500);
+                            } else {
+                                // Fallback original
+                                setIsEquipmentStartModalOpen(true);
+                            }
                         }}
                     />
                     <StartingEquipmentModal
@@ -2820,8 +2938,13 @@ const AttributeInput = ({ label, value, onChange, disabled }: { label: string, v
                 disabled={disabled}
                 value={value}
                 onChange={(e) => onChange(parseInt(e.target.value) || 0)}
-                className="w-14 sm:w-16 text-3xl sm:text-3xl font-bold text-center bg-transparent text-rpg-parchment focus:outline-none font-medieval"
+                className={`w-14 sm:w-16 text-3xl sm:text-3xl font-bold text-center bg-transparent focus:outline-none font-medieval ${disabled ? 'text-rpg-grey opacity-50' : 'text-rpg-parchment'}`}
             />
+            {disabled && (
+                <div className="absolute -top-1 -right-1 group-hover:block hidden bg-rpg-dark border border-rpg-gold/50 text-rpg-gold text-[8px] px-1 rounded shadow-lg z-10">
+                    Predefinido (Nv.1)
+                </div>
+            )}
             <div className="text-sm sm:text-sm text-rpg-gold mt-2 sm:mt-3 font-bold font-medieval border border-rpg-gold/30 px-4 sm:px-4 py-1.5 rounded shadow-sm bg-black/40 group-hover:bg-rpg-gold/10 transition-colors">
                 {modifier >= 0 ? `+${modifier}` : modifier}
             </div>

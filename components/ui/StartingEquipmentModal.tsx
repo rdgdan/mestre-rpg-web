@@ -19,7 +19,7 @@ export const StartingEquipmentModal: React.FC<StartingEquipmentModalProps> = ({ 
         } else {
             document.body.style.overflow = 'unset';
         }
-        
+
         return () => {
             document.body.style.overflow = 'unset';
         };
@@ -31,8 +31,24 @@ export const StartingEquipmentModal: React.FC<StartingEquipmentModalProps> = ({ 
 
     // Se a classe não tiver equipamento definido ou não for encontrada, fecha ou mostra erro.
     // Por enquanto, apenas não renderiza.
+    // Se a classe não tiver equipamento definido ou não for encontrada, fecha ou mostra erro.
     if (!equipmentData) {
-        return null;
+        return (
+            <div className="fixed inset-0 z-[260] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in font-sans">
+                <div className="bg-rpg-panel border-2 border-rpg-red/50 rounded-lg p-6 text-center max-w-md shadow-2xl">
+                    <h3 className="text-xl font-bold font-cinzel text-rpg-red mb-4 uppercase tracking-widest"> ⚠ Equipamento Indisponível</h3>
+                    <p className="text-sm text-rpg-parchment mb-6">
+                        Não há configuração de equipamento inicial definida para a classe <strong className="text-white">{className}</strong>.
+                    </p>
+                    <button
+                        onClick={onClose}
+                        className="px-6 py-2 bg-rpg-slate border border-white/10 text-rpg-parchment rounded hover:bg-rpg-red/20 hover:text-red-400 transition-colors uppercase text-xs font-bold tracking-wider"
+                    >
+                        Fechar
+                    </button>
+                </div>
+            </div>
+        );
     }
 
     const { options, defaultItems } = equipmentData;
@@ -125,51 +141,68 @@ export const StartingEquipmentModal: React.FC<StartingEquipmentModalProps> = ({ 
 
                     {/* Itens Padrão */}
                     {defaultItems.length > 0 && (
-                        <div className="bg-black/20 p-4 rounded border border-white/5">
-                            <h4 className="text-rpg-parchment font-bold text-sm uppercase mb-3 border-b border-white/10 pb-1">Itens Incluídos</h4>
-                            <ul className="space-y-1">
+                        <div className="bg-emerald-900/10 p-4 rounded border border-emerald-500/30 shadow-sm border-dashed">
+                            <h4 className="text-[10px] font-black text-emerald-400 uppercase tracking-widest mb-3 flex items-center gap-2">
+                                🎒 Itens Incluídos Automaticamente
+                            </h4>
+                            <div className="grid grid-cols-2 gap-2">
                                 {defaultItems.map((item, idx) => (
-                                    <li key={idx} className="text-rpg-grey text-sm flex items-center gap-2">
-                                        <span className="text-rpg-gold">•</span>
+                                    <div key={idx} className="text-rpg-parchment text-[11px] flex items-center gap-2 bg-black/20 p-2 rounded border border-emerald-500/10">
+                                        <span className="text-emerald-400">✓</span>
                                         {item.quantity}x {item.name}
-                                    </li>
+                                    </div>
                                 ))}
-                            </ul>
+                            </div>
                         </div>
                     )}
 
                     {/* Escolhas */}
-                    {options.map((choiceGroup, groupIdx) => (
-                        <div key={groupIdx} className="space-y-2">
-                            <h4 className="text-rpg-gold/80 font-bold text-xs uppercase tracking-wider">Escolha {groupIdx + 1}</h4>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                {choiceGroup.map((option, optIdx) => {
-                                    const isSelected = selections[groupIdx] === optIdx;
-                                    return (
-                                        <button
-                                            key={optIdx}
-                                            onClick={() => handleSelect(groupIdx, optIdx)}
-                                            className={`p-3 rounded border text-left transition-all ${isSelected
-                                                ? 'bg-rpg-gold/20 border-rpg-gold text-rpg-gold shadow-glow-gold/10'
-                                                : 'bg-black/20 border-white/10 text-rpg-grey hover:border-rpg-gold/30 hover:text-rpg-parchment'
-                                                }`}
-                                        >
-                                            <div className="flex justify-between items-start">
-                                                <span className="font-bold text-sm">{option.label}</span>
-                                                {isSelected && <span className="text-xs font-black">✓</span>}
-                                            </div>
-                                            {/* Listar sub-itens se houver mais de um ou se o nome for diferente da label */}
-                                            {option.choices.length > 0 && (
-                                                <div className="mt-1 text-[10px] opacity-70">
-                                                    Contém: {option.choices.map(c => `${c.quantity}x ${c.name}`).join(', ')}
-                                                </div>
-                                            )}
-                                        </button>
-                                    );
-                                })}
-                            </div>
+                    <div className="space-y-6">
+                        <div className="flex justify-between items-center text-xs">
+                            <h4 className="font-black text-rpg-gold uppercase tracking-widest flex items-center gap-2">
+                                ⚔️ Escolhas de Equipamento Necessárias
+                            </h4>
+                            <span className={`px-3 py-1 rounded font-black uppercase tracking-tighter shadow-sm ${isAllSelected ? 'bg-green-600/20 text-green-400 border border-green-500/30' : 'bg-red-600/20 text-red-400 border border-red-500/30 animate-pulse'}`}>
+                                {isAllSelected ? '✓ Seleções Concluídas' : `Faltam ${options.length - Object.keys(selections).length} Escolhas`}
+                            </span>
                         </div>
-                    ))}
+
+                        {options.map((choiceGroup, groupIdx) => (
+                            <div key={groupIdx} className="space-y-3 bg-black/20 p-4 rounded-lg border border-white/5">
+                                <h4 className="text-rpg-gold/80 font-bold text-[10px] uppercase tracking-wider flex items-center gap-2">
+                                    <span className="w-5 h-5 rounded-full bg-rpg-gold/10 flex items-center justify-center border border-rpg-gold/20 text-[10px]">{groupIdx + 1}</span>
+                                    Configuração de Equipamento
+                                </h4>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                    {choiceGroup.map((option, optIdx) => {
+                                        const isSelected = selections[groupIdx] === optIdx;
+                                        return (
+                                            <button
+                                                key={optIdx}
+                                                onClick={() => handleSelect(groupIdx, optIdx)}
+                                                className={`p-4 rounded-lg border text-left transition-all ${isSelected
+                                                    ? 'bg-rpg-gold/20 border-rpg-gold text-rpg-gold shadow-glow-gold/10'
+                                                    : 'bg-black/30 border-white/10 text-rpg-grey hover:border-rpg-gold/30 hover:text-rpg-parchment'
+                                                    }`}
+                                            >
+                                                <div className="flex justify-between items-start mb-2">
+                                                    <span className="font-bold text-sm leading-tight">{option.label}</span>
+                                                    <div className={`w-5 h-5 rounded-full border flex items-center justify-center transition-all ${isSelected ? 'border-rpg-gold bg-rpg-gold text-rpg-dark font-black' : 'border-white/20'}`}>
+                                                        {isSelected ? '✓' : ''}
+                                                    </div>
+                                                </div>
+                                                {option.choices.length > 0 && (
+                                                    <div className="text-[10px] opacity-60 font-medium">
+                                                        Inclui: {option.choices.map(c => `${c.quantity}x ${c.name}`).join(', ')}
+                                                    </div>
+                                                )}
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        ))}
+                    </div>
                 </div>
 
                 <div className="p-6 border-t border-rpg-gold/20 bg-black/20 flex justify-end gap-3 flex-shrink-0">

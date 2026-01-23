@@ -1,0 +1,45 @@
+
+export const CLASS_SUMMARIES: Record<string, string> = {
+    "Artífice": "Mestres da invenção, artífices usam magia para imbuir objetos comuns com poderes extraordinários.",
+    "Bárbaro": "Um guerreiro feroz de origem primitiva que pode entrar em fúria em batalha.",
+    "Bardo": "Um mestre da música e da magia que usa sons e palavras para inspirar aliados e confundir inimigos.",
+    "Bruxo": "Um conjurador que recebe seu poder através de um pacto com uma entidade extraplanar.",
+    "Clérigo": "Um campeão sacerdotal que empunha magia divina a serviço de um poder superior.",
+    "Druida": "Um guardião da natureza que pode adotar formas animais e controlar os elementos.",
+    "Feiticeiro": "Um conjurador nato que possui magia inerente em seu sangue ou linhagem.",
+    "Guerreiro": "Um mestre do combate armado e perito em uma vasta gama de armas e armaduras.",
+    "Ladino": "Um mestre da furtividade e da precisão, capaz de encontrar fraquezas onde outros não as veem.",
+    "Mago": "Um estudioso astuto capaz de manipular as leis da realidade através de diagramas e fórmulas.",
+    "Monge": "Um mestre das artes marciais que canaliza a energia vital (Ki) em seu próprio corpo.",
+    "Paladino": "Um guerreiro sagrado vinculado por um juramento inquebrável para combater o mal.",
+    "Patrulheiro": "Um caçador e rastreador perito que protege as fronteiras da civilização contra ameaças selvagens."
+};
+
+export const RACE_SUMMARIES: Record<string, string> = {
+    "Anão da Colina": "Anjos robustos com sentidos aguçados, resiliência profunda e intuição intuitiva.",
+    "Anão da Montanha": "Fortes e resistentes, treinados para sobreviver e lutar nos picos mais altos.",
+    "Elfo Alto": "Sábios e graciosos, com um toque natural para a magia arcana.",
+    "Elfo da Floresta": "Rápidos e furtivos, mestres da sobrevivência em áreas naturais densas.",
+    "Elfo Sombrio (Drow)": "Moradores do Subterrâneo, dotados de magia sombria e visão aguçada na escuridão.",
+    "Halfling Pés Leves": "Pequenos e furtivos, conhecidos por sua sorte incomum e agilidade.",
+    "Halfling Robusto": "Mais resistentes que seus primos, com uma constituição que desafia venenos.",
+    "Humano": "A raça mais adaptável e ambiciosa entre os povos comuns.",
+    "Draconato": "Descendentes de dragões, orgulhosos e capazes de exalar sopros elementares.",
+    "Gnomo da Floresta": "Pequenos inventores amigos dos animais, peritos em ilusões simples.",
+    "Gnomo das Rochas": "Engenhosos e resistentes, mestres da mecânica e da tecnologia.",
+    "Meio-Elfo": "Combinando a diplomacia humana com a graça élfica, vivem entre dois mundos.",
+    "Meio-Orc": "Fortes e ferozes, possuindo uma determinação implacável em batalha.",
+    "Tiefling": "Marcados por uma linhagem infernal, possuem resistência ao fogo e magia inata.",
+    "Aasimar": "Seres tocados pelo plano celestial, portadores de luz e cura.",
+    "Firbolg": "Guardiões reclusos das florestas, dotados de magia da natureza e grande força.",
+    "Goliath": "Nascidos nos picos das montanhas, possuem uma força e resistência titânicas.",
+    "Kenku": "Povo-pássaro mímico, astutos rastreadores e peritos em cópias.",
+    "Lizardfolk": "Sobreviventes pragmáticos dos pântanos, com instintos naturais de caçador.",
+    "Tabaxi": "Curiosos e ágeis, os povos-gato são excelentes exploradores e ladinos.",
+    "Tritão": "Protetores das profundezas oceânicas, comandantes da água e do frio.",
+    "Yuan-ti Pureblood": "Astutos e serpentinos, com uma resistência natural a magias e venenos.",
+    "Genasi (Água)": "Descendentes do elemento água, adaptáveis e fluidos.",
+    "Genasi (Ar)": "Filhos do vento, leves e velozes como a brisa ou a tempestade.",
+    "Genasi (Fogo)": "Ardentes e voláteis, portadores da chama interior.",
+    "Genasi (Terra)": "Sólidos e inabaláveis, com a força e estabilidade da rocha."
+};

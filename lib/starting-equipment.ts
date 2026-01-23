@@ -147,5 +147,131 @@ export const CLASS_STARTING_EQUIPMENT: Record<string, ClassStartingEquipment> = 
         defaultItems: [
             { name: "Livro de Magias", quantity: 1, type: 'other' }
         ]
+    },
+    "Bruxo": {
+        options: [
+            [
+                { label: "Besta Leve e 20 virotes", choices: [{ name: "Besta Leve", quantity: 1, type: 'weapon' }, { name: "Virotes", quantity: 20, type: 'other' }] },
+                { label: "Qualquer Arma Simples", choices: [{ name: "Adaga", quantity: 1, type: 'weapon', defaultName: "Arma Simples" }] }
+            ],
+            [
+                { label: "Bolsa de Componentes", choices: [{ name: "Bolsa de Componentes", quantity: 1, type: 'other' }] },
+                { label: "Foco Arcano", choices: [{ name: "Foco Arcano", quantity: 1, type: 'other' }] }
+            ],
+            [
+                { label: "Pacote de Estudioso", choices: [{ name: "Pacote de Estudioso", quantity: 1, type: 'other' }] },
+                { label: "Pacote de Assaltante", choices: [{ name: "Pacote de Assaltante", quantity: 1, type: 'other' }] }
+            ]
+        ],
+        defaultItems: [
+            { name: "Armadura de Couro", quantity: 1, type: 'armor' },
+            { name: "Qualquer Arma Simples", quantity: 1, type: 'weapon' },
+            { name: "Adaga", quantity: 2, type: 'weapon' }
+        ]
+    },
+    "Druida": {
+        options: [
+            [
+                { label: "Escudo de Madeira", choices: [{ name: "Escudo", quantity: 1, type: 'shield' }] },
+                { label: "Qualquer Arma Simples", choices: [{ name: "Clava", quantity: 1, type: 'weapon', defaultName: "Arma Simples" }] }
+            ],
+            [
+                { label: "Cimitarra", choices: [{ name: "Cimitarra", quantity: 1, type: 'weapon' }] },
+                { label: "Qualquer Arma Simples Corpo-a-Corpo", choices: [{ name: "Adaga", quantity: 1, type: 'weapon', defaultName: "Arma Simples" }] }
+            ]
+        ],
+        defaultItems: [
+            { name: "Armadura de Couro", quantity: 1, type: 'armor' },
+            { name: "Pacote de Explorador", quantity: 1, type: 'other' },
+            { name: "Foco Druídico", quantity: 1, type: 'other' }
+        ]
+    },
+    "Monge": {
+        options: [
+            [
+                { label: "Espada Curta", choices: [{ name: "Espada Curta", quantity: 1, type: 'weapon' }] },
+                { label: "Qualquer Arma Simples", choices: [{ name: "Clava", quantity: 1, type: 'weapon', defaultName: "Arma Simples" }] }
+            ],
+            [
+                { label: "Pacote de Aventureiro", choices: [{ name: "Pacote de Aventureiro", quantity: 1, type: 'other' }] },
+                { label: "Pacote de Explorador", choices: [{ name: "Pacote de Explorador", quantity: 1, type: 'other' }] }
+            ]
+        ],
+        defaultItems: [
+            { name: "Dardos", quantity: 10, type: 'weapon' }
+        ]
+    },
+    "Paladino": {
+        options: [
+            [
+                { label: "Uma Arma Marcial e Escudo", choices: [{ name: "Espada Longa", quantity: 1, type: 'weapon', defaultName: "Arma Marcial" }, { name: "Escudo", quantity: 1, type: 'shield' }] },
+                { label: "Duas Armas Marciais", choices: [{ name: "Espada Longa", quantity: 1, type: 'weapon', defaultName: "Arma Marcial 1" }, { name: "Machado de Batalha", quantity: 1, type: 'weapon', defaultName: "Arma Marcial 2" }] }
+            ],
+            [
+                { label: "Cinco Azagaias", choices: [{ name: "Azagaia", quantity: 5, type: 'weapon' }] },
+                { label: "Qualquer Arma Simples Corpo-a-Corpo", choices: [{ name: "Adaga", quantity: 1, type: 'weapon', defaultName: "Arma Simples" }] }
+            ],
+            [
+                { label: "Pacote de Sacerdote", choices: [{ name: "Pacote de Sacerdote", quantity: 1, type: 'other' }] },
+                { label: "Pacote de Explorador", choices: [{ name: "Pacote de Explorador", quantity: 1, type: 'other' }] }
+            ]
+        ],
+        defaultItems: [
+            { name: "Cota de Malha", quantity: 1, type: 'armor' },
+            { name: "Símbolo Sagrado", quantity: 1, type: 'other' }
+        ]
+    },
+    "Patrulheiro": {
+        options: [
+            [
+                { label: "Cota de Escamas", choices: [{ name: "Cota de Escamas", quantity: 1, type: 'armor' }] },
+                { label: "Armadura de Couro", choices: [{ name: "Armadura de Couro", quantity: 1, type: 'armor' }] }
+            ],
+            [
+                { label: "Duas Espadas Curtas", choices: [{ name: "Espada Curta", quantity: 2, type: 'weapon' }] },
+                { label: "Duas Armas Simples Corpo-a-Corpo", choices: [{ name: "Adaga", quantity: 2, type: 'weapon', defaultName: "Armas Simples" }] }
+            ],
+            [
+                { label: "Pacote de Aventureiro", choices: [{ name: "Pacote de Aventureiro", quantity: 1, type: 'other' }] },
+                { label: "Pacote de Explorador", choices: [{ name: "Pacote de Explorador", quantity: 1, type: 'other' }] }
+            ]
+        ],
+        defaultItems: [
+            { name: "Arco Longo", quantity: 1, type: 'weapon' },
+            { name: "Flechas", quantity: 20, type: 'other' }
+        ]
+    },
+    "Feiticeiro": {
+        options: [
+            [
+                { label: "Besta Leve e 20 virotes", choices: [{ name: "Besta Leve", quantity: 1, type: 'weapon' }, { name: "Virotes", quantity: 20, type: 'other' }] },
+                { label: "Qualquer Arma Simples", choices: [{ name: "Adaga", quantity: 1, type: 'weapon', defaultName: "Arma Simples" }] }
+            ],
+            [
+                { label: "Bolsa de Componentes", choices: [{ name: "Bolsa de Componentes", quantity: 1, type: 'other' }] },
+                { label: "Foco Arcano", choices: [{ name: "Foco Arcano", quantity: 1, type: 'other' }] }
+            ],
+            [
+                { label: "Pacote de Aventureiro", choices: [{ name: "Pacote de Aventureiro", quantity: 1, type: 'other' }] },
+                { label: "Pacote de Explorador", choices: [{ name: "Pacote de Explorador", quantity: 1, type: 'other' }] }
+            ]
+        ],
+        defaultItems: [
+            { name: "Adaga", quantity: 2, type: 'weapon' }
+        ]
+    },
+    "Artífice": {
+        options: [
+            [
+                { label: "Ferramentas de Ladrão", choices: [{ name: "Ferramentas de Ladrão", quantity: 1, type: 'other' }] },
+                { label: "Pacote de Aventureiro", choices: [{ name: "Pacote de Aventureiro", quantity: 1, type: 'other' }] }
+            ]
+        ],
+        defaultItems: [
+            { name: "Besta Leve", quantity: 1, type: 'weapon' },
+            { name: "Virotes", quantity: 20, type: 'other' },
+            { name: "Armadura de Couro Batido", quantity: 1, type: 'armor' },
+            { name: "Adaga", quantity: 2, type: 'weapon' }
+        ]
     }
 };

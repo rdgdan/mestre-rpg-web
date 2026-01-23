@@ -34,13 +34,19 @@ const SKILL_NAMES: Record<string, string> = {
 export const StartingProficienciesModal: React.FC<StartingProficienciesModalProps> = ({ isOpen, onClose, className, onConfirm }) => {
     const [selected, setSelected] = useState<string[]>([]);
 
-    if (!isOpen) return null;
-
-    const profData = CLASS_PROFICIENCIES[className];
-    if (!profData) return null;
-
-    const { choose, from } = profData.skills;
+    const profData = className ? CLASS_PROFICIENCIES[className] : null;
+    const { choose, from } = profData?.skills || { choose: 0, from: [] };
+    const savingThrows = profData?.savingThrows || [];
     const remaining = choose - selected.length;
+
+    // Auto-selecionar se o número de opções for igual ao número de escolhas
+    React.useEffect(() => {
+        if (from && from.length > 0 && from.length <= choose && selected.length === 0) {
+            setSelected(from);
+        }
+    }, [from, choose, selected.length]);
+
+    if (!isOpen || !profData) return null;
 
     const toggleSkill = (skill: string) => {
         if (selected.includes(skill)) {
@@ -68,33 +74,55 @@ export const StartingProficienciesModal: React.FC<StartingProficienciesModalProp
                     </h3>
                     <p className="text-xs text-rpg-grey text-center mt-2 font-medieval">
                         Sua classe define suas aptidões iniciais.
-                        <br />
-                        <span className="text-rpg-parchment font-bold">Escolha {choose} perícias.</span>
                     </p>
                 </div>
 
-                <div className="p-6 grid grid-cols-2 gap-3 max-h-[60vh] overflow-y-auto custom-scrollbar">
-                    {from.map(skill => {
-                        const isSelected = selected.includes(skill);
-                        const isDisabled = !isSelected && remaining === 0;
+                <div className="p-6 space-y-4 max-h-[60vh] overflow-y-auto custom-scrollbar">
+                    {/* Salvaguardas Automáticas */}
+                    {savingThrows.length > 0 && (
+                        <div className="bg-blue-900/10 border border-blue-500/20 p-3 rounded-lg">
+                            <h4 className="text-[10px] font-black text-blue-300 uppercase tracking-widest mb-2 flex items-center gap-2">
+                                🛡️ Salvaguardas Recebidas
+                            </h4>
+                            <div className="flex flex-wrap gap-2">
+                                {savingThrows.map(save => (
+                                    <span key={save} className="px-3 py-1 bg-blue-600/20 text-blue-200 border border-blue-500/30 rounded text-xs font-bold uppercase">
+                                        {ATTRIBUTE_DISPLAY_NAMES[save] || save}
+                                    </span>
+                                ))}
+                            </div>
+                        </div>
+                    )}
 
-                        return (
-                            <button
-                                key={skill}
-                                onClick={() => toggleSkill(skill)}
-                                disabled={isDisabled}
-                                className={`flex items-center justify-between p-3 rounded border transition-all ${isSelected
-                                    ? 'bg-rpg-gold/20 border-rpg-gold text-rpg-gold shadow-glow-gold/10'
-                                    : isDisabled
-                                        ? 'bg-black/20 border-white/5 text-rpg-grey/30 cursor-not-allowed'
-                                        : 'bg-black/20 border-white/10 text-rpg-grey hover:border-rpg-gold/50 hover:text-rpg-parchment'
-                                    }`}
-                            >
-                                <span className="font-bold text-sm uppercase tracking-wide">{SKILL_NAMES[skill] || skill}</span>
-                                {isSelected && <span className="text-xs font-black">✓</span>}
-                            </button>
-                        );
-                    })}
+                    <div className="border-t border-white/5 pt-4">
+                        <h4 className="text-[10px] font-black text-rpg-gold uppercase tracking-widest mb-3 flex justify-between items-center">
+                            <span>Perícias para Escolher</span>
+                            <span className="text-rpg-parchment bg-rpg-gold/20 px-2 py-0.5 rounded">Faltam {remaining}</span>
+                        </h4>
+                        <div className="grid grid-cols-2 gap-3">
+                            {from.map(skill => {
+                                const isSelected = selected.includes(skill);
+                                const isDisabled = !isSelected && remaining === 0;
+
+                                return (
+                                    <button
+                                        key={skill}
+                                        onClick={() => toggleSkill(skill)}
+                                        disabled={isDisabled}
+                                        className={`flex items-center justify-between p-3 rounded border transition-all ${isSelected
+                                            ? 'bg-rpg-gold/20 border-rpg-gold text-rpg-gold shadow-glow-gold/10'
+                                            : isDisabled
+                                                ? 'bg-black/20 border-white/5 text-rpg-grey/30 cursor-not-allowed'
+                                                : 'bg-black/20 border-white/10 text-rpg-grey hover:border-rpg-gold/50 hover:text-rpg-parchment'
+                                            }`}
+                                    >
+                                        <span className="font-bold text-sm uppercase tracking-wide">{SKILL_NAMES[skill] || skill}</span>
+                                        {isSelected && <span className="text-xs font-black">✓</span>}
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    </div>
                 </div>
 
                 <div className="p-6 border-t border-rpg-gold/20 bg-black/20 flex justify-between items-center">

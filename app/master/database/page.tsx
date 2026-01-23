@@ -503,7 +503,19 @@ export default function DatabaseManagementPage() {
                         {/* Magias */}
                         {registrationType === 'magias' && (
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                <InputField label="Círculo (Nível)" type="number" value={formData.level} onChange={(v: any) => updateField('level', parseInt(v))} required />
+                                <div>
+                                    <InputField label="Círculo (Nível)" type="number" value={formData.level} onChange={(v: any) => updateField('level', parseInt(v))} required />
+                                    <div className="flex items-center gap-2 mt-2">
+                                        <input
+                                            type="checkbox"
+                                            id="isCantrip"
+                                            checked={formData.level === 0}
+                                            onChange={(e) => updateField('level', e.target.checked ? 0 : 1)}
+                                            className="w-4 h-4 rounded border-gray-300 text-rpg-gold focus:ring-rpg-gold"
+                                        />
+                                        <label htmlFor="isCantrip" className="text-xs font-cinzel text-rpg-gold cursor-pointer">É um Truque (Nível 0)</label>
+                                    </div>
+                                </div>
                                 <InputField label="Escola" value={formData.school} onChange={(v: any) => updateField('school', v)} placeholder="Evocação, Necromancia..." required />
                                 <InputField label="Tempo de Conjuração" value={formData.castingTime} onChange={(v: any) => updateField('castingTime', v)} placeholder="1 ação, 10 minutos..." required />
                                 <InputField label="Alcance" value={formData.range} onChange={(v: any) => updateField('range', v)} placeholder="9 metros, Toque..." required />

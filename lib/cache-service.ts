@@ -4,12 +4,12 @@
  */
 
 class FirestoreCacheService {
-    private cache: Map<string, any[]> = new Map();
+    private cache: Map<string, any> = new Map();
 
     /**
      * Recupera dados do cache para uma chave específica
      */
-    get(key: string): any[] | null {
+    get(key: string): any | null {
         if (this.cache.has(key)) {
             console.log(`[CacheService] Recuperando do cache: ${key}`);
             return this.cache.get(key) || null;
@@ -20,7 +20,7 @@ class FirestoreCacheService {
     /**
      * Armazena dados no cache
      */
-    set(key: string, data: any[]): void {
+    set(key: string, data: any): void {
         console.log(`[CacheService] Armazenando no cache: ${key}`);
         this.cache.set(key, data);
     }

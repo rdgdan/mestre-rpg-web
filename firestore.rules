@@ -1,12 +1,40 @@
-
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // A regra a seguir permite acesso de leitura e escrita a todos os documentos
-    // em seu banco de dados. Qualquer pessoa, autenticada ou não, pode
-    // ler, modificar ou deletar qualquer dado.
-    match /{document=**} {
-      allow read, write: if true;
+
+    // 1. Coleções de Referência (Banco de Dados Central)
+    // Permite que qualquer um leia (Android), mas apenas VOCÊ (Web) escreva.
+    match /magias/{doc}   { allow read: if true; allow write: if request.auth.uid == 'WR0168EySccvAQXnvPoozEEpb1u2'; }
+    match /armas/{doc}    { allow read: if true; allow write: if request.auth.uid == 'WR0168EySccvAQXnvPoozEEpb1u2'; }
+    match /itens/{doc}    { allow read: if true; allow write: if request.auth.uid == 'WR0168EySccvAQXnvPoozEEpb1u2'; }
+    match /monsters/{doc} { allow read: if true; allow write: if request.auth.uid == 'WR0168EySccvAQXnvPoozEEpb1u2'; }
+    match /classes/{doc}  { allow read: if true; allow write: if request.auth.uid == 'WR0168EySccvAQXnvPoozEEpb1u2'; }
+    match /npcs/{doc}     { allow read: if true; allow write: if request.auth.uid == 'WR0168EySccvAQXnvPoozEEpb1u2'; }
+    match /escudos/{doc}  { allow read: if true; allow write: if request.auth.uid == 'WR0168EySccvAQXnvPoozEEpb1u2'; }
+    match /armadura/{doc} { allow read: if true; allow write: if request.auth.uid == 'WR0168EySccvAQXnvPoozEEpb1u2'; }
+    match /races/{doc}    { allow read: if true; allow write: if request.auth.uid == 'WR0168EySccvAQXnvPoozEEpb1u2'; }
+
+    // 2. Campanhas (Criadas na Web)
+    match /campaigns/{campaignId} {
+      allow read: if true;
+      allow write: if request.auth != null; 
+    }
+
+    // Permitir leitura para todos, escrita só para o mestre
+    // FIX: Usando {document=**} para permitir leitura de subcoleções (class_features, feats, list, etc)
+    match /game_rules/{document=**} {
+      allow read: if true;
+      allow write: if request.auth.uid == 'WR0168EySccvAQXnvPoozEEpb1u2';
+    }
+
+    // 3. Personagens
+    match /personagens/{charId} {
+      allow read, write: if request.auth != null;
+    }
+
+    // Regra Padrão: Bloqueia tudo o que não foi definido acima
+    match /{path=**} {
+      allow read, write: if false;
     }
   }
 }

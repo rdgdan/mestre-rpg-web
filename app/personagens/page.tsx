@@ -110,7 +110,7 @@ export default function CharacterListPage() {
   };
 
   const handleCreateCharacter = () => {
-    router.push(`/personagem/novo`);
+    router.push(`/personagem/criar`);
   };
 
   const handleDeleteCharacter = async (e: React.MouseEvent<HTMLButtonElement>, id: string, name: string) => {

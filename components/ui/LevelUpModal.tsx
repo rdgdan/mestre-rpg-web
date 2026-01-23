@@ -62,9 +62,34 @@ const LevelUpModal: React.FC<LevelUpModalProps> = ({ isOpen, onClose, onApply, l
     const availableSpellLevel = getFullCasterSlotLevel(level); // Simplificado. Warlock/Half-caster precisaria de mais refino na função getFullCasterSlotLevel
 
     const handleAttrChange = (attr: string, delta: number) => {
-        if (delta > 0 && pointsRemaining <= 0) return;
+        const currentValue = (currentAttributes[attr] || 10) + attrChoices[attr];
+
+        if (delta > 0) {
+            if (pointsRemaining <= 0) return;
+            if (currentValue + delta > 20) {
+                alert(`⚠️ O atributo ${attr.toUpperCase()} não pode ultrapassar o limite máximo de 20.`);
+                return;
+            }
+        }
+
         if (delta < 0 && attrChoices[attr] <= 0) return;
         setAttrChoices(prev => ({ ...prev, [attr]: prev[attr] + delta }));
+    };
+
+    const canClaimPower = () => {
+        // 1. Validar ASI se houver
+        if (hasASI && pointsRemaining > 0) return false;
+
+        // 2. Validar Magias se houver
+        const cantripsChosen = newSpells.filter(s => s.level === 0).length;
+        const spellsChosen = newSpells.filter(s => s.level > 0).length;
+        if (cantripsToLearn > 0 && cantripsChosen < cantripsToLearn) return false;
+        if (spellsToLearn > 0 && spellsChosen < spellsToLearn) return false;
+
+        // 3. Validar Subclasse se for o nível
+        if (canChooseSubclass && !selectedSubclass) return false;
+
+        return true;
     };
 
     const isMaxLevel = level === 20;
@@ -79,14 +104,14 @@ const LevelUpModal: React.FC<LevelUpModalProps> = ({ isOpen, onClose, onApply, l
     return (
         <div className="fixed inset-0 bg-black/90 backdrop-blur-md flex justify-center items-center z-[100] p-2 sm:p-4 animate-in fade-in duration-500">
             <div className={`modal-theme-c border-2 ${isMaxLevel ? 'border-purple-500 shadow-[0_0_60px_-10px_rgba(168,85,247,0.6)]' : 'shadow-[0_0_50px_-10px_rgba(255,120,72,0.5)]'} rounded-lg w-full max-w-lg overflow-hidden relative group max-h-[95vh] flex flex-col`} style={{
-              borderColor: isMaxLevel ? 'rgba(168, 85, 247, 1)' : 'rgba(255, 120, 72, 0.5)'
+                borderColor: isMaxLevel ? 'rgba(168, 85, 247, 1)' : 'rgba(255, 120, 72, 0.5)'
             }}>
                 {/* Efeito de Brilho de Fundo */}
                 <div className={`absolute inset-0 ${isMaxLevel ? 'bg-gradient-to-b from-purple-500/10 to-transparent' : 'bg-gradient-to-b from-yellow-500/10 to-transparent'} pointer-events-none`} />
 
                 {/* Cabeçalho de Celebração */}
                 <div className="p-4 sm:p-8 text-center modal-header-theme-c border-b relative overflow-hidden shrink-0" style={{
-                  backgroundColor: 'rgba(0, 0, 0, 0.3)'
+                    backgroundColor: 'rgba(0, 0, 0, 0.3)'
                 }}>
                     <div className="absolute inset-0 flex justify-center items-center opacity-10">
                         <span className={`text-7xl sm:text-9xl font-black ${isMaxLevel ? 'text-purple-500' : 'text-yellow-400'} select-none`}>{level}</span>
@@ -123,11 +148,10 @@ const LevelUpModal: React.FC<LevelUpModalProps> = ({ isOpen, onClose, onApply, l
                                     <button
                                         onClick={() => { setIsCantripSelection(true); setSpellModalOpen(true); }}
                                         disabled={newSpells.filter(s => s.level === 0).length >= cantripsToLearn}
-                                        className={`w-full p-4 border border-dashed border-purple-400/30 rounded-lg transition-all group flex items-center justify-center gap-2 ${
-                                            newSpells.filter(s => s.level === 0).length >= cantripsToLearn
-                                                ? 'opacity-50 cursor-not-allowed bg-purple-900/10'
-                                                : 'hover:bg-purple-900/20'
-                                        }`}
+                                        className={`w-full p-4 border border-dashed border-purple-400/30 rounded-lg transition-all group flex items-center justify-center gap-2 ${newSpells.filter(s => s.level === 0).length >= cantripsToLearn
+                                            ? 'opacity-50 cursor-not-allowed bg-purple-900/10'
+                                            : 'hover:bg-purple-900/20'
+                                            }`}
                                     >
                                         <span className="text-purple-300 group-hover:text-purple-100 font-bold uppercase tracking-widest text-xs">+ Selecionar Truque</span>
                                     </button>
@@ -157,11 +181,10 @@ const LevelUpModal: React.FC<LevelUpModalProps> = ({ isOpen, onClose, onApply, l
                                     <button
                                         onClick={() => { setIsCantripSelection(false); setSpellModalOpen(true); }}
                                         disabled={newSpells.filter(s => s.level > 0).length >= spellsToLearn}
-                                        className={`w-full p-4 border border-dashed border-purple-400/30 rounded-lg transition-all group flex items-center justify-center gap-2 ${
-                                            newSpells.filter(s => s.level > 0).length >= spellsToLearn
-                                                ? 'opacity-50 cursor-not-allowed bg-purple-900/10'
-                                                : 'hover:bg-purple-900/20'
-                                        }`}
+                                        className={`w-full p-4 border border-dashed border-purple-400/30 rounded-lg transition-all group flex items-center justify-center gap-2 ${newSpells.filter(s => s.level > 0).length >= spellsToLearn
+                                            ? 'opacity-50 cursor-not-allowed bg-purple-900/10'
+                                            : 'hover:bg-purple-900/20'
+                                            }`}
                                     >
                                         <span className="text-purple-300 group-hover:text-purple-100 font-bold uppercase tracking-widest text-xs">+ Selecionar Magia</span>
                                     </button>
@@ -250,23 +273,47 @@ const LevelUpModal: React.FC<LevelUpModalProps> = ({ isOpen, onClose, onApply, l
                         </div>
                     </div>
 
-                    <div className="space-y-4">
-                        <h3 className="text-xs font-bold text-rpg-gold uppercase tracking-widest border-l-4 border-rpg-gold pl-3">Habilidades de Classe</h3>
+                    <div className="space-y-6">
                         {progression ? (
-                            progression.features.filter(f => !f.name.includes("Melhoria no Valor de Atributo")).map((feature, idx) => (
-                                <div key={idx} className="bg-white/5 border border-rpg-gold/10 p-4 rounded-md hover:bg-white/10 transition-colors group/item relative overflow-hidden">
-                                    <div className="flex justify-between items-start mb-1">
-                                        <h4 className="font-bold text-rpg-parchment font-medieval text-lg group-hover/item:text-rpg-gold transition-colors">{feature.name}</h4>
-                                        {feature.isChoice && (
-                                            <span className="bg-blue-600/20 text-blue-300 text-[8px] px-2 py-0.5 rounded border border-blue-500/30 font-black uppercase tracking-tighter shadow-sm animate-pulse">Escolha Requerida</span>
-                                        )}
+                            <>
+                                {/* Habilidades Recebidas Automaticamente */}
+                                {progression.features.some(f => !f.isChoice && !f.name.includes("Melhoria no Valor de Atributo")) && (
+                                    <div className="space-y-4">
+                                        <h3 className="text-[10px] font-black text-emerald-400 uppercase tracking-widest border-l-4 border-emerald-500 pl-3">Novas Habilidades Recebidas</h3>
+                                        {progression.features.filter(f => !f.isChoice && !f.name.includes("Melhoria no Valor de Atributo")).map((feature, idx) => (
+                                            <div key={idx} className="bg-emerald-950/20 border border-emerald-500/20 p-4 rounded-md group/item relative overflow-hidden">
+                                                <div className="flex justify-between items-start mb-1">
+                                                    <h4 className="font-bold text-emerald-200 font-medieval text-lg">{feature.name}</h4>
+                                                    <span className="text-[8px] bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded border border-emerald-500/30 font-black uppercase tracking-tighter">✓ Automatico</span>
+                                                </div>
+                                                <p className="text-sm text-rpg-grey leading-relaxed font-sans">{feature.description}</p>
+                                            </div>
+                                        ))}
                                     </div>
-                                    <p className="text-sm text-rpg-grey leading-relaxed font-sans">{feature.description}</p>
-                                    {feature.choiceText && (
-                                        <p className="mt-2 text-[10px] font-bold text-blue-300/80 bg-blue-900/10 p-2 rounded border border-blue-500/10 italic">{feature.choiceText}</p>
-                                    )}
-                                </div>
-                            ))
+                                )}
+
+                                {/* Escolhas de Classe Necessárias */}
+                                {progression.features.some(f => f.isChoice && !f.name.includes("Melhoria no Valor de Atributo")) && (
+                                    <div className="space-y-4">
+                                        <h3 className="text-[10px] font-black text-blue-400 uppercase tracking-widest border-l-4 border-blue-500 pl-3">Escolhas de Classe Necessárias</h3>
+                                        {progression.features.filter(f => f.isChoice && !f.name.includes("Melhoria no Valor de Atributo")).map((feature, idx) => (
+                                            <div key={idx} className="bg-blue-950/20 border border-blue-500/30 p-4 rounded-md group/item relative overflow-hidden border-dashed">
+                                                <div className="flex justify-between items-start mb-1">
+                                                    <h4 className="font-bold text-blue-200 font-medieval text-lg">{feature.name}</h4>
+                                                    <span className="bg-blue-600/20 text-blue-300 text-[8px] px-2 py-0.5 rounded border border-blue-500/30 font-black uppercase tracking-tighter animate-pulse">Ação Requerida</span>
+                                                </div>
+                                                <p className="text-sm text-rpg-grey mb-3 leading-relaxed font-sans">{feature.description}</p>
+                                                {feature.choiceText && (
+                                                    <div className="p-3 bg-blue-900/30 rounded border border-blue-500/20 flex flex-col gap-2">
+                                                        <p className="text-[10px] font-bold text-blue-300 uppercase italic">⚠️ {feature.choiceText}</p>
+                                                        <p className="text-[9px] text-rpg-grey italic">Nota: Algumas escolhas manuais devem ser registradas na aba "Habilidades" ou consultadas com o Mestre.</p>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </>
                         ) : (
                             <div className="text-center py-10 opacity-50 italic">
                                 <p className="text-4xl mb-4">📜</p>
@@ -280,16 +327,20 @@ const LevelUpModal: React.FC<LevelUpModalProps> = ({ isOpen, onClose, onApply, l
                 <div className="p-4 sm:p-6 border-t border-rpg-gold/20 flex justify-center bg-black/40 shrink-0">
                     <button
                         onClick={() => {
-                            if (canChooseSubclass && !selectedSubclass) {
-                                alert("Por favor, escolha uma subclasse para continuar.");
+                            if (!canClaimPower()) {
+                                alert("Por favor, complete todas as escolhas obrigatórias antes de prosseguir (pontos de atributo, magias ou subclasse).");
                                 return;
                             }
                             onApply({ attributes: attrChoices, hpIncrease, newSpells, subclass: selectedSubclass });
                             onClose();
                         }}
-                        className="w-full sm:w-auto px-8 sm:px-12 py-3 bg-gradient-to-r from-rpg-gold via-yellow-400 to-rpg-gold text-rpg-dark font-black rounded shadow-[0_0_20px_rgba(255,215,0,0.3)] hover:shadow-[0_0_30px_rgba(255,215,0,0.5)] transform hover:scale-105 active:scale-95 transition-all uppercase tracking-widest text-xs sm:text-sm font-cinzel"
+                        disabled={!canClaimPower()}
+                        className={`w-full sm:w-auto px-8 sm:px-12 py-3 bg-gradient-to-r from-rpg-gold via-yellow-400 to-rpg-gold text-rpg-dark font-black rounded shadow-[0_0_20px_rgba(255,215,0,0.3)] transform transition-all uppercase tracking-widest text-xs sm:text-sm font-cinzel ${!canClaimPower()
+                            ? 'opacity-50 cursor-not-allowed grayscale'
+                            : 'hover:shadow-[0_0_30px_rgba(255,215,0,0.5)] hover:scale-105 active:scale-95'
+                            }`}
                     >
-                        Reivindicar Poder
+                        {canClaimPower() ? 'Reivindicar Poder' : 'Escolhas Pendentes...'}
                     </button>
                 </div>
 

@@ -8,6 +8,7 @@ import {
     LevelProgression
 } from './class-features';
 import { syncSRDToFirestore } from './srd-sync';
+import { firestoreCache } from './cache-service';
 
 /**
  * Sincroniza TODAS as regras (Classes, Raças, Talentos) para o Firestore
@@ -66,6 +67,10 @@ export async function syncClassFeaturesToFirestore(): Promise<void> {
  */
 export async function fetchClassFeaturesFromFirestore(className: string): Promise<Record<number, LevelProgression>> {
     try {
+        const cacheKey = `class_features_${className}`;
+        const cached = firestoreCache.get(cacheKey);
+        if (cached) return cached as any;
+
         const classRef = collection(db, 'game_rules', 'class_features', className);
         const snapshot = await getDocs(classRef);
 
@@ -80,6 +85,7 @@ export async function fetchClassFeaturesFromFirestore(className: string): Promis
                 const level = parseInt(doc.id);
                 features[level] = doc.data() as LevelProgression;
             });
+            firestoreCache.set(cacheKey, features);
             return features;
         }
 
@@ -89,6 +95,7 @@ export async function fetchClassFeaturesFromFirestore(className: string): Promis
             features[level] = doc.data() as LevelProgression;
         });
 
+        firestoreCache.set(cacheKey, features);
         return features;
     } catch (error) {
         console.error(`❌ Erro ao buscar características de ${className}, usando dados locais:`, error);
@@ -123,11 +130,17 @@ export async function fetchAllClassFeaturesFromFirestore(): Promise<Record<strin
  */
 export async function fetchRaceFeaturesFromFirestore(raceName: string): Promise<ClassFeature[]> {
     try {
+        const cacheKey = `race_features_${raceName}`;
+        const cached = firestoreCache.get(cacheKey);
+        if (cached) return cached;
+
         const docRef = doc(db, 'game_rules', 'race_features', 'races', raceName);
         const snapshot = await getDoc(docRef);
 
         if (snapshot.exists()) {
-            return snapshot.data().features as ClassFeature[];
+            const features = snapshot.data().features as ClassFeature[];
+            firestoreCache.set(cacheKey, features);
+            return features;
         }
 
         // Fallback local se não existir
@@ -143,6 +156,9 @@ export async function fetchRaceFeaturesFromFirestore(raceName: string): Promise<
  */
 export async function fetchAllFeatsFromFirestore(): Promise<ClassFeature[]> {
     try {
+        const cached = firestoreCache.get('feats_list');
+        if (cached) return cached;
+
         const featsRef = collection(db, 'game_rules', 'feats', 'list');
         const snapshot = await getDocs(featsRef);
 
@@ -150,7 +166,9 @@ export async function fetchAllFeatsFromFirestore(): Promise<ClassFeature[]> {
             return DND_FEATS;
         }
 
-        return snapshot.docs.map(doc => doc.data() as ClassFeature);
+        const feats = snapshot.docs.map(doc => doc.data() as ClassFeature);
+        firestoreCache.set('feats_list', feats);
+        return feats;
     } catch (error) {
         console.error('❌ Erro ao buscar talentos:', error);
         return DND_FEATS;
