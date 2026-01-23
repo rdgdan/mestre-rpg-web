@@ -14,6 +14,7 @@
     "migrate-logger": "tsx scripts/migrate-to-logger.ts",
     "limpar-banco": "tsx scripts/limpar-banco.ts",
     "popular-monstros": "tsx scripts/popular-monstros.ts",
+    "popular-racas": "tsx scripts/popular-racas.ts",
     "popular-npcs": "tsx scripts/popular-npcs.ts",
     "diagnostico-banco": "tsx scripts/diagnostico-banco.ts",
     "clean-duplicates": "tsx scripts/clean_duplicates.ts",

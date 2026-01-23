@@ -22,9 +22,15 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
+
 # local env files
+.env
 .env*.local
 .env.local
+serviceAccountKey-android.json
+serviceAccountKey-web.json
+.env.local2
+
 
 # vercel
 .vercel
