@@ -6,7 +6,7 @@ import { StartingAttributesModal } from '@/components/ui/StartingAttributesModal
 import { StartingEquipmentModal } from '@/components/ui/StartingEquipmentModal';
 import { StartingProficienciesModal } from '@/components/ui/StartingProficienciesModal';
 import { useAuth } from '@/context/AuthContext';
-import { Background } from '@/lib/backgrounds-data';
+import { Background, BACKGROUNDS } from '@/lib/backgrounds-data';
 import {
     ATTRIBUTE_DISPLAY_NAMES,
     AttributeKey,
@@ -562,6 +562,7 @@ export default function CreateCharacterPage() {
                 isOpen={isProfModalOpen}
                 onClose={() => setIsProfModalOpen(false)}
                 className={character.class}
+                backgroundSkills={BACKGROUNDS.find(b => b.name === character.background)?.skills || []}
                 onConfirm={handleProficienciesConfirm}
             />
             <StartingEquipmentModal
