@@ -1,6 +1,6 @@
 
 // lib/character-data.ts
-import { Inventory, OtherEquipmentItem, parseDamageString, dndWeapons } from './items-data';
+import { dndWeapons, Inventory, parseDamageString } from './items-data';
 import { Spell } from './spells-data';
 
 export const ATTRIBUTE_KEYS = ['strength', 'dexterity', 'constitution', 'intelligence', 'wisdom', 'charisma'] as const;
@@ -45,10 +45,11 @@ export interface Character {
     createdAt?: string;
     name: string;
     race: string;
-    class: string;
+    class: string; // Classe Principal (ou primeira classe)
+    classes: { name: string; level: number; subclass?: string }[]; // Multiclasse
     subclass?: string;
     background: string;
-    level: number;
+    level: number; // Nível Total
     experience: number;
     proficiencyBonus: number;
     armorClass: number;
@@ -116,171 +117,142 @@ function getModifier(score: number): number {
 // --- FUNÇÕES DE LÓGICA DO PERSONAGEM ---
 
 export function calculateComputedStats(character: Omit<Character, 'proficiencyBonus' | 'armorClass' | 'initiative' | 'attributeModifiers' | 'spellcasting'>): Character {
-    const { level, class: className, attributes } = character;
-    const lowerCaseClass = className.toLowerCase();
+    const char = { ...character } as Character;
 
-    const proficiencyBonus = getProficiencyBonusFromLevel(level);
+    // 1. Garantir que o array de classes existe e está sincronizado
+    if (!char.classes || char.classes.length === 0) {
+        char.classes = [{ name: char.class || 'Guerreiro', level: char.level || 1, subclass: char.subclass || '' }];
+    }
 
-    // Bônus de Fúria (D&D 5e: +2 até nível 8, +3 até 15, +4 até 20)
+    // Atualiza nível total e classe principal para compatibilidade de UI
+    const totalLevel = char.classes.reduce((sum, c) => sum + c.level, 0);
+    char.level = totalLevel;
+    char.class = char.classes[0].name;
+    char.subclass = char.classes[0].subclass || '';
+
+    const proficiencyBonus = getProficiencyBonusFromLevel(totalLevel);
+
+    // Bônus de Fúria (D&D 5e: baseado no nível de Bárbaro, se houver)
     let rageBonus = 0;
-    if (character.activeEffects?.includes('rage')) {
-        if (level >= 16) rageBonus = 4;
-        else if (level >= 9) rageBonus = 3;
+    const barbarianClass = char.classes.find(c => c.name.toLowerCase().includes('bárbaro') || c.name.toLowerCase().includes('barbaro'));
+    if (barbarianClass && char.activeEffects?.includes('rage')) {
+        const bLevel = barbarianClass.level;
+        if (bLevel >= 16) rageBonus = 4;
+        else if (bLevel >= 9) rageBonus = 3;
         else rageBonus = 2;
     }
 
     const attributeModifiers = ATTRIBUTE_KEYS.reduce((acc, key) => {
-        let score = attributes[key] || 10;
+        let score = char.attributes[key] || 10;
         acc[key] = getModifier(score);
         return acc;
     }, {} as Record<AttributeKey, number>);
 
-    const dexterity = attributes.dexterity || 10;
-    const dexMod = Math.floor((dexterity - 10) / 2);
+    const dexterity = char.attributes.dexterity || 10;
+    const dexMod = attributeModifiers.dexterity;
 
     // -- CÁLCULO DE CA (ARMOR CLASS) --
-    let ac = 10 + dexMod; // Base: Sem armadura
+    let ac = 10 + dexMod;
 
-    if (character.inventory && character.inventory.otherEquipment) {
-        const equippedArmor = character.inventory.otherEquipment.find(item => item.isEquipped && item.type === 'armor');
-        const equippedShield = character.inventory.otherEquipment.find(item => item.isEquipped && item.type === 'shield');
+    if (char.inventory && char.inventory.otherEquipment) {
+        const equippedArmor = char.inventory.otherEquipment.find(item => item.isEquipped && item.type === 'armor');
+        const equippedShield = char.inventory.otherEquipment.find(item => item.isEquipped && item.type === 'shield');
 
         if (equippedArmor) {
             const baseAC = equippedArmor.armorClass || 10;
-            // Heurística simples para tipo de armadura baseada no valor de CA, já que não temos o subtipo explícito no momento
-            // AC Base < 14: Leve (Dex total)
-            // AC Base 14 ou 15: Média (Dex máx +2)
-            // AC Base >= 16: Pesada (Sem Dex)
-            if (baseAC < 14) {
-                ac = baseAC + dexMod;
-            } else if (baseAC < 16) {
-                ac = baseAC + Math.min(dexMod, 2);
-            } else {
-                ac = baseAC;
+            if (baseAC < 14) ac = baseAC + dexMod;
+            else if (baseAC < 16) ac = baseAC + Math.min(dexMod, 2);
+            else ac = baseAC;
+        }
+
+        if (!equippedArmor) {
+            // Defesa sem Armadura (Bárbaro/Monge)
+            const hasBarbarian = char.classes.some(c => c.name.toLowerCase().includes('bárbaro') || c.name.toLowerCase().includes('barbaro'));
+            const hasMonk = char.classes.some(c => c.name.toLowerCase().includes('monge'));
+
+            if (hasBarbarian) {
+                ac = 10 + dexMod + attributeModifiers.constitution;
+            } else if (hasMonk) {
+                ac = 10 + dexMod + attributeModifiers.wisdom;
             }
         }
 
-        // Defesa sem Armadura (Bárbaro/Monge) - simplificado por detecção de string na classe
-        if (!equippedArmor && className) {
-            const lowerClass = className.toLowerCase();
-            if (lowerClass.includes('bárbaro') || lowerClass.includes('barbaro')) {
-                const conMod = Math.floor(((attributes.constitution || 10) - 10) / 2);
-                ac = 10 + dexMod + conMod;
-            } else if (lowerClass.includes('monge')) {
-                const wisMod = Math.floor(((attributes.wisdom || 10) - 10) / 2);
-                ac = 10 + dexMod + wisMod;
-            }
-        }
-
-        if (equippedShield) {
-            ac += (equippedShield.armorClass || 2);
-        }
+        if (equippedShield) ac += (equippedShield.armorClass || 2);
     }
 
-    // -- CÁLCULO DE PESO E SOBRECARGA --
+    // -- CÁLCULO DE PESO --
     let totalWeight = 0;
-    if (character.inventory) {
-        character.inventory.weapons.forEach(w => totalWeight += (w.weight || 0) * (w.quantity || 1));
-        character.inventory.otherEquipment.forEach(e => totalWeight += (e.weight || 0) * (e.quantity || 1));
+    if (char.inventory) {
+        char.inventory.weapons.forEach(w => totalWeight += (w.weight || 0) * (w.quantity || 1));
+        char.inventory.otherEquipment.forEach(e => totalWeight += (e.weight || 0) * (e.quantity || 1));
     }
 
-    const strengthScore = attributes.strength || 10;
-    const carryCapacity = strengthScore * 7.5; // Simplificado (Regra padrão é 15 lbs / ~7.5 kg por ponto de força)
+    const carryCapacity = (char.attributes.strength || 10) * 7.5;
+    let currentSpeed = char.speed || 9;
+    if (totalWeight > carryCapacity) currentSpeed = Math.max(1.5, currentSpeed - 3);
 
-    let currentSpeed = character.speed || 9;
-    if (totalWeight > carryCapacity) {
-        // Sobrecarga pesada: Deslocamento cai em 3 metros (ou 6 dependendo da severidade)
-        currentSpeed = Math.max(1.5, currentSpeed - 3);
+    // -- CÁLCULO DE MAGIA (MULTICLASSE) --
+    const { getSpellSlots, getSpellcastingAbility } = require('./level-progression');
+
+    // Tenta encontrar a habilidade de conjuração (usa a da primeira classe conjuradora)
+    let castingAbility: AttributeKey | '' = '';
+    for (const c of char.classes) {
+        const ability = getSpellcastingAbility(c.name);
+        if (ability) {
+            castingAbility = ability;
+            break;
+        }
     }
 
-    // -- CÁLCULO DE MAGIA --
-    const castingAbility = SPELLCASTING_ABILITY_MAP[lowerCaseClass] as AttributeKey | undefined;
-
-    // Preserva slots existentes ou inicia vazio
-    // Usamos 'any' aqui para acessar spellcasting se ele existir no objeto character (partial)
-    const existingSpellcasting = (character as any).spellcasting;
+    const existingSpellcasting = (char as any).spellcasting;
     const existingSlots = existingSpellcasting?.slots || {};
-
     let spellcastingData: Character['spellcasting'];
 
     if (castingAbility) {
-        const abilityScore = attributes[castingAbility] || 10;
-        const mod = Math.floor((abilityScore - 10) / 2);
-        const saveDc = 8 + proficiencyBonus + mod;
-        const attackBonus = proficiencyBonus + mod;
+        const abilityScore = char.attributes[castingAbility] || 10;
+        const mod = getModifier(abilityScore);
 
-        // Calcular slots máximos baseados no nível e classe
-        const { getSpellSlots } = require('./level-progression');
-        const maxSlots = getSpellSlots(className, level) as Record<string, number>;
-
-        // Mesclar slots atuais com máximos calculados
+        // Slots calculados pela lógica de multiclasse
+        const maxSlots = getSpellSlots(char.classes);
         const mergedSlots: Record<string, { current: number; max: number }> = {};
 
-        // Se for Warlock, lida com Pact Magic
-        if (maxSlots.pact !== undefined) {
-            const totalPactSlots = Number(maxSlots.pact);
-            // Slot de pacto é único e recuperável em curto descanso
-            const currentPactValue = existingSlots['pact']?.current !== undefined ? Number(existingSlots['pact'].current) : totalPactSlots;
-
-            mergedSlots['pact'] = {
-                current: Math.min(currentPactValue, totalPactSlots),
-                max: totalPactSlots
-            };
-        } else {
-            // Full/Half/Third casters
-            Object.entries(maxSlots).forEach(([lvl, count]) => {
-                const countNum = Number(count);
-                const current = existingSlots[lvl]?.current !== undefined ? Number(existingSlots[lvl].current) : countNum;
-                mergedSlots[lvl] = {
-                    current: Math.min(current, countNum),
-                    max: countNum
-                };
-            });
-        }
+        Object.entries(maxSlots).forEach(([lvl, count]) => {
+            if (lvl === 'pactLevel') return; // Metadata
+            const countNum = Number(count);
+            const current = existingSlots[lvl]?.current !== undefined ? Number(existingSlots[lvl].current) : countNum;
+            mergedSlots[lvl] = { current: Math.min(current, countNum), max: countNum };
+        });
 
         spellcastingData = {
             ability: castingAbility,
-            saveDc,
-            attackBonus,
+            saveDc: 8 + proficiencyBonus + mod,
+            attackBonus: proficiencyBonus + mod,
             slots: mergedSlots
         };
     } else {
-        spellcastingData = existingSpellcasting || {
-            ability: '',
-            saveDc: 0,
-            attackBonus: 0,
-            slots: {}
-        };
+        spellcastingData = existingSpellcasting || { ability: '', saveDc: 0, attackBonus: 0, slots: {} };
     }
 
     const computed: Character = {
-        ...character,
+        ...char,
         proficiencyBonus,
         armorClass: ac,
         initiative: dexMod,
-        speed: currentSpeed, // Aplica velocidade calculada (com sobrecarga)
+        speed: currentSpeed,
         attributeModifiers,
         spellcasting: spellcastingData,
-        // Garante que campos novos existam
-        conditions: character.conditions || [],
-        activeEffects: character.activeEffects || [],
+        conditions: char.conditions || [],
+        activeEffects: char.activeEffects || [],
         rageBonus
     };
 
-    // Validar e auto-ajustar nível baseado em XP
-    const { getLevelFromXP, validateXPForLevel } = require('./xp-progression');
+    // Validar nível baseado em XP
+    const { validateXPForLevel } = require('./xp-progression');
     const validation = validateXPForLevel(computed.level, computed.experience);
 
-    if (!validation.isValid && validation.suggestedLevel) {
-        // Auto-ajustar nível APENAS se o XP for maior que o nível atual (progressão natural)
-        if (validation.suggestedLevel > computed.level) {
-            console.log(`📈 Auto-ajustando nível de ${computed.level} para ${validation.suggestedLevel} baseado em XP.`);
-            computed.level = validation.suggestedLevel;
-            computed.proficiencyBonus = getProficiencyBonusFromLevel(validation.suggestedLevel);
-        } else {
-            // Se o nível for MAIOR que o sugerido pelo XP, entendemos como uma escolha do Mestre.
-            // Silenciamos o warning para não poluir o console a cada render.
-        }
+    if (!validation.isValid && validation.suggestedLevel && validation.suggestedLevel > computed.level) {
+        // Marcamos aqui que o personagem pode subir de nível, mas não mexemos no array classes automaticamente
+        console.log(`📈 Nível sugerido por XP: ${validation.suggestedLevel}.`);
     }
 
     return computed;
@@ -296,6 +268,7 @@ export function createBlankCharacter(ownerId: string): Character {
         name: 'Novo Personagem',
         race: '',
         class: '',
+        classes: [],
         subclass: '',
         background: '',
         level: 1,
@@ -341,6 +314,22 @@ export function hydrateCharacter(partialData: Partial<Character> & { equipment?:
     // Garante que campos aninhados sejam mesclados, não sobrescritos
     hydrated.attributes = { ...blank.attributes, ...partialData.attributes };
     hydrated.skills = { ...blank.skills, ...partialData.skills };
+
+    // --- Migração Multiclasse ---
+    // Se o personagem não tem o array 'classes' mas tem o campo 'class' legado, migra para o novo formato.
+    if ((!hydrated.classes || hydrated.classes.length === 0) && hydrated.class) {
+        hydrated.classes = [{
+            name: hydrated.class,
+            level: hydrated.level || 1,
+            subclass: hydrated.subclass || ''
+        }];
+    }
+    // Sincroniza o campo 'class' e 'level' para compatibilidade (usa a primeira classe como principal)
+    if (hydrated.classes && hydrated.classes.length > 0) {
+        hydrated.class = hydrated.classes[0].name;
+        hydrated.subclass = hydrated.classes[0].subclass || '';
+        hydrated.level = hydrated.classes.reduce((sum, c) => sum + c.level, 0);
+    }
 
     // Lógica cuidadosa de migração do inventário
     let finalInventory = { ...blank.inventory };

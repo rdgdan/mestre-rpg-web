@@ -18,6 +18,12 @@ export interface LevelProgression {
 const ASI: ClassFeature = { name: "Melhoria no Valor de Atributo", description: "Aumento de Atributo ou Talento.", isChoice: true };
 
 export const CLASS_PROGRESSION: Record<string, Record<number, LevelProgression>> = {
+    "Artífice": {
+        1: { features: [{ name: "Engenharia Mágica", description: "Você sabe como imbuir itens com propriedades mágicas." }, { name: "Ferramentas de Artífice", description: "Você pode usar ferramentas como foco para suas magias." }], hitDice: "1d8" },
+        2: { features: [{ name: "Infundir Itens", description: "Você ganha a habilidade de transformar itens mundanos em itens mágicos." }] },
+        3: { features: [{ name: "Especialista em Ferramentas", description: "Seu bônus de proficiência é dobrado para qualquer teste de ferramenta que você tenha proficiência." }, { name: "Especialização de Artífice", description: "Escolha seu caminho.", isChoice: true }] },
+        4: { features: [ASI] }
+    },
     "Bárbaro": {
         1: { features: [{ name: "Fúria", description: "Vantagem em testes de Força, bônus no dano e resistência a danos físicos." }, { name: "Defesa Sem Armadura", description: "CA = 10 + Destreza + Constituição." }], hitDice: "1d12" },
         2: { features: [{ name: "Ataque Temerário", description: "Vantagem em ataques, mas ataques contra você também têm vantagem." }, { name: "Sentido de Perigo", description: "Vantagem em salvaguardas de Destreza." }] },
@@ -341,6 +347,86 @@ export const RACE_FEATURES: Record<string, ClassFeature[]> = {
         { name: "Visão no Escuro", description: "18m" },
         { name: "Resistência Infernal", description: "Resistência a dano de fogo." },
         { name: "Legado Infernal", description: "Conhece o truque Taumaturgia. No nível 3 lança Repreensão Infernal e no nível 5 lança Escuridão." }
+    ],
+    "Elfo Sombrio (Drow)": [
+        { name: "Visão no Escuro Superior", description: "Você pode enxergar na escuridão a até 36 metros." },
+        { name: "Sensibilidade à Luz Solar", description: "Desvantagem em ataques e testes de Percepção quando você ou o alvo estiverem sob luz solar direta." },
+        { name: "Magia Drow", description: "Você conhece o truque Globos de Luz. No nível 3 lança Fogo Fada e no nível 5 lança Escuridão." },
+        { name: "Treinamento de Armas Drow", description: "Proficiência com rapieiras, espadas curtas e bestas de mão." }
+    ],
+    "Gnomo da Floresta": [
+        { name: "Visão no Escuro", description: "18m" },
+        { name: "Astúcia Gnômica", description: "Vantagem em salvaguardas de Inteligência, Sabedoria e Carisma contra magia." },
+        { name: "Ilusionista Nato", description: "Você conhece o truque Ilusão Menor." },
+        { name: "Falar com Pequenas Bestas", description: "Você pode comunicar ideias simples para bestas Pequenas ou menores através de gestos e sons." }
+    ],
+    "Gnomo das Rochas": [
+        { name: "Visão no Escuro", description: "18m" },
+        { name: "Astúcia Gnômica", description: "Vantagem em salvaguardas de Inteligência, Sabedoria e Carisma contra magia." },
+        { name: "Conhecimento de Artífice", description: "Dobre seu bônus de proficiência em testes de História relacionados a itens mágicos ou tecnológicos." },
+        { name: "Funileiro", description: "Você pode usar suas ferramentas de funileiro para criar dispositivos mecânicos miniaturizados." }
+    ],
+    "Aasimar": [
+        { name: "Visão no Escuro", description: "18m" },
+        { name: "Resistência Celestial", description: "Resistência a dano necrótico e radiante." },
+        { name: "Mãos Curadoras", description: "Com uma ação, toque uma criatura para restaurar PV igual ao seu nível." },
+        { name: "Portador da Luz", description: "Você conhece o truque Luz." }
+    ],
+    "Firbolg": [
+        { name: "Magia de Firbolg", description: "Você pode lançar Detectar Magia e Disfarçar-se com Sabedoria como atributo de conjuração." },
+        { name: "Passo Oculto", description: "Como ação bônus, você pode ficar invisível até o início do seu próximo turno." },
+        { name: "Constituição Poderosa", description: "Você conta como uma categoria de tamanho maior para determinar sua capacidade de carga." },
+        { name: "Fala da Besta e Folha", description: "Você tem a habilidade de se comunicar de forma limitada com feras e plantas." }
+    ],
+    "Goliath": [
+        { name: "Atleta Natural", description: "Proficiência em Atletismo." },
+        { name: "Constituição de Pedra", description: "Você pode reduzir o dano recebido em 1d12 + modificador de Constituição usando uma reação (1/descanso curto)." },
+        { name: "Constituição Poderosa", description: "Você conta como uma categoria de tamanho maior para determinar sua capacidade de carga." },
+        { name: "Nascido nas Montanhas", description: "Adaptado a altitudes elevadas e climas frios." }
+    ],
+    "Kenku": [
+        { name: "Treinamento Kenku", description: "Proficiência em duas perícias de perícia e crime (Acrobacia, Enganação, Furtividade ou Prestidigitação).", isChoice: true },
+        { name: "Mimetismo", description: "Você pode imitar sons que ouviu, incluindo vozes." }
+    ],
+    "Lizardfolk": [
+        { name: "Armadura Natural", description: "Sua CA é 13 + seu modificador de Destreza quando não estiver usando armadura." },
+        { name: "Mandíbulas", description: "Sua mandíbula é uma arma natural que causa 1d6 + Força de dano perfurante e pode te dar PV temporários (Cerveja Faminta)." },
+        { name: "Sobrevivência do Caçador", description: "Proficiência em duas perícias: Adestrar Animais, Atletismo, Natureza, Percepção ou Sobrevivência.", isChoice: true },
+        { name: "Prender a Respiração", description: "Pode prender a respiração por até 15 minutos." }
+    ],
+    "Tabaxi": [
+        { name: "Agilidade Felina", description: "Dobre seu deslocamento por um turno (1/combate, recarrega ao se mover 0m)." },
+        { name: "Garras do Gato", description: "Dano desarmado 1d4 + Força e deslocamento de escalada de 6 metros." },
+        { name: "Talentos do Gato", description: "Proficiência nas perícias Percepção e Furtividade." }
+    ],
+    "Tritão": [
+        { name: "Anfíbio", description: "Pode respirar ar e água." },
+        { name: "Emissário do Mar", description: "Pode comunicar ideias simples para bestas aquáticas." },
+        { name: "Guardião das Profundezas", description: "Resistência a dano de frio." },
+        { name: "Chamado ao Mar", description: "Conhece magias relacionadas à água conforme sobe de nível." }
+    ],
+    "Yuan-ti Pureblood": [
+        { name: "Resistência à Magia", description: "Vantagem em salvaguardas contra magias e outros efeitos mágicos." },
+        { name: "Imunidade a Veneno", description: "Imunidade a dano de veneno e à condição envenenado." },
+        { name: "Conjuração Inata", description: "Conhece o truque Amizade Animal (cobras ilimitado) e pode lançar Sugestão (1/descanso longo)." }
+    ],
+    "Genasi (Água)": [
+        { name: "Resistência a Ácido", description: "Resistência a dano de ácido." },
+        { name: "Anfíbio", description: "Pode respirar ar e água." },
+        { name: "Caminhar sobre as Águas", description: "Pode lançar a magia Caminhar sobre as Águas uma vez por descanso longo." }
+    ],
+    "Genasi (Ar)": [
+        { name: "Fôlego Interminável", description: "Pode prender a respiração indefinidamente enquanto não estiver incapacitado." },
+        { name: "Mistura-se ao Vento", description: "Pode lançar a magia Levitação uma vez por descanso longo." }
+    ],
+    "Genasi (Fogo)": [
+        { name: "Visão no Escuro", description: "18m (visão térmica avermelhada)." },
+        { name: "Resistência ao Fogo", description: "Resistência a dano de fogo." },
+        { name: "Alcançar a Chama", description: "Conhece o truque Produzir Chama. No nível 3 lança Mãos Flamejantes." }
+    ],
+    "Genasi (Terra)": [
+        { name: "Caminhar sobre a Terra", description: "Pode se mover através de terreno difícil feito de terra ou rocha sem movimento extra." },
+        { name: "Mesclar-se à Rocha", description: "Pode lançar a magia Passos sem Pegadas uma vez por descanso longo." }
     ]
 };
 

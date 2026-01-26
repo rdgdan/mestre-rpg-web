@@ -1,58 +1,57 @@
 
 "use client";
 
-import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { logger } from '@/lib/logger';
-import Link from 'next/link';
-import { useParams, useRouter } from 'next/navigation';
-import { doc, getDoc, setDoc, getDocs, collection, writeBatch, query, where, updateDoc, addDoc } from 'firebase/firestore';
-import { db, auth } from '@/lib/firebase';
-import { useAuthState } from 'react-firebase-hooks/auth';
-import {
-    ATTRIBUTE_DISPLAY_NAMES,
-    SKILLS,
-    createBlankCharacter,
-    hydrateCharacter,
-    calculateComputedStats,
-    Character,
-    ATTRIBUTE_KEYS
-} from '@/lib/character-data';
-import { Weapon, OtherEquipmentItem, dndWeapons, dndEquipments, parseDamageString } from '@/lib/items-data';
-import { dndClasses, dndRaces } from '@/lib/dnd-data';
-import SelectionModal from '@/components/ui/SelectionModal';
-import SubclassModal from '../../../components/ui/SubclassModal';
-import WeaponModal from '@/components/ui/WeaponModal';
+import { CombatNotification } from '@/components/CombatNotifications';
+import Modal from '@/components/Modal';
+import BackgroundModal from '@/components/ui/BackgroundModal';
 import EquipmentModal from '@/components/ui/EquipmentModal';
+import LevelUpModal from '@/components/ui/LevelUpModal';
+import SelectionModal from '@/components/ui/SelectionModal';
 import SpellModal from '@/components/ui/SpellModal';
 import SpellSelectModalWithLevel from '@/components/ui/SpellSelectModalWithLevel';
-import { searchSpells } from '@/lib/spells-data';
-import { getMaxSpellSlots, getAllSpellSlots, getSpellUsageDescription } from '@/lib/spell-slots';
-import LevelUpModal from '@/components/ui/LevelUpModal';
 import SpellSlotsDisplay from '@/components/ui/SpellSlotsDisplay';
-import UseSpellModal from '@/components/ui/UseSpellModal';
-import { CombatNotification } from '@/components/CombatNotifications';
-import { getMaxSpellSlotsForCharacter, consumeSpellSlot, restLongSpells, restShortSpells, canUseSpell } from '@/lib/spell-usage';
-import {
-    fetchClassFeaturesFromFirestore,
-    fetchRaceFeaturesFromFirestore,
-    fetchAllFeatsFromFirestore,
-    saveGeneratedSubclassToFirestore
-} from '@/lib/class-features-sync';
-import { SUBCLASSES, SUBCLASS_CHOICE_LEVELS } from '@/lib/class-features';
-import Toast, { ToastMessage } from '@/components/ui/Toast';
-import { CLASS_PROFICIENCIES } from '@/lib/class-proficiencies';
-import { StartingProficienciesModal } from '@/components/ui/StartingProficienciesModal';
-import { StartingEquipmentModal } from '@/components/ui/StartingEquipmentModal';
 import { StartingAttributesModal } from '@/components/ui/StartingAttributesModal';
-import { RACE_BONUSES } from '@/lib/race-bonuses';
-import Modal from '@/components/Modal';
-import { CLASS_EFFECTS, COMMON_CONDITIONS, getCategorizedGlobalConditions, getEffectStyle } from '@/lib/effects-conditions';
-import { getXPForNextLevel, getXPProgress } from '@/lib/xp-progression';
+import { StartingEquipmentModal } from '@/components/ui/StartingEquipmentModal';
+import { StartingProficienciesModal } from '@/components/ui/StartingProficienciesModal';
+import Toast, { ToastMessage } from '@/components/ui/Toast';
+import WeaponModal from '@/components/ui/WeaponModal';
+import { Background } from '@/lib/backgrounds-data';
 import { firestoreCache } from '@/lib/cache-service';
+import {
+    ATTRIBUTE_DISPLAY_NAMES,
+    ATTRIBUTE_KEYS,
+    Character,
+    SKILLS,
+    calculateComputedStats,
+    createBlankCharacter,
+    hydrateCharacter
+} from '@/lib/character-data';
+import { SUBCLASSES, SUBCLASS_CHOICE_LEVELS } from '@/lib/class-features';
+import {
+    fetchAllFeatsFromFirestore,
+    fetchClassFeaturesFromFirestore,
+    fetchRaceFeaturesFromFirestore
+} from '@/lib/class-features-sync';
+import { CLASS_PROFICIENCIES } from '@/lib/class-proficiencies';
+import { dndClasses, dndRaces } from '@/lib/dnd-data';
+import { CLASS_EFFECTS, COMMON_CONDITIONS, getCategorizedGlobalConditions, getEffectStyle } from '@/lib/effects-conditions';
+import { auth, db } from '@/lib/firebase';
+import { OtherEquipmentItem, Weapon, dndEquipments, dndWeapons, parseDamageString } from '@/lib/items-data';
+import { logger } from '@/lib/logger';
+import { getMaxSpellSlots, getSpellUsageDescription } from '@/lib/spell-slots';
+import { canUseSpell, consumeSpellSlot, getMaxSpellSlotsForCharacter, restLongSpells, restShortSpells } from '@/lib/spell-usage';
+import { searchSpells } from '@/lib/spells-data';
+import { getXPForNextLevel, getXPProgress } from '@/lib/xp-progression';
+import { addDoc, collection, doc, getDoc, getDocs, setDoc, writeBatch } from 'firebase/firestore';
+import Link from 'next/link';
+import { useParams, useRouter } from 'next/navigation';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useAuthState } from 'react-firebase-hooks/auth';
+import SubclassModal from '../../../components/ui/SubclassModal';
 
 // Lodash debounce import
 function debounce<T extends (...args: any[]) => any>(fn: T, delay: number): T {
-    let timeoutId: NodeJS.Timeout;
+    let timeoutId: any;
     return ((...args: any[]) => {
         clearTimeout(timeoutId);
         timeoutId = setTimeout(() => fn(...args), delay);
@@ -133,6 +132,7 @@ export default function CharacterSheetPage() {
     const [isStartingAttributesModalOpen, setIsStartingAttributesModalOpen] = useState(false);
     const [creationStep, setCreationStep] = useState<number>(0); // 0: None, 1: Race, 2: Class, 3: Attributes, 4: Proficiencies, 5: Equipment, 6: Spells (if applicable)
     const [selectedClassForProficiency, setSelectedClassForProficiency] = useState<string>('');
+    const [isBgModalOpen, setIsBgModalOpen] = useState(false);
 
     // Modais e Estados de Dados
     const [isSelectionModalOpen, setSelectionModalOpen] = useState(false);
@@ -438,8 +438,17 @@ export default function CharacterSheetPage() {
                     ])
                 ]);
 
-                setClasses(classData.map(c => c.name));
-                setRaces(raceData.map(r => r.name));
+                // Sanity Filter: Garante que raças não apareçam como classes e vice-versa
+                const filteredClasses = classData
+                    .map(c => c.name)
+                    .filter(name => !dndRaces.includes(name));
+
+                const filteredRaces = raceData
+                    .map(r => r.name)
+                    .filter(name => !dndClasses.includes(name));
+
+                setClasses(filteredClasses);
+                setRaces(filteredRaces);
 
                 // Remover duplicatas por nome (caso o merge tenha falhado)
                 const weaponsMap = new Map();
@@ -634,167 +643,195 @@ export default function CharacterSheetPage() {
         loadChar();
     }, [id, user, loadingAuth, router, character, debouncedSave]);
 
-    // Monitoramento de Level Up
+    const autoLevelUpTriggered = useRef<number | null>(null);
+
+    // Monitoramento de Level Up Automático
     useEffect(() => {
-        if (!character || isLoading) return;
+        if (!character || isLoading || isLevelUpModalOpen) return;
 
-        if (lastLevelRef.current !== null && character.level > lastLevelRef.current) {
-            setLevelUpModalOpen(true);
+        const nextXP = getXPForNextLevel(character.level);
+        if (character.level < 20 && character.experience >= nextXP) {
+            // Se já processamos este nível, não dispara de novo
+            if (autoLevelUpTriggered.current !== character.level) {
+                console.log(`🚀 Triggering auto level up for level ${character.level} (XP: ${character.experience}/${nextXP})`);
+                setLevelUpModalOpen(true);
+                autoLevelUpTriggered.current = character.level;
+                showToast("✨ XP Suficiente! Hora de subir de nível.", 'success');
+            }
+        } else {
+            // Se o XP baixou (raro) ou o nível subiu de fato, resetamos o trigger para o NOVO nível
+            if (autoLevelUpTriggered.current !== character.level) {
+                autoLevelUpTriggered.current = null;
+            }
         }
-        lastLevelRef.current = character.level;
+    }, [character?.level, character?.experience, isLoading, isLevelUpModalOpen]);
 
-        if (character.class) {
-            fetchClassFeaturesFromFirestore(character.class).then(progression => {
+    // Carregar Regras de Jogo conforme necessário
+    useEffect(() => {
+        if (!character?.class) return;
+
+        const loadRules = async () => {
+            try {
+                const progression = await fetchClassFeaturesFromFirestore(character.class);
                 setClassProgression(progression);
-            });
-        }
 
-        // Carregar Talentos Disponíveis
-        fetchAllFeatsFromFirestore().then(feats => {
-            setAvailableFeats(feats);
-        });
+                const feats = await fetchAllFeatsFromFirestore();
+                setAvailableFeats(feats);
 
-        // Injetar Características Raciais se estiverem faltando
-        if (character.race && (!character.features || character.features.filter(f => f.type === 'race').length === 0)) {
-            fetchRaceFeaturesFromFirestore(character.race).then(raceFeatures => {
-                if (raceFeatures.length > 0) {
-                    updateCharacter(prev => {
-                        const existingNames = new Set((prev.features || []).map(f => f.name));
-                        const newRacialFeatures = raceFeatures
-                            .filter(rf => !existingNames.has(rf.name))
-                            .map(rf => ({ ...rf, type: 'race' as const }));
+                // Injetar Características Raciais se estiverem faltando
+                if (character.race && (!character.features || character.features.filter(f => f.type === 'race').length === 0)) {
+                    const raceFeatures = await fetchRaceFeaturesFromFirestore(character.race);
+                    if (raceFeatures.length > 0) {
+                        updateCharacter(prev => {
+                            const existingNames = new Set((prev.features || []).map(f => f.name));
+                            const newRacialFeatures = raceFeatures
+                                .filter(rf => !existingNames.has(rf.name))
+                                .map(rf => ({ ...rf, type: 'race' as const }));
 
-                        if (newRacialFeatures.length === 0) return prev;
+                            if (newRacialFeatures.length === 0) return prev;
 
-                        return {
-                            ...prev,
-                            features: [...(prev.features || []), ...newRacialFeatures]
-                        };
-                    });
-                }
-            });
-        }
-    }, [character, isLoading, updateCharacter]);
-
-    const handleApplyLevelUp = (choices: { attributes: Record<string, number>; hpIncrease: number; newSpells?: any[]; subclass?: string }) => {
-        if (!character) return;
-
-        updateCharacter(prev => {
-            const newAttributes = { ...prev.attributes };
-            Object.entries(choices.attributes).forEach(([attr, bonus]) => {
-                if (bonus > 0) {
-                    newAttributes[attr as keyof typeof newAttributes] = (newAttributes[attr as keyof typeof newAttributes] || 10) + bonus;
-                }
-            });
-
-            const newLevel = prev.level; // O nível já foi atualizado pelo gatilho (XP ou Manual)
-            const newFeatures = [...(prev.features || [])];
-
-            // 1. Buscar características da CLASSE para o NOVO nível
-            if (classProgression && classProgression[newLevel]) {
-                const levelProgression = classProgression[newLevel];
-                levelProgression.features.forEach(feat => {
-                    // Evitar duplicatas exatas e ASI (que é escolha manual)
-                    const isDuplicate = newFeatures.some(f => f.name === feat.name);
-                    const isASI = feat.name.includes("Melhoria no Valor de Atributo");
-
-                    if (!isDuplicate && !isASI) {
-                        newFeatures.push({
-                            ...feat,
-                            level: newLevel,
-                            type: 'class'
+                            return {
+                                ...prev,
+                                features: [...(prev.features || []), ...newRacialFeatures]
+                            };
                         });
                     }
-                });
+                }
+            } catch (err) {
+                console.error("Erro ao carregar regras de jogo no useEffect:", err);
             }
+        };
 
-            // 2. Buscar características da SUBCLASSE (se houver escolha nova ou já existente)
-            const activeSubclass = choices.subclass || prev.subclass;
-            if (activeSubclass && prev.class) {
-                const subclassData = SUBCLASSES[prev.class]?.[activeSubclass]?.[newLevel];
-                if (subclassData) {
-                    // Features
-                    subclassData.features.forEach(feat => {
+        loadRules();
+    }, [character?.class, character?.race, character?.features?.length, updateCharacter]);
+
+    const handleApplyLevelUp = (choices: { attributes: Record<string, number>; hpIncrease: number; newSpells?: any[]; subclass?: string; className: string; isNewClass: boolean }) => {
+        if (!character) return;
+
+        try {
+            updateCharacter(prev => {
+                const newAttributes = { ...prev.attributes };
+                const changes: string[] = [];
+
+                Object.entries(choices.attributes).forEach(([attr, bonus]) => {
+                    if (bonus > 0) {
+                        const oldVal = newAttributes[attr as keyof typeof newAttributes] || 10;
+                        const newVal = oldVal + bonus;
+                        newAttributes[attr as keyof typeof newAttributes] = newVal;
+                        const attrName = ATTRIBUTE_DISPLAY_NAMES[attr as keyof typeof ATTRIBUTE_DISPLAY_NAMES] || attr;
+                        changes.push(`${attrName}: ${oldVal} ➔ ${newVal}`);
+                    }
+                });
+
+                // Gerenciar Array de Classes
+                let updatedClasses = [...(prev.classes || [])];
+                let targetClass: any;
+
+                if (choices.isNewClass) {
+                    targetClass = { name: choices.className, level: 1, subclass: choices.subclass };
+                    updatedClasses.push(targetClass);
+                } else {
+                    updatedClasses = updatedClasses.map(c => {
+                        if (c.name === choices.className) {
+                            targetClass = { ...c, level: c.level + 1, subclass: choices.subclass || c.subclass };
+                            return targetClass;
+                        }
+                        return c;
+                    });
+                }
+
+                const newTotalLevel = updatedClasses.reduce((acc, c) => acc + c.level, 0);
+                const classLevelGained = targetClass?.level || 1;
+                const newFeatures = [...(prev.features || [])];
+
+                // 1. Buscar características da CLASSE ESPECÍFICA para o nível ganho nela
+                if (classProgression && classProgression[classLevelGained]) {
+                    const levelProgression = classProgression[classLevelGained];
+                    levelProgression.features.forEach(feat => {
                         const isDuplicate = newFeatures.some(f => f.name === feat.name);
-                        if (!isDuplicate) {
+                        const isASI = feat.name.includes("Melhoria no Valor de Atributo");
+
+                        if (!isDuplicate && !isASI) {
                             newFeatures.push({
                                 ...feat,
-                                level: newLevel,
-                                type: 'class', // Usando 'class' pois as features de subclasse são extensões da classe
-                                source: activeSubclass
+                                level: classLevelGained,
+                                type: 'class',
+                                source: choices.className
                             });
                         }
                     });
+                }
 
-                    // Magias Automáticas (Automação Sugerida)
-                    if (subclassData.spells && subclassData.spells.length > 0) {
-                        // Buscar detalhes das magias
-                        // Precisamos de spellsDatabase. Vamos assumir que está importado ou usar uma função auxiliar.
-                        // Como não temos acesso direto ao banco aqui dentro, vamos tentar usar searchSpells se importada,
-                        // ou injetar manualmente se tivermos os dados.
-                        // Melhor: Assumir que `spellsDatabase` (hardcoded) pode ser importado de spells-data.
-
-                        // Importação dinâmica ou uso de função global seria ideal, mas aqui vamos tentar importar spellsDatabase no topo.
-                        // Se não der, usaremos searchSpells que já deve estar importada (verificar imports).
-                        // Assumindo que temos searchSpells de spells-data:
-                        const autoSpells = subclassData.spells.map(spellId =>
-                            searchSpells('', undefined).find(s => s.id === spellId)
-                        ).filter(Boolean);
-
-                        autoSpells.forEach(spell => {
-                            if (spell) {
-                                // Adicionar à lista de magias
-                                // Verificar se já não está na lista de "updatedSpells" (que será processada abaixo)
-                                // Mas precisamos adicionar ao "updatedSpells" antes do return.
-                                // Como "updatedSpells" é definido DEPOIS, vamos adicionar a uma lista temporária ou mover a definição.
+                // 2. Buscar características da SUBCLASSE
+                const activeSubclass = choices.subclass || (targetClass?.subclass);
+                if (activeSubclass) {
+                    const subclassData = SUBCLASSES[choices.className]?.[activeSubclass]?.[classLevelGained];
+                    if (subclassData) {
+                        subclassData.features.forEach(feat => {
+                            const isDuplicate = newFeatures.some(f => f.name === feat.name);
+                            if (!isDuplicate) {
+                                newFeatures.push({
+                                    ...feat,
+                                    level: classLevelGained,
+                                    type: 'class',
+                                    source: activeSubclass
+                                });
                             }
                         });
-
-                        // Vamos mover a definição de updatedSpells para cima para poder usar aqui.
                     }
                 }
-            }
 
-            // Magias (Evitar duplicatas)
-            // Lógica ajustada para incluir subclass spells
-            let updatedSpells = [...(prev.spells || [])];
+                // Magias
+                let updatedSpells = [...(prev.spells || [])];
 
-            // Adicionar Automatic Spells
-            if (activeSubclass && prev.class) {
-                const subclassData = SUBCLASSES[prev.class]?.[activeSubclass]?.[newLevel];
-                if (subclassData && subclassData.spells) {
-                    const allSpells = searchSpells('', undefined); // Busca todas hardcoded
-                    const autoSpells = subclassData.spells.map(id => allSpells.find(s => s.id === id)).filter(Boolean);
+                // Adicionar Automatic Spells da Subclasse
+                if (activeSubclass) {
+                    const subclassData = SUBCLASSES[choices.className]?.[activeSubclass]?.[classLevelGained];
+                    if (subclassData && subclassData.spells) {
+                        const allSpells = searchSpells('', undefined);
+                        const autoSpells = subclassData.spells.map(id => allSpells.find(s => s.id === id)).filter(Boolean);
 
-                    autoSpells.forEach(spell => {
-                        if (spell && !updatedSpells.some(s => s.id === spell.id)) {
+                        autoSpells.forEach(spell => {
+                            if (spell && !updatedSpells.some(s => s.id === spell.id)) {
+                                updatedSpells.push(spell);
+                            }
+                        });
+                    }
+                }
+
+                if (choices.newSpells && choices.newSpells.length > 0) {
+                    const existingIds = new Set(updatedSpells.map(s => s.id));
+                    choices.newSpells.forEach(spell => {
+                        if (spell && !existingIds.has(spell.id)) {
                             updatedSpells.push(spell);
+                            existingIds.add(spell.id);
                         }
                     });
                 }
-            }
 
-            if (choices.newSpells && choices.newSpells.length > 0) {
-                const existingIds = new Set(updatedSpells.map(s => s.id));
-                choices.newSpells.forEach(spell => {
-                    if (spell && !existingIds.has(spell.id)) {
-                        updatedSpells.push(spell);
-                        existingIds.add(spell.id);
-                    }
-                });
-            }
+                if (changes.length > 0) {
+                    showToast(`Atributos Atualizados:\n${changes.join('\n')}`, 'success');
+                } else {
+                    showToast(`Nível Aumentado para ${newTotalLevel}! (HP +${choices.hpIncrease})`, 'success');
+                }
 
-            return {
-                ...prev,
-                level: newLevel,
-                attributes: newAttributes,
-                maxHp: (prev.maxHp || 0) + choices.hpIncrease,
-                currentHp: (prev.currentHp || 0) + choices.hpIncrease,
-                features: newFeatures,
-                spells: updatedSpells,
-                subclass: activeSubclass
-            };
-        });
+                return {
+                    ...prev,
+                    level: newTotalLevel,
+                    classes: updatedClasses,
+                    class: updatedClasses[0].name,
+                    subclass: updatedClasses[0].subclass || '',
+                    attributes: newAttributes,
+                    maxHp: (prev.maxHp || 0) + choices.hpIncrease,
+                    currentHp: (prev.currentHp || 0) + choices.hpIncrease,
+                    features: newFeatures,
+                    spells: updatedSpells
+                };
+            });
+        } catch (error) {
+            console.error("Erro ao aplicar level up:", error);
+            showToast("Erro ao processar subida de nível. Verifique o console.", 'error');
+        }
     };
 
     // --- Lógica de Campos ---
@@ -822,6 +859,30 @@ export default function CharacterSheetPage() {
             return { ...char, inventory: { ...char.inventory, weapons: newWeapons } };
         });
         setWeaponModalOpen(false);
+    };
+
+    const handleBackgroundConfirm = (bg: Background) => {
+        if (!character || !id) return;
+        updateCharacter(prev => {
+            const newSkills = { ...prev.skills };
+            bg.skills.forEach(s => newSkills[s] = true);
+
+            const newInv = { ...prev.inventory };
+            newInv.currency.gp += bg.gold;
+
+            bg.equipment.forEach(item => {
+                newInv.otherEquipment.push({
+                    id: `bg-${Date.now()}-${Math.random()}`,
+                    name: item,
+                    quantity: 1,
+                    type: 'other',
+                    description: `Equipamento de ${bg.name}`
+                });
+            });
+
+            return { ...prev, background: bg.name, skills: newSkills as any, inventory: newInv };
+        });
+        setIsBgModalOpen(false);
     };
     const handleRemoveWeapon = (weaponId: string) => {
         updateCharacter(char => ({
@@ -1170,6 +1231,14 @@ export default function CharacterSheetPage() {
 
             handleFieldChange(modalConfig.type, item);
 
+            // Automação: Proficiências de Raça (Ex: Anão da Montanha escolha de ferramenta)
+            const raceProfData = CLASS_PROFICIENCIES[item];
+            if (raceProfData) {
+                setSelectedClassForProficiency(item);
+                setCreationStep(4);
+                setIsProficiencyModalOpen(true);
+            }
+
             if (isChangingRace) {
                 updateCharacter(char => ({
                     ...char,
@@ -1477,10 +1546,19 @@ export default function CharacterSheetPage() {
                             placeholder="Nome do Personagem"
                         />
                         <div className="flex items-center gap-3 mt-2 flex-wrap">
-                            <p className="text-rpg-grey uppercase font-bold tracking-[0.2em] text-[10px] break-all">
-                                {character.race} • {character.class}{character.subclass ? ` (${character.subclass})` : ''}
+                            <p className="text-rpg-grey uppercase font-bold tracking-[0.2em] text-[10px] break-all flex items-center gap-2">
+                                <span>{character.race}</span>
+                                <span>•</span>
+                                <span>{character.classes.map(c => `${c.name} ${c.level}`).join(', ')}</span>
+                                <span>•</span>
+                                <button
+                                    onClick={() => !isReadOnly && setIsBgModalOpen(true)}
+                                    className={`hover:text-rpg-gold transition-colors ${!isReadOnly ? 'cursor-pointer' : 'cursor-default underline underline-offset-4 decoration-rpg-gold/20'}`}
+                                >
+                                    {character.background || 'Sem Antecedente'}
+                                </button>
                             </p>
-                            {!character.subclass && character.level >= (SUBCLASS_CHOICE_LEVELS[character.class] || 3) && (
+                            {character.classes.some(c => !c.subclass && c.level >= (SUBCLASS_CHOICE_LEVELS[c.name] || 3)) && (
                                 <button
                                     onClick={() => setIsSubclassModalOpen(true)}
                                     className="text-[9px] bg-purple-900/40 text-purple-300 border border-purple-500/30 px-2 py-0.5 rounded-full hover:bg-purple-500 hover:text-white transition-all animate-pulse flex items-center gap-1 shadow-glow-purple/20 whitespace-nowrap"
@@ -1493,10 +1571,27 @@ export default function CharacterSheetPage() {
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 w-full lg:w-[600px]">
                         {/* Linha 1: Classe e Raça */}
                         <div className="flex flex-col gap-1">
-                            <label className="block text-[10px] font-bold text-rpg-gold uppercase tracking-wider mb-1 font-cinzel">Classe</label>
-                            <button disabled={isReadOnly} onClick={() => openSelectionModal('class')} className={`w-full bg-rpg-slate border border-rpg-gold/20 rounded-md px-3 py-2 text-left hover:border-rpg-gold/50 font-medieval text-sm ${isReadOnly ? 'opacity-70 cursor-not-allowed' : ''}`}>
-                                {character.class || 'Selecione...'}
-                            </button>
+                            <label className="block text-[10px] font-bold text-rpg-gold uppercase tracking-wider mb-1 font-cinzel">Classes</label>
+                            <div className="flex flex-wrap gap-1">
+                                {character.classes.map((c, idx) => (
+                                    <button
+                                        key={idx}
+                                        disabled={isReadOnly}
+                                        onClick={() => { /* Lógica para editar nível específico ou adicionar nova */ }}
+                                        className={`bg-rpg-slate border border-rpg-gold/20 rounded-md px-2 py-1 text-left hover:border-rpg-gold/50 font-medieval text-[10px] ${isReadOnly ? 'opacity-70 cursor-not-allowed' : ''}`}
+                                    >
+                                        {c.name} {c.level}
+                                    </button>
+                                ))}
+                                {!isReadOnly && (
+                                    <button
+                                        onClick={() => openSelectionModal('class')}
+                                        className="bg-green-900/20 border border-green-500/30 text-green-500 rounded-md px-2 py-1 text-[10px] hover:bg-green-500 hover:text-white transition-all"
+                                    >
+                                        + Classe
+                                    </button>
+                                )}
+                            </div>
                         </div>
                         <div className="flex flex-col gap-1">
                             <label className="block text-[10px] font-bold text-rpg-gold uppercase tracking-wider mb-1 font-cinzel text-left">Raça</label>
@@ -1517,7 +1612,7 @@ export default function CharacterSheetPage() {
                                     >-</button>
                                     <span className="text-2xl font-black text-rpg-gold font-medieval drop-shadow-glow-gold px-1">{character.level || 1}</span>
                                     <button
-                                        onClick={() => handleFieldChange('level', Math.min(20, (character.level || 1) + 1))}
+                                        onClick={() => setLevelUpModalOpen(true)}
                                         disabled={isReadOnly}
                                         className={`w-7 h-full flex items-center justify-center bg-rpg-dark/50 hover:bg-green-900/20 text-rpg-grey hover:text-green-500 rounded transition-all font-bold z-10 ${isReadOnly ? 'opacity-50 cursor-not-allowed' : ''}`}
                                     >+</button>
@@ -1527,14 +1622,23 @@ export default function CharacterSheetPage() {
                             <div className="flex-grow min-w-0">
                                 <label className="block text-[10px] font-bold text-rpg-gold uppercase tracking-wider mb-1 font-cinzel">Experiência</label>
                                 <div className="bg-rpg-slate border border-rpg-gold/20 rounded-md p-2 flex flex-col gap-1">
-                                    {/* XP Info */}
                                     <div className="flex justify-between items-center mb-1">
-                                        <span className="text-[10px] text-rpg-grey font-cinzel truncate">
-                                            {(() => {
-                                                const nextXP = getXPForNextLevel(character.level);
-                                                return character.level >= 20 ? 'Max' : `${character.experience} / ${nextXP} XP`;
-                                            })()}
-                                        </span>
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-[10px] text-rpg-grey font-cinzel truncate">
+                                                {(() => {
+                                                    const nextXP = getXPForNextLevel(character.level);
+                                                    return character.level >= 20 ? 'Max' : `${character.experience} / ${nextXP} XP`;
+                                                })()}
+                                            </span>
+                                            {character.level < 20 && character.experience >= getXPForNextLevel(character.level) && (
+                                                <button
+                                                    onClick={() => setLevelUpModalOpen(true)}
+                                                    className="text-[9px] bg-green-500 text-white px-2 py-0.5 rounded-full font-black animate-bounce shadow-glow-green"
+                                                >
+                                                    SUBIR DE NÍVEL! ✨
+                                                </button>
+                                            )}
+                                        </div>
                                         {!isReadOnly && (
                                             <button
                                                 onClick={() => {
@@ -1724,7 +1828,7 @@ export default function CharacterSheetPage() {
                                 <div className="flex gap-2 overflow-x-auto pb-4 no-scrollbar -mx-2 px-2 snap-x sm:justify-center sm:overflow-visible">
                                     {ATTRIBUTE_KEYS.map((key) => (
                                         <div key={key} className="snap-center">
-                                            <AttributeInput label={ATTRIBUTE_DISPLAY_NAMES[key].slice(0, 3)} value={character.attributes[key]} onChange={(val) => handleNestedChange(`attributes.${key}`, val)} disabled={isReadOnly} />
+                                            <AttributeInput label={ATTRIBUTE_DISPLAY_NAMES[key].slice(0, 3)} value={character.attributes[key]} onChange={(val) => handleNestedChange(`attributes.${key}`, val)} disabled={true} />
                                         </div>
                                     ))}
                                 </div>
@@ -2578,6 +2682,7 @@ export default function CharacterSheetPage() {
                         progression={classProgression?.[character.level]}
                         currentSpells={character.spells}
                         currentAttributes={character.attributes}
+                        character={character}
                     />
 
                     {/* CASTER ALERT MODAL */}
@@ -2893,6 +2998,14 @@ export default function CharacterSheetPage() {
                         })()}
                     </div>
                 </Modal>
+
+                <BackgroundModal
+                    isOpen={isBgModalOpen}
+                    onClose={() => setIsBgModalOpen(false)}
+                    onConfirm={handleBackgroundConfirm}
+                    currentBackground={character.background}
+                />
+
                 {/* Toast Notification */}
                 {
                     toast && (
@@ -2902,8 +3015,8 @@ export default function CharacterSheetPage() {
                         />
                     )
                 }
-            </div >
-        </div >
+            </div>
+        </div>
     );
 }
 
@@ -2932,19 +3045,11 @@ const AttributeInput = ({ label, value, onChange, disabled }: { label: string, v
         <div className="flex flex-col items-center p-4 sm:p-5 bg-rpg-panel border-b-2 border-rpg-gold/20 rounded-t-lg min-w-[100px] sm:min-w-[110px] transition-all hover:bg-rpg-gold/5 group relative shadow-md">
             <div className="absolute top-0 left-0 w-full h-[1px] bg-white/5"></div>
             <span className="text-[11px] sm:text-xs font-black text-rpg-gold uppercase mb-2 tracking-widest font-cinzel">{label}</span>
-            <input
-                type="number"
-                inputMode="numeric"
-                disabled={disabled}
-                value={value}
-                onChange={(e) => onChange(parseInt(e.target.value) || 0)}
-                className={`w-14 sm:w-16 text-3xl sm:text-3xl font-bold text-center bg-transparent focus:outline-none font-medieval ${disabled ? 'text-rpg-grey opacity-50' : 'text-rpg-parchment'}`}
-            />
-            {disabled && (
-                <div className="absolute -top-1 -right-1 group-hover:block hidden bg-rpg-dark border border-rpg-gold/50 text-rpg-gold text-[8px] px-1 rounded shadow-lg z-10">
-                    Predefinido (Nv.1)
-                </div>
-            )}
+            {/* Atributos agora são SOMENTE LEITURA - não podem ser editados diretamente */}
+            <div className="w-14 sm:w-16 text-3xl sm:text-3xl font-bold text-center font-medieval text-rpg-parchment select-none">
+                {value}
+            </div>
+            <div className="text-[8px] text-rpg-grey/60 mt-1 italic">Somente leitura</div>
             <div className="text-sm sm:text-sm text-rpg-gold mt-2 sm:mt-3 font-bold font-medieval border border-rpg-gold/30 px-4 sm:px-4 py-1.5 rounded shadow-sm bg-black/40 group-hover:bg-rpg-gold/10 transition-colors">
                 {modifier >= 0 ? `+${modifier}` : modifier}
             </div>

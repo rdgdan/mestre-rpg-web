@@ -18,7 +18,7 @@ export const CLASS_PROFICIENCIES: Record<string, ClassProficiencyData> = {
         savingThrows: ["strength", "constitution"],
         skills: {
             choose: 2,
-            from: ["adestrar_animais", "atletismo", "intimidacao", "natureza", "percepcao", "sobrevivencia"]
+            from: ["animalHandling", "athletics", "intimidation", "nature", "perception", "survival"]
         }
     },
     "Bardo": {
@@ -26,9 +26,9 @@ export const CLASS_PROFICIENCIES: Record<string, ClassProficiencyData> = {
         skills: {
             choose: 3,
             from: [
-                "acrobacia", "adestrar_animais", "arcanismo", "atletismo", "atuacao", "enganaacao",
-                "furtividade", "historia", "intimidacao", "intuicao", "investigacao", "medicina",
-                "natureza", "percepcao", "persuasao", "prestidigitacao", "religiao", "sobrevivencia"
+                "acrobatics", "animalHandling", "arcana", "athletics", "performance", "deception",
+                "stealth", "history", "intimidation", "insight", "investigation", "medicine",
+                "nature", "perception", "persuasion", "sleightOfHand", "religion", "survival"
             ]
         }
     },
@@ -36,70 +36,95 @@ export const CLASS_PROFICIENCIES: Record<string, ClassProficiencyData> = {
         savingThrows: ["wisdom", "charisma"],
         skills: {
             choose: 2,
-            from: ["historia", "intuicao", "medicina", "persuasao", "religiao"]
+            from: ["history", "insight", "medicine", "persuasion", "religion"]
         }
     },
     "Druida": {
         savingThrows: ["intelligence", "wisdom"],
         skills: {
             choose: 2,
-            from: ["adestrar_animais", "arcanismo", "intuicao", "medicina", "natureza", "percepcao", "religiao", "sobrevivencia"]
+            from: ["animalHandling", "arcana", "insight", "medicine", "nature", "perception", "religion", "survival"]
         }
     },
     "Guerreiro": {
         savingThrows: ["strength", "constitution"],
         skills: {
             choose: 2,
-            from: ["acrobacia", "adestrar_animais", "atletismo", "historia", "intimidacao", "intuicao", "percepcao", "sobrevivencia"]
+            from: ["acrobatics", "animalHandling", "athletics", "history", "intimidation", "insight", "perception", "survival"]
         }
     },
     "Monge": {
         savingThrows: ["strength", "dexterity"],
         skills: {
             choose: 2,
-            from: ["acrobacia", "atletismo", "furtividade", "historia", "intuicao", "religiao"]
+            from: ["acrobatics", "athletics", "stealth", "history", "insight", "religion"]
         }
     },
     "Paladino": {
         savingThrows: ["wisdom", "charisma"],
         skills: {
             choose: 2,
-            from: ["atletismo", "intimidacao", "intuicao", "medicina", "persuasao", "religiao"]
+            from: ["athletics", "intimidation", "insight", "medicine", "persuasion", "religion"]
         }
     },
     "Patrulheiro": {
         savingThrows: ["strength", "dexterity"],
         skills: {
             choose: 3,
-            from: ["adestrar_animais", "atletismo", "furtividade", "intuicao", "investigacao", "natureza", "percepcao", "sobrevivencia"]
+            from: ["animalHandling", "athletics", "stealth", "insight", "investigation", "nature", "perception", "survival"]
         }
     },
     "Ladino": {
         savingThrows: ["dexterity", "intelligence"],
         skills: {
             choose: 4,
-            from: ["acrobacia", "atletismo", "atuacao", "enganaacao", "furtividade", "intimidacao", "intuicao", "investigacao", "percepcao", "persuasao", "prestidigitacao"]
+            from: ["acrobatics", "athletics", "performance", "deception", "stealth", "intimidation", "insight", "investigation", "perception", "persuasion", "sleightOfHand"]
         }
     },
     "Feiticeiro": {
         savingThrows: ["constitution", "charisma"],
         skills: {
             choose: 2,
-            from: ["arcanismo", "enganacao", "intimidacao", "intuicao", "persuasao", "religiao"]
+            from: ["arcana", "deception", "intimidation", "insight", "persuasion", "religion"]
         }
     },
     "Bruxo": {
         savingThrows: ["wisdom", "charisma"],
         skills: {
             choose: 2,
-            from: ["arcanismo", "enganacao", "historia", "intimidacao", "investigacao", "natureza", "religiao"]
+            from: ["arcana", "deception", "history", "intimidation", "investigation", "nature", "religion"]
         }
     },
     "Mago": {
         savingThrows: ["intelligence", "wisdom"],
         skills: {
             choose: 2,
-            from: ["arcanismo", "historia", "intuicao", "investigacao", "medicina", "religiao"]
+            from: ["arcana", "history", "insight", "investigation", "medicine", "religion"]
+        }
+    },
+    "Artífice": {
+        savingThrows: ["constitution", "intelligence"],
+        skills: {
+            choose: 2,
+            from: ["arcana", "history", "investigation", "medicine", "nature", "perception", "sleightOfHand"]
+        }
+    },
+    "Anão da Montanha": {
+        savingThrows: [],
+        skills: {
+            choose: 1,
+            from: ["Ferramentas de Ferreiro", "Ferramentas de Cervejeiro", "Ferramentas de Pedreiro"]
+        }
+    },
+    "Meio-Elfo": {
+        savingThrows: [],
+        skills: {
+            choose: 2,
+            from: [
+                "acrobatics", "animalHandling", "arcana", "athletics", "performance", "deception",
+                "stealth", "history", "intimidation", "insight", "investigation", "medicine",
+                "nature", "perception", "persuasion", "sleightOfHand", "religion", "survival"
+            ]
         }
     }
 };

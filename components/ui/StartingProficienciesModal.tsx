@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import { ATTRIBUTE_DISPLAY_NAMES, SKILLS } from '@/lib/character-data';
 import { CLASS_PROFICIENCIES } from '@/lib/class-proficiencies';
-import { ATTRIBUTE_DISPLAY_NAMES } from '@/lib/character-data';
+import React, { useState } from 'react';
 
 interface StartingProficienciesModalProps {
     isOpen: boolean;
@@ -8,28 +8,6 @@ interface StartingProficienciesModalProps {
     className: string;
     onConfirm: (selectedSkills: string[]) => void;
 }
-
-// Mapa para nomes mais bonitos (opcional, se não tiver em utils)
-const SKILL_NAMES: Record<string, string> = {
-    "acrobacia": "Acrobacia",
-    "adestrar_animais": "Adestrar Animais",
-    "arcanismo": "Arcanismo",
-    "atletismo": "Atletismo",
-    "atuacao": "Atuação",
-    "enganacao": "Enganação",
-    "furtividade": "Furtividade",
-    "historia": "História",
-    "intimidacao": "Intimidação",
-    "intuicao": "Intuição",
-    "investigacao": "Investigação",
-    "medicina": "Medicina",
-    "natureza": "Natureza",
-    "percepcao": "Percepção",
-    "persuasao": "Persuasão",
-    "prestidigitacao": "Prestidigitação",
-    "religiao": "Religião",
-    "sobrevivencia": "Sobrevivência"
-};
 
 export const StartingProficienciesModal: React.FC<StartingProficienciesModalProps> = ({ isOpen, onClose, className, onConfirm }) => {
     const [selected, setSelected] = useState<string[]>([]);
@@ -87,7 +65,7 @@ export const StartingProficienciesModal: React.FC<StartingProficienciesModalProp
                             <div className="flex flex-wrap gap-2">
                                 {savingThrows.map(save => (
                                     <span key={save} className="px-3 py-1 bg-blue-600/20 text-blue-200 border border-blue-500/30 rounded text-xs font-bold uppercase">
-                                        {ATTRIBUTE_DISPLAY_NAMES[save] || save}
+                                        {ATTRIBUTE_DISPLAY_NAMES[save as any] || save}
                                     </span>
                                 ))}
                             </div>
@@ -103,6 +81,7 @@ export const StartingProficienciesModal: React.FC<StartingProficienciesModalProp
                             {from.map(skill => {
                                 const isSelected = selected.includes(skill);
                                 const isDisabled = !isSelected && remaining === 0;
+                                const skillData = SKILLS.find(s => s.key === skill);
 
                                 return (
                                     <button
@@ -116,7 +95,9 @@ export const StartingProficienciesModal: React.FC<StartingProficienciesModalProp
                                                 : 'bg-black/20 border-white/10 text-rpg-grey hover:border-rpg-gold/50 hover:text-rpg-parchment'
                                             }`}
                                     >
-                                        <span className="font-bold text-sm uppercase tracking-wide">{SKILL_NAMES[skill] || skill}</span>
+                                        <span className="font-bold text-sm uppercase tracking-wide">
+                                            {skillData ? skillData.displayName : skill}
+                                        </span>
                                         {isSelected && <span className="text-xs font-black">✓</span>}
                                     </button>
                                 );

@@ -1,14 +1,14 @@
-import { db } from './firebase';
-import { collection, doc, getDocs, writeBatch, query, where, getDoc, setDoc } from 'firebase/firestore';
+import { collection, doc, getDoc, getDocs, setDoc, writeBatch } from 'firebase/firestore';
+import { firestoreCache } from './cache-service';
 import {
     CLASS_PROGRESSION,
-    RACE_FEATURES,
-    DND_FEATS,
     ClassFeature,
-    LevelProgression
+    DND_FEATS,
+    LevelProgression,
+    RACE_FEATURES
 } from './class-features';
+import { db } from './firebase';
 import { syncSRDToFirestore } from './srd-sync';
-import { firestoreCache } from './cache-service';
 
 /**
  * Sincroniza TODAS as regras (Classes, Raças, Talentos) para o Firestore
@@ -132,7 +132,7 @@ export async function fetchRaceFeaturesFromFirestore(raceName: string): Promise<
     try {
         const cacheKey = `race_features_${raceName}`;
         const cached = firestoreCache.get(cacheKey);
-        if (cached) return cached;
+        if (cached) return cached as any;
 
         const docRef = doc(db, 'game_rules', 'race_features', 'races', raceName);
         const snapshot = await getDoc(docRef);
@@ -143,7 +143,18 @@ export async function fetchRaceFeaturesFromFirestore(raceName: string): Promise<
             return features;
         }
 
-        // Fallback local se não existir
+        // Se não existir no Firestore, tenta sincronizar e buscar novamente
+        console.log(`🌲 Características de raça ${raceName} não encontradas, sincronizando...`);
+        await syncAllGameRulesToFirestore();
+
+        const newSnapshot = await getDoc(docRef);
+        if (newSnapshot.exists()) {
+            const features = newSnapshot.data().features as ClassFeature[];
+            firestoreCache.set(cacheKey, features);
+            return features;
+        }
+
+        // Fallback local se falhar o sync ou continuar não existindo
         return RACE_FEATURES[raceName] || [];
     } catch (error) {
         console.error(`❌ Erro ao buscar características de raça ${raceName}:`, error);
