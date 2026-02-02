@@ -106,6 +106,30 @@ const WARLOCK_SLOTS: Record<number, WarlockSlots> = {
     20: { level: 5, slots: 4 }
 };
 
+// Tabela de Slots de Multiclasse (D&D 5e)
+const MULTICLASS_SLOTS: Record<number, number[]> = {
+    1: [2],
+    2: [3],
+    3: [4, 2],
+    4: [4, 3],
+    5: [4, 3, 2],
+    6: [4, 3, 3],
+    7: [4, 3, 3, 1],
+    8: [4, 3, 3, 2],
+    9: [4, 3, 3, 3, 1],
+    10: [4, 3, 3, 3, 2],
+    11: [4, 3, 3, 3, 2, 1],
+    12: [4, 3, 3, 3, 2, 1],
+    13: [4, 3, 3, 3, 2, 1, 1],
+    14: [4, 3, 3, 3, 2, 1, 1],
+    15: [4, 3, 3, 3, 2, 1, 1, 1],
+    16: [4, 3, 3, 3, 2, 1, 1, 1],
+    17: [4, 3, 3, 3, 2, 1, 1, 1, 1],
+    18: [4, 3, 3, 3, 2, 1, 1, 1, 1],
+    19: [4, 3, 3, 3, 2, 1, 1, 1, 1],
+    20: [4, 3, 3, 3, 2, 1, 1, 1, 1]
+};
+
 export type CasterType = 'full' | 'half' | 'artificer' | 'warlock' | 'third' | 'none';
 
 export function getCasterType(className: string): CasterType {
@@ -123,123 +147,160 @@ export function getCasterType(className: string): CasterType {
     if (lower.includes('bruxo')) {
         return 'warlock';
     }
-    // Cavaleiro Arcano e Trapaceiro Arcano precisariam de detecção de subclasse, por enquanto 'none' ou manual
+    // Cavaleiro Arcano e Trapaceiro Arcano (Third Casters) precisariam de detecção de subclasse
     return 'none';
 }
 
-export function getSpellcastingAbility(className: string): 'intelligence' | 'wisdom' | 'charisma' | null {
-    const lower = className.toLowerCase();
-    if (lower.includes('mago') || lower.includes('artífice') || lower.includes('artifice')) return 'intelligence';
-    if (lower.includes('clérigo') || lower.includes('druida') || lower.includes('ranger') || lower.includes('patrulheiro')) return 'wisdom';
-    if (lower.includes('bardo') || lower.includes('feiticeiro') || lower.includes('bruxo') || lower.includes('paladino')) return 'charisma';
-    return null;
-}
+/**
+ * Calcula o Nível de Conjurador (Caster Level) para multiclasse (D&D 5e)
+ */
+export function calculateMulticlassCasterLevel(classes: { name: string; level: number }[]): number {
+    let totalLevel = 0;
 
-// Tabela de Magias Conhecidas (Spells Known) para Bardos
-export const BARD_KNOWN: Record<number, number> = {
-    1: 4, 2: 5, 3: 6, 4: 7, 5: 8, 6: 9, 7: 10, 8: 11, 9: 12, 10: 14,
-    11: 15, 12: 15, 13: 16, 14: 18, 15: 19, 16: 19, 17: 20, 18: 22, 19: 22, 20: 22
-};
-
-// Tabela de Truques Conhecidos (Cantrips Known)
-export const CANTRIPS_KNOWN: Record<string, Record<number, number>> = {
-    'Bardo': { 1: 2, 2: 2, 3: 2, 4: 3, 5: 3, 6: 3, 7: 3, 8: 3, 9: 3, 10: 4, 11: 4, 12: 4, 13: 4, 14: 4, 15: 4, 16: 4, 17: 4, 18: 4, 19: 4, 20: 4 },
-    'Clérigo': { 1: 3, 2: 3, 3: 3, 4: 4, 5: 4, 6: 4, 7: 4, 8: 4, 9: 4, 10: 5, 11: 5, 12: 5, 13: 5, 14: 5, 15: 5, 16: 5, 17: 5, 18: 5, 19: 5, 20: 5 },
-    'Druida': { 1: 2, 2: 2, 3: 2, 4: 3, 5: 3, 6: 3, 7: 3, 8: 3, 9: 3, 10: 4, 11: 4, 12: 4, 13: 4, 14: 4, 15: 4, 16: 4, 17: 4, 18: 4, 19: 4, 20: 4 },
-    'Feiticeiro': { 1: 4, 2: 4, 3: 4, 4: 5, 5: 5, 6: 5, 7: 5, 8: 5, 9: 5, 10: 6, 11: 6, 12: 6, 13: 6, 14: 6, 15: 6, 16: 6, 17: 6, 18: 6, 19: 6, 20: 6 },
-    'Mago': { 1: 3, 2: 3, 3: 3, 4: 4, 5: 4, 6: 4, 7: 4, 8: 4, 9: 4, 10: 5, 11: 5, 12: 5, 13: 5, 14: 5, 15: 5, 16: 5, 17: 5, 18: 5, 19: 5, 20: 5 },
-    'Bruxo': { 1: 2, 2: 2, 3: 2, 4: 3, 5: 3, 6: 3, 7: 3, 8: 3, 9: 3, 10: 4, 11: 4, 12: 4, 13: 4, 14: 4, 15: 4, 16: 4, 17: 4, 18: 4, 19: 4, 20: 4 },
-    'Artífice': { 1: 2, 2: 2, 3: 2, 4: 2, 5: 2, 6: 2, 7: 2, 8: 2, 9: 2, 10: 3, 11: 3, 12: 3, 13: 3, 14: 3, 15: 3, 16: 3, 17: 3, 18: 3, 19: 3, 20: 3 }
-};
-
-export function getCantripsKnownCount(className: string, level: number): number {
-    // Normalizar nome da classe (Pode vir "Bardo", "bardo", etc)
-    // Mapeamento simples para chaves do objeto acima
-    const map: Record<string, string> = {
-        'bardo': 'Bardo', 'clérigo': 'Clérigo', 'clerigo': 'Clérigo',
-        'druida': 'Druida', 'feiticeiro': 'Feiticeiro', 'mago': 'Mago',
-        'bruxo': 'Bruxo', 'artífice': 'Artífice', 'artifice': 'Artífice'
-    };
-
-    // Tenta encontrar a chave correta
-    const key = Object.keys(map).find(k => className.toLowerCase().includes(k));
-    if (key) {
-        const canonicalName = map[key];
-        return CANTRIPS_KNOWN[canonicalName]?.[level] || 0;
-    }
-    return 0;
-}
-
-// Tabela de Magias Conhecidas para Feiticeiros
-export const SORCERER_KNOWN: Record<number, number> = {
-    1: 2, 2: 3, 3: 4, 4: 5, 5: 6, 6: 7, 7: 8, 8: 9, 9: 10, 10: 11,
-    11: 12, 12: 12, 13: 13, 14: 13, 15: 14, 16: 14, 17: 15, 18: 15, 19: 15, 20: 15
-};
-
-// Tabela de Magias Conhecidas para Bruxos
-export const WARLOCK_KNOWN: Record<number, number> = {
-    1: 2, 2: 3, 3: 4, 4: 5, 5: 6, 6: 7, 7: 8, 8: 9, 9: 10, 10: 10,
-    11: 11, 12: 11, 13: 12, 14: 12, 15: 13, 16: 13, 17: 14, 18: 14, 19: 15, 20: 15
-};
-
-// Tabela de Magias Conhecidas para Rangers
-export const RANGER_KNOWN: Record<number, number> = {
-    1: 0, 2: 2, 3: 3, 4: 3, 5: 4, 6: 4, 7: 5, 8: 5, 9: 6, 10: 6,
-    11: 7, 12: 7, 13: 8, 14: 8, 15: 9, 16: 9, 17: 10, 18: 10, 19: 11, 20: 11
-};
-
-export function getSpellsKnownCount(className: string, level: number): number {
-    const lower = className.toLowerCase();
-
-    // Classes com tabela fixa de Spells Known
-    if (lower.includes('bardo')) return BARD_KNOWN[level] || 0;
-    if (lower.includes('feiticeiro')) return SORCERER_KNOWN[level] || 0;
-    if (lower.includes('bruxo')) return WARLOCK_KNOWN[level] || 0;
-    if (lower.includes('ranger') || lower.includes('patrulheiro')) return RANGER_KNOWN[level] || 0;
-    if (lower.includes('paladino')) return 0; // Paladinos preparam, não "conhecem" fixo (mod + level/2)
-    if (lower.includes('clérigo') || lower.includes('druida')) return 0; // Preparam (mod + level)
-
-    // Mago: Aprende 2 por nível (adiciona ao grimório), além das 6 iniciais no lv 1
-    // Mas aqui retornamos o TOTAL esperado? Não, Magos funcionam diferente.
-    // Vamos retornar -1 para indicar "Lógica Especial / Preparada" ou lidar na UI
-    if (lower.includes('mago')) return -1; // Special case
-
-    return 0;
-}
-
-export function getFullCasterSlotLevel(level: number): number {
-    const slots = FULL_CASTER_SLOTS[level];
-    return slots ? slots.length : 0;
-}
-
-export function getSpellSlots(className: string, level: number): Record<string, number> {
-    const casterType = getCasterType(className);
-    const slotsObj: Record<string, number> = {};
-
-    // Limite de nível 1 a 20
-    const lvl = Math.max(1, Math.min(20, level));
-
-    if (casterType === 'warlock') {
-        const pact = WARLOCK_SLOTS[lvl];
-        slotsObj['pact'] = pact.slots;
-        slotsObj['pactLevel'] = pact.level; // Guardar nível do slot de pacto como metadado se necessário, mas aqui retornamos qtd.
-        // Warlock é complicado porque todos os slots são do mesmo nvel.
-        // Vamos retornar especial: 'pact': X (quantidade). O Nível é fixo.
-        return { pact: pact.slots, pactLevel: pact.level };
-    }
-
-    let progression: number[] = [];
-
-    if (casterType === 'full') progression = FULL_CASTER_SLOTS[lvl];
-    else if (casterType === 'half') progression = HALF_CASTER_SLOTS[lvl];
-    else if (casterType === 'artificer') progression = ARTIFICER_SLOTS[lvl];
-    else return {}; // None
-
-    progression.forEach((count, index) => {
-        if (count > 0) {
-            slotsObj[(index + 1).toString()] = count;
+    classes.forEach(c => {
+        const type = getCasterType(c.name);
+        switch (type) {
+            case 'full':
+                totalLevel += c.level;
+                break;
+            case 'half':
+                // Paladino/Ranger: metade do nível (arredondado para baixo)
+                totalLevel += Math.floor(c.level / 2);
+                break;
+            case 'artificer':
+                // Artífice: metade do nível (arredondado para CIMA)
+                totalLevel += Math.ceil(c.level / 2);
+                break;
+            case 'third':
+                // Subclasses conjuradoras: 1/3 do nível
+                totalLevel += Math.floor(c.level / 3);
+                break;
         }
     });
 
-    return slotsObj;
+    return totalLevel;
+}
+
+export function getSpellSlots(characterClasses: { name: string; level: number }[]): Record<string, number> {
+    if (!characterClasses || characterClasses.length === 0) return {};
+
+    // Se tiver apenas UMA classe, usa a progressão normal daquela classe
+    if (characterClasses.length === 1) {
+        const charClass = characterClasses[0];
+        const casterType = getCasterType(charClass.name);
+        const lvl = Math.max(1, Math.min(20, charClass.level));
+
+        if (casterType === 'warlock') {
+            const pact = WARLOCK_SLOTS[lvl];
+            return { pact: pact.slots, pactLevel: pact.level };
+        }
+
+        let progression = [];
+        if (casterType === 'full') progression = FULL_CASTER_SLOTS[lvl];
+        else if (casterType === 'half') progression = HALF_CASTER_SLOTS[lvl];
+        else if (casterType === 'artificer') progression = ARTIFICER_SLOTS[lvl];
+        else return {};
+
+        const slots: Record<string, number> = {};
+        progression.forEach((count, index) => {
+            if (count > 0) slots[(index + 1).toString()] = count;
+        });
+        return slots;
+    }
+
+    // MULTICLASSE
+    const casterLevel = calculateMulticlassCasterLevel(characterClasses);
+    const slots: Record<string, number> = {};
+
+    // Pact Magic (Warlock) é SEMPRE separado
+    const warlockClass = characterClasses.find(c => getCasterType(c.name) === 'warlock');
+    if (warlockClass) {
+        const pact = WARLOCK_SLOTS[Math.max(1, Math.min(20, warlockClass.level))];
+        slots['pact'] = pact.slots;
+        slots['pactLevel'] = pact.level;
+    }
+
+    // Slots normais de multiclasse
+    if (casterLevel > 0) {
+        const multiclassProgression = MULTICLASS_SLOTS[Math.max(1, Math.min(20, casterLevel))];
+        multiclassProgression.forEach((count, index) => {
+            if (count > 0) slots[(index + 1).toString()] = count;
+        });
+    }
+
+    return slots;
+}
+
+export function getSpellcastingAbility(className: string): any {
+    const lower = className.toLowerCase();
+    if (lower.includes('mago') || lower.includes('artífice') || lower.includes('artifice')) return 'intelligence';
+    if (lower.includes('bruxo') || lower.includes('bardo') || lower.includes('feiticeiro') || lower.includes('paladino')) return 'charisma';
+    if (lower.includes('clérigo') || lower.includes('druida') || lower.includes('ranger') || lower.includes('patrulheiro')) return 'wisdom';
+    return '';
+}
+
+export function getFullCasterSlotLevel(level: number): number {
+    return Math.max(0, Math.ceil(level / 2));
+}
+
+export function getHalfCasterSlotLevel(level: number): number {
+    if (level < 2) return 0;
+    return Math.max(0, Math.ceil(level / 4));
+}
+
+export function getThirdCasterSlotLevel(level: number): number {
+    if (level < 3) return 0;
+    return Math.max(0, Math.ceil(level / 6));
+}
+
+export function getSpellsKnownCount(className: string, level: number): number {
+    const lower = className.toLowerCase();
+    const lvl = Math.max(1, Math.min(20, level));
+
+    if (lower.includes('bardo')) {
+        const table = [0, 4, 5, 6, 7, 8, 9, 10, 11, 12, 14, 15, 15, 16, 18, 19, 19, 20, 22, 22, 22];
+        return table[lvl];
+    }
+    if (lower.includes('feiticeiro')) {
+        const table = [0, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 12, 13, 13, 14, 14, 15, 15, 15, 15];
+        return table[lvl];
+    }
+    if (lower.includes('bruxo')) {
+        const table = [0, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 12, 13, 13, 14, 14, 15, 15, 15, 15];
+        return table[lvl];
+    }
+    if (lower.includes('ranger') || lower.includes('patrulheiro')) {
+        const table = [0, 0, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8, 8, 9, 9, 10, 10, 11, 11];
+        return table[lvl];
+    }
+
+    return 0;
+}
+
+export function getCantripsKnownCount(className: string, level: number): number {
+    const lower = className.toLowerCase();
+    const lvl = Math.max(1, Math.min(20, level));
+
+    if (lower.includes('mago') || lower.includes('bruxo') || lower.includes('bardo') || lower.includes('druida')) {
+        if (lvl >= 10) return 4;
+        if (lvl >= 4) return 3;
+        return 2;
+    }
+    if (lower.includes('feiticeiro')) {
+        if (lvl >= 10) return 6;
+        if (lvl >= 4) return 5;
+        return 4;
+    }
+    if (lower.includes('clérigo')) {
+        if (lvl >= 10) return 5;
+        if (lvl >= 4) return 4;
+        return 3;
+    }
+    if (lower.includes('artífice')) {
+        if (lvl >= 14) return 4;
+        if (lvl >= 10) return 3;
+        return 2;
+    }
+
+    return 0;
 }

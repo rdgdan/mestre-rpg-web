@@ -16,7 +16,7 @@ export const CLASS_SUMMARIES: Record<string, string> = {
 };
 
 export const RACE_SUMMARIES: Record<string, string> = {
-    "Anão da Colina": "Anjos robustos com sentidos aguçados, resiliência profunda e intuição intuitiva.",
+    "Anão da Colina": "Anões robustos com sentidos aguçados, resiliência profunda e intuição intuitiva.",
     "Anão da Montanha": "Fortes e resistentes, treinados para sobreviver e lutar nos picos mais altos.",
     "Elfo Alto": "Sábios e graciosos, com um toque natural para a magia arcana.",
     "Elfo da Floresta": "Rápidos e furtivos, mestres da sobrevivência em áreas naturais densas.",

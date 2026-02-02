@@ -1,27 +1,30 @@
 
 "use client";
 
-import React, { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import BackgroundModal from '@/components/ui/BackgroundModal';
+import { StartingAttributesModal } from '@/components/ui/StartingAttributesModal';
+import { StartingEquipmentModal } from '@/components/ui/StartingEquipmentModal';
+import { StartingProficienciesModal } from '@/components/ui/StartingProficienciesModal';
 import { useAuth } from '@/context/AuthContext';
-import { db } from '@/lib/firebase';
-import { doc, setDoc, collection } from 'firebase/firestore';
+import { Background, BACKGROUNDS } from '@/lib/backgrounds-data';
 import {
+    ATTRIBUTE_DISPLAY_NAMES,
+    AttributeKey,
+    calculateComputedStats,
     Character,
     createBlankCharacter,
-    calculateComputedStats,
-    AttributeKey,
-    ATTRIBUTE_DISPLAY_NAMES
+    SKILLS
 } from '@/lib/character-data';
+import { CLASS_PROGRESSION, RACE_FEATURES } from '@/lib/class-features';
 import { dndClasses, dndRaces } from '@/lib/dnd-data';
 import { CLASS_SUMMARIES, RACE_SUMMARIES } from '@/lib/dnd-descriptions';
-import { CLASS_PROGRESSION, RACE_FEATURES } from '@/lib/class-features';
-import { RACE_BONUSES } from '@/lib/race-bonuses';
-import { StartingAttributesModal } from '@/components/ui/StartingAttributesModal';
-import { StartingProficienciesModal } from '@/components/ui/StartingProficienciesModal';
-import { StartingEquipmentModal } from '@/components/ui/StartingEquipmentModal';
+import { db } from '@/lib/firebase';
 import { logger } from '@/lib/logger';
+import { RACE_BONUSES } from '@/lib/race-bonuses';
+import { collection, doc, setDoc } from 'firebase/firestore';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { useEffect, useState } from 'react';
 
 export default function CreateCharacterPage() {
     const { user, loading: loadingAuth } = useAuth();
@@ -39,6 +42,7 @@ export default function CreateCharacterPage() {
     const [isAttrModalOpen, setIsAttrModalOpen] = useState(false);
     const [isProfModalOpen, setIsProfModalOpen] = useState(false);
     const [isEquipModalOpen, setIsEquipModalOpen] = useState(false);
+    const [isBgModalOpen, setIsBgModalOpen] = useState(false);
 
     useEffect(() => {
         if (!loadingAuth && !user) {
@@ -78,10 +82,36 @@ export default function CreateCharacterPage() {
     };
 
     const handleProficienciesConfirm = (skills: string[]) => {
-        const skillMap: Record<string, boolean> = {};
+        const skillMap: Record<string, boolean> = { ...(character?.skills || {}) };
         skills.forEach(s => skillMap[s] = true);
         setCharacter(prev => prev ? { ...prev, skills: skillMap as any } : null);
         setIsProfModalOpen(false);
+        nextStep();
+    };
+
+    const handleBackgroundConfirm = (bg: Background) => {
+        setCharacter(prev => {
+            if (!prev) return null;
+            const newSkills = { ...prev.skills };
+            bg.skills.forEach(s => newSkills[s] = true);
+
+            const newInv = { ...prev.inventory };
+            newInv.currency.gp += bg.gold;
+
+            // Adiciona equipamentos do background como itens de descrição por enquanto
+            bg.equipment.forEach(item => {
+                newInv.otherEquipment.push({
+                    id: `bg-${Date.now()}-${Math.random()}`,
+                    name: item,
+                    quantity: 1,
+                    type: 'other',
+                    description: `Equipamento de ${bg.name}`
+                });
+            });
+
+            return { ...prev, background: bg.name, skills: newSkills as any, inventory: newInv };
+        });
+        setIsBgModalOpen(false);
         nextStep();
     };
 
@@ -125,10 +155,11 @@ export default function CreateCharacterPage() {
     const steps = [
         { id: 1, title: 'Classe' },
         { id: 2, title: 'Raça' },
-        { id: 3, title: 'Atributos' },
-        { id: 4, title: 'Perícias' },
-        { id: 5, title: 'Equipamento' },
-        { id: 6, title: 'Finalizar' }
+        { id: 3, title: 'Antecedente' },
+        { id: 4, title: 'Atributos' },
+        { id: 5, title: 'Perícias' },
+        { id: 6, title: 'Equipamento' },
+        { id: 7, title: 'Finalizar' }
     ];
 
     return (
@@ -283,8 +314,26 @@ export default function CreateCharacterPage() {
                     </div>
                 )}
 
-                {/* ETAPA 3: ATRIBUTOS */}
+                {/* ETAPA 3: ANTECEDENTE */}
                 {step === 3 && (
+                    <div className="text-center py-20">
+                        <div className="max-w-2xl mx-auto space-y-8 bg-rpg-panel/60 p-12 rounded-2xl border border-rpg-gold/20 shadow-2xl">
+                            <h2 className="text-4xl font-bold font-cinzel text-rpg-gold">Sua História</h2>
+                            <p className="text-rpg-parchment/70 font-medieval text-xl">
+                                O que você fazia antes de se tornar um aventureiro? Seu antecedente define suas perícias extras e equipamentos iniciais.
+                            </p>
+                            <button
+                                onClick={() => setIsBgModalOpen(true)}
+                                className="bg-gradient-to-r from-rpg-gold to-yellow-600 text-rpg-dark px-12 py-5 rounded-lg font-black uppercase text-lg tracking-widest hover:scale-105 transition-all shadow-glow-gold"
+                            >
+                                Definir Antecedente
+                            </button>
+                        </div>
+                    </div>
+                )}
+
+                {/* ETAPA 4: ATRIBUTOS */}
+                {step === 4 && (
                     <div className="text-center py-20">
                         <div className="max-w-2xl mx-auto space-y-8 bg-rpg-panel/60 p-12 rounded-2xl border border-rpg-gold/20 shadow-2xl">
                             <h2 className="text-4xl font-bold font-cinzel text-rpg-gold">Poder e Potencial</h2>
@@ -302,8 +351,8 @@ export default function CreateCharacterPage() {
                     </div>
                 )}
 
-                {/* ETAPA 4: PERÍCIAS */}
-                {step === 4 && (
+                {/* ETAPA 5: PERÍCIAS */}
+                {step === 5 && (
                     <div className="text-center py-20">
                         <div className="max-w-2xl mx-auto space-y-8 bg-rpg-panel/60 p-12 rounded-2xl border border-rpg-gold/20 shadow-2xl">
                             <h2 className="text-4xl font-bold font-cinzel text-rpg-gold">Talentos e Aptidões</h2>
@@ -321,8 +370,8 @@ export default function CreateCharacterPage() {
                     </div>
                 )}
 
-                {/* ETAPA 5: EQUIPAMENTO */}
-                {step === 5 && (
+                {/* ETAPA 6: EQUIPAMENTO */}
+                {step === 6 && (
                     <div className="text-center py-20">
                         <div className="max-w-2xl mx-auto space-y-8 bg-rpg-panel/60 p-12 rounded-2xl border border-rpg-gold/20 shadow-2xl">
                             <h2 className="text-4xl font-bold font-cinzel text-rpg-gold">Armas e Provisões</h2>
@@ -340,8 +389,8 @@ export default function CreateCharacterPage() {
                     </div>
                 )}
 
-                {/* ETAPA 6: FINALIZAR */}
-                {step === 6 && (
+                {/* ETAPA 7: FINALIZAR */}
+                {step === 7 && (
                     <div className="max-w-6xl mx-auto p-4 lg:p-12 animate-fade-up">
                         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                             {/* COLUNA ESQUERDA: Identidade e Finalização */}
@@ -427,34 +476,53 @@ export default function CreateCharacterPage() {
                                     <div className="bg-black/20 rounded-xl p-4 border border-white/5">
                                         <h4 className="text-sm font-bold text-rpg-gold uppercase mb-3 font-cinzel">Perícias Treinadas</h4>
                                         <div className="flex flex-wrap gap-2">
-                                            {Object.keys(character.skills || {}).map(skill => (
-                                                <span key={skill} className="text-xs bg-rpg-slate px-2 py-1 rounded text-rpg-parchment border border-white/10 capitalize">
-                                                    {skill.replace(/([A-Z])/g, ' $1').trim()}
-                                                </span>
-                                            ))}
+                                            {(() => {
+                                                const skillNames = Object.keys(character.skills || {}).map(skillKey => {
+                                                    const skillData = SKILLS.find(s => s.key === skillKey);
+                                                    return skillData ? skillData.displayName : skillKey;
+                                                });
+                                                const uniqueNames = Array.from(new Set(skillNames));
+
+                                                return uniqueNames.map(displayName => (
+                                                    <span key={displayName} className="text-[10px] font-bold bg-rpg-slate px-3 py-1.5 rounded-full text-rpg-parchment border border-rpg-gold/20 shadow-sm uppercase tracking-wider">
+                                                        {displayName}
+                                                    </span>
+                                                ));
+                                            })()}
+                                            {Object.keys(character.skills || {}).length === 0 && (
+                                                <span className="text-xs text-rpg-grey italic opacity-50">Nenhuma perícia selecionada</span>
+                                            )}
                                         </div>
                                     </div>
                                 </div>
 
                                 {/* FEATURES */}
-                                <div className="bg-black/20 rounded-xl p-4 border border-white/5">
-                                    <h4 className="text-sm font-bold text-rpg-gold uppercase mb-3 font-cinzel">Características de Classe & Raça</h4>
-                                    <ul className="space-y-2 max-h-40 overflow-y-auto custom-scrollbar pr-2">
+                                <div className="bg-black/20 rounded-xl p-6 border border-white/5">
+                                    <h4 className="text-sm font-bold text-rpg-gold uppercase mb-6 font-cinzel border-b border-rpg-gold/10 pb-2">Características de Classe & Raça</h4>
+                                    <div className="grid grid-cols-1 gap-4 max-h-[400px] overflow-y-auto custom-scrollbar pr-4">
                                         {/* Class Features */}
                                         {CLASS_PROGRESSION[character.class]?.[1]?.features.map((f, i) => (
-                                            <li key={`cls-${i}`} className="text-xs text-rpg-parchment flex gap-2">
-                                                <span className="text-rpg-gold">✦</span>
-                                                <span><strong className="text-white">{f.name}:</strong> {f.description.substring(0, 100)}...</span>
-                                            </li>
+                                            <div key={`cls-${i}`} className="bg-rpg-panel/40 p-4 rounded-lg border-l-4 border-rpg-gold shadow-md">
+                                                <div className="flex items-center gap-2 mb-2">
+                                                    <span className="text-rpg-gold text-xs">✦</span>
+                                                    <h5 className="font-bold text-rpg-gold font-medieval text-base uppercase tracking-wider">{f.name}</h5>
+                                                    <span className="text-[9px] bg-rpg-gold/10 text-rpg-gold px-2 py-0.5 rounded border border-rpg-gold/20 font-black ml-auto">CLASSE</span>
+                                                </div>
+                                                <p className="text-sm text-rpg-parchment/90 leading-relaxed font-sans">{f.description}</p>
+                                            </div>
                                         ))}
                                         {/* Race Features */}
                                         {RACE_FEATURES[character.race]?.map((f, i) => (
-                                            <li key={`race-${i}`} className="text-xs text-rpg-parchment flex gap-2">
-                                                <span className="text-emerald-400">✦</span>
-                                                <span><strong className="text-white">{f.name}:</strong> {f.description.substring(0, 100)}...</span>
-                                            </li>
+                                            <div key={`race-${i}`} className="bg-emerald-950/20 p-4 rounded-lg border-l-4 border-emerald-500 shadow-md">
+                                                <div className="flex items-center gap-2 mb-2">
+                                                    <span className="text-emerald-400 text-xs">✦</span>
+                                                    <h5 className="font-bold text-emerald-300 font-medieval text-base uppercase tracking-wider">{f.name}</h5>
+                                                    <span className="text-[9px] bg-emerald-500/10 text-emerald-400 px-2 py-0.5 rounded border border-emerald-500/20 font-black ml-auto">RAÇA</span>
+                                                </div>
+                                                <p className="text-sm text-rpg-parchment/90 leading-relaxed font-sans">{f.description}</p>
+                                            </div>
                                         ))}
-                                    </ul>
+                                    </div>
                                 </div>
 
                                 <div className="text-[10px] text-rpg-grey text-center italic">
@@ -476,7 +544,7 @@ export default function CreateCharacterPage() {
                     >
                         Voltar
                     </button>
-                    {step > 2 && step < 6 && (
+                    {step > 2 && step < 7 && (
                         <span className="text-rpg-gold font-cinzel text-xs flex items-center animate-pulse">Ação Requerida no Modal</span>
                     )}
                 </div>
@@ -494,6 +562,7 @@ export default function CreateCharacterPage() {
                 isOpen={isProfModalOpen}
                 onClose={() => setIsProfModalOpen(false)}
                 className={character.class}
+                backgroundSkills={BACKGROUNDS.find(b => b.name === character.background)?.skills || []}
                 onConfirm={handleProficienciesConfirm}
             />
             <StartingEquipmentModal
@@ -502,6 +571,12 @@ export default function CreateCharacterPage() {
                 className={character.class}
                 background={character.background}
                 onConfirm={handleEquipmentConfirm}
+            />
+            <BackgroundModal
+                isOpen={isBgModalOpen}
+                onClose={() => setIsBgModalOpen(false)}
+                onConfirm={handleBackgroundConfirm}
+                currentBackground={character.background}
             />
         </div>
     );

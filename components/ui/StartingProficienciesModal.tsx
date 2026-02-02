@@ -1,65 +1,64 @@
-import React, { useState } from 'react';
+import { ATTRIBUTE_DISPLAY_NAMES, SKILLS } from '@/lib/character-data';
 import { CLASS_PROFICIENCIES } from '@/lib/class-proficiencies';
-import { ATTRIBUTE_DISPLAY_NAMES } from '@/lib/character-data';
+import React, { useState } from 'react';
 
 interface StartingProficienciesModalProps {
     isOpen: boolean;
     onClose: () => void;
     className: string;
+    backgroundSkills?: string[];
     onConfirm: (selectedSkills: string[]) => void;
 }
 
-// Mapa para nomes mais bonitos (opcional, se não tiver em utils)
-const SKILL_NAMES: Record<string, string> = {
-    "acrobacia": "Acrobacia",
-    "adestrar_animais": "Adestrar Animais",
-    "arcanismo": "Arcanismo",
-    "atletismo": "Atletismo",
-    "atuacao": "Atuação",
-    "enganacao": "Enganação",
-    "furtividade": "Furtividade",
-    "historia": "História",
-    "intimidacao": "Intimidação",
-    "intuicao": "Intuição",
-    "investigacao": "Investigação",
-    "medicina": "Medicina",
-    "natureza": "Natureza",
-    "percepcao": "Percepção",
-    "persuasao": "Persuasão",
-    "prestidigitacao": "Prestidigitação",
-    "religiao": "Religião",
-    "sobrevivencia": "Sobrevivência"
-};
-
-export const StartingProficienciesModal: React.FC<StartingProficienciesModalProps> = ({ isOpen, onClose, className, onConfirm }) => {
+export const StartingProficienciesModal: React.FC<StartingProficienciesModalProps> = ({ isOpen, onClose, className, backgroundSkills = [], onConfirm }) => {
     const [selected, setSelected] = useState<string[]>([]);
 
     const profData = className ? CLASS_PROFICIENCIES[className] : null;
     const { choose, from } = profData?.skills || { choose: 0, from: [] };
     const savingThrows = profData?.savingThrows || [];
-    const remaining = choose - selected.length;
 
-    // Auto-selecionar se o número de opções for igual ao número de escolhas
+    // Count only skills that are NOT from background
+    const userSelectedCount = selected.filter(s => !backgroundSkills.includes(s)).length;
+    const remaining = choose - userSelectedCount;
+
+    // Initialize with background skills
     React.useEffect(() => {
-        if (from && from.length > 0 && from.length <= choose && selected.length === 0) {
-            setSelected(from);
+        if (isOpen) {
+            // Start with background skills selected
+            setSelected(prev => {
+                const unique = new Set([...prev, ...backgroundSkills]);
+                return Array.from(unique);
+            });
         }
-    }, [from, choose, selected.length]);
+    }, [isOpen, backgroundSkills]);
+
+    // Auto-select if choices available match required count (and we haven't picked yet)
+    React.useEffect(() => {
+        if (from && from.length > 0 && from.length <= choose && userSelectedCount === 0) {
+            setSelected(prev => {
+                const unique = new Set([...prev, ...from]);
+                return Array.from(unique);
+            });
+        }
+    }, [from, choose, userSelectedCount]);
 
     if (!isOpen || !profData) return null;
 
     const toggleSkill = (skill: string) => {
+        // Cannot toggle background skills
+        if (backgroundSkills.includes(skill)) return;
+
         if (selected.includes(skill)) {
             setSelected(selected.filter(s => s !== skill));
         } else {
-            if (selected.length < choose) {
+            if (userSelectedCount < choose) {
                 setSelected([...selected, skill]);
             }
         }
     };
 
     const handleConfirm = () => {
-        if (selected.length === choose) {
+        if (remaining === 0) {
             onConfirm(selected);
             onClose();
         }
@@ -87,7 +86,7 @@ export const StartingProficienciesModal: React.FC<StartingProficienciesModalProp
                             <div className="flex flex-wrap gap-2">
                                 {savingThrows.map(save => (
                                     <span key={save} className="px-3 py-1 bg-blue-600/20 text-blue-200 border border-blue-500/30 rounded text-xs font-bold uppercase">
-                                        {ATTRIBUTE_DISPLAY_NAMES[save] || save}
+                                        {ATTRIBUTE_DISPLAY_NAMES[save as any] || save}
                                     </span>
                                 ))}
                             </div>
@@ -99,25 +98,44 @@ export const StartingProficienciesModal: React.FC<StartingProficienciesModalProp
                             <span>Perícias para Escolher</span>
                             <span className="text-rpg-parchment bg-rpg-gold/20 px-2 py-0.5 rounded">Faltam {remaining}</span>
                         </h4>
+
+                        {backgroundSkills.length > 0 && (
+                            <p className="text-xs text-blue-400 mb-2 italic">
+                                * Perícias marcadas em azul vieram do seu Antecedente.
+                            </p>
+                        )}
+
                         <div className="grid grid-cols-2 gap-3">
                             {from.map(skill => {
                                 const isSelected = selected.includes(skill);
-                                const isDisabled = !isSelected && remaining === 0;
+                                const isBgSkill = backgroundSkills.includes(skill);
+                                const isDisabled = (!isSelected && remaining === 0) || isBgSkill;
+                                const skillData = SKILLS.find(s => s.key === skill);
 
                                 return (
                                     <button
                                         key={skill}
                                         onClick={() => toggleSkill(skill)}
                                         disabled={isDisabled}
-                                        className={`flex items-center justify-between p-3 rounded border transition-all ${isSelected
-                                            ? 'bg-rpg-gold/20 border-rpg-gold text-rpg-gold shadow-glow-gold/10'
-                                            : isDisabled
-                                                ? 'bg-black/20 border-white/5 text-rpg-grey/30 cursor-not-allowed'
-                                                : 'bg-black/20 border-white/10 text-rpg-grey hover:border-rpg-gold/50 hover:text-rpg-parchment'
+                                        className={`flex items-center justify-between p-3 rounded border transition-all ${isBgSkill
+                                                ? 'bg-blue-900/20 border-blue-500/50 text-blue-300'
+                                                : isSelected
+                                                    ? 'bg-rpg-gold/20 border-rpg-gold text-rpg-gold shadow-glow-gold/10'
+                                                    : isDisabled
+                                                        ? 'bg-black/20 border-white/5 text-rpg-grey/30 cursor-not-allowed'
+                                                        : 'bg-black/20 border-white/10 text-rpg-grey hover:border-rpg-gold/50 hover:text-rpg-parchment'
                                             }`}
                                     >
-                                        <span className="font-bold text-sm uppercase tracking-wide">{SKILL_NAMES[skill] || skill}</span>
-                                        {isSelected && <span className="text-xs font-black">✓</span>}
+                                        <div className="flex flex-col items-start text-left">
+                                            <span className="font-bold text-sm uppercase tracking-wide">
+                                                {skillData ? skillData.displayName : skill}
+                                            </span>
+                                        </div>
+                                        {isBgSkill ? (
+                                            <span className="text-[10px] bg-blue-500/20 text-blue-300 px-1 rounded border border-blue-500/30">BG</span>
+                                        ) : isSelected && (
+                                            <span className="text-xs font-black">✓</span>
+                                        )}
                                     </button>
                                 );
                             })}
