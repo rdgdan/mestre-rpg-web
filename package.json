@@ -12,6 +12,7 @@
     "test:coverage": "jest --coverage",
     "type-check": "tsc --noEmit",
     "migrate-logger": "tsx scripts/migrate-to-logger.ts",
+    "migrate-spells": "tsx -r dotenv/config scripts/migrate-spells-to-firestore.ts dotenv_config_path=.env.local",
     "limpar-banco": "tsx scripts/limpar-banco.ts",
     "popular-monstros": "tsx scripts/popular-monstros.ts",
     "popular-racas": "tsx scripts/popular-racas.ts",

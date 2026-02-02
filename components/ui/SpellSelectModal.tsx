@@ -40,6 +40,44 @@ const SpellSelectModal: React.FC<SpellSelectModalProps> = ({
     minLevel: minLevel
   }, [...globalSpells]);
 
+  // Debug: Logar informações sobre magias filtradas
+  useEffect(() => {
+    if (isOpen && globalSpells.length > 0) {
+      console.log('🔍 DEBUG SpellSelectModal:');
+      console.log('  📚 Total de magias carregadas:', globalSpells.length);
+      console.log('  🎯 Filtro de classe:', filterClass || 'Nenhum');
+      console.log('  📊 Filtro de nível máximo:', filterLevel !== undefined ? filterLevel : 'Nenhum');
+      console.log('  📈 Filtro de nível mínimo:', minLevel !== undefined ? minLevel : 'Nenhum');
+      console.log('  ✨ Magias após filtro:', filtered.length);
+
+      if (filterClass) {
+        const classSpells = globalSpells.filter(s =>
+          Array.isArray(s.classes) &&
+          s.classes.some(c => typeof c === 'string' && c.toLowerCase().trim() === filterClass.toLowerCase().trim())
+        );
+        console.log(`  🎵 Magias de ${filterClass} no total:`, classSpells.length);
+
+        if (classSpells.length > 0 && classSpells.length <= 20) {
+          console.table(classSpells.map(s => ({
+            nome: s.name,
+            nível: s.level,
+            classes: Array.isArray(s.classes) ? s.classes.join(', ') : s.classes
+          })));
+        }
+
+        // Verificar magias com problemas
+        const problematicSpells = globalSpells.filter(s => !Array.isArray(s.classes));
+        if (problematicSpells.length > 0) {
+          console.warn('  ⚠️ Magias com campo classes inválido:', problematicSpells.length);
+          console.table(problematicSpells.map(s => ({
+            nome: s.name,
+            classes: s.classes
+          })));
+        }
+      }
+    }
+  }, [isOpen, globalSpells, filterClass, filterLevel, minLevel, filtered.length]);
+
   if (!isOpen) return null;
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">

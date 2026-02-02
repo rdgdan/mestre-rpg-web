@@ -429,8 +429,60 @@ export default function CharacterSheetPage() {
                     return finalData;
                 };
 
-                const [classData, raceData, allItemsData] = await Promise.all([
-                    populateCollection('classes', dndClasses.map(name => ({ name }))),
+                // Buscar classes de game_rules (estrutura correta do Firestore)
+                const fetchClassesFromGameRules = async () => {
+                    try {
+                        // Tentar buscar de game_rules/class_features (estrutura correta)
+                        const gameRulesRef = collection(db, 'game_rules');
+                        const gameRulesSnap = await getDocs(gameRulesRef);
+
+                        // Procurar pelo documento class_features
+                        const classDoc = gameRulesSnap.docs.find(doc => doc.id === 'class_features');
+
+                        if (classDoc) {
+                            // Buscar subcoleções (cada classe é uma subcoleção)
+                            const classesFromSubcollections: string[] = [];
+                            const classDocRef = doc(db, 'game_rules', 'class_features');
+
+                            // Listar todas as subcoleções (cada uma é uma classe)
+                            // Como não podemos listar subcoleções diretamente no client SDK,
+                            // vamos usar os nomes hardcoded e verificar se existem
+                            for (const className of dndClasses) {
+                                const classCollectionRef = collection(classDocRef, className);
+                                const classSnap = await getDocs(classCollectionRef);
+                                if (!classSnap.empty) {
+                                    classesFromSubcollections.push(className);
+                                }
+                            }
+
+                            if (classesFromSubcollections.length > 0) {
+                                console.log('✅ Classes carregadas de game_rules/class_features:', classesFromSubcollections);
+                                return classesFromSubcollections;
+                            }
+                        }
+
+                        // Fallback: tentar coleção classes (estrutura antiga)
+                        const classesRef = collection(db, 'classes');
+                        const classesSnap = await getDocs(classesRef);
+                        const classesFromOldStructure = classesSnap.docs.map(doc => doc.data().name).filter(Boolean);
+
+                        if (classesFromOldStructure.length > 0) {
+                            console.log('⚠️ Classes carregadas da estrutura antiga (classes):', classesFromOldStructure);
+                            return classesFromOldStructure;
+                        }
+
+                        // Último fallback: usar hardcoded
+                        console.warn('⚠️ Nenhuma classe encontrada no Firestore, usando fallback hardcoded');
+                        return dndClasses;
+
+                    } catch (error) {
+                        console.error('❌ Erro ao buscar classes:', error);
+                        return dndClasses;
+                    }
+                };
+
+                const [loadedClasses, raceData, allItemsData] = await Promise.all([
+                    fetchClassesFromGameRules(),
                     populateCollection('races', dndRaces.map(name => ({ name }))),
                     populateCollection('itens', [
                         ...dndWeapons.map(w => ({ ...w, itemType: 'WEAPON' })),
@@ -438,8 +490,12 @@ export default function CharacterSheetPage() {
                     ])
                 ]);
 
-                setClasses(classData.map(c => c.name));
+                setClasses(loadedClasses);
                 setRaces(raceData.map(r => r.name));
+
+                // DEBUG: Verificar quantas classes foram carregadas
+                console.log('🔍 DEBUG Classes finais:', loadedClasses);
+                console.log('🔍 DEBUG Total de classes:', loadedClasses.length);
 
                 // Remover duplicatas por nome (caso o merge tenha falhado)
                 const weaponsMap = new Map();
@@ -676,7 +732,7 @@ export default function CharacterSheetPage() {
         }
     }, [character, isLoading, updateCharacter]);
 
-    const handleApplyLevelUp = (choices: { attributes: Record<string, number>; hpIncrease: number; newSpells?: any[]; subclass?: string }) => {
+    const handleApplyLevelUp = (choices: { attributes: Record<string, number>; hpIncrease: number; newSpells?: any[]; subclass?: string; newClass?: string }) => {
         if (!character) return;
 
         updateCharacter(prev => {
@@ -784,9 +840,49 @@ export default function CharacterSheetPage() {
                 });
             }
 
+            // Processar multiclasse se foi escolhida
+            let finalClass = prev.class;
+            if (choices.newClass) {
+                // Adicionar nova classe ao campo class
+                const currentClasses = prev.class.split('/').map(c => c.trim());
+                if (!currentClasses.includes(choices.newClass)) {
+                    finalClass = `${prev.class}/${choices.newClass}`;
+                    showToast(`✨ Multiclasse adicionada! Agora você é ${finalClass}`, 'success');
+
+                    // Buscar e adicionar features de nível 1 da nova classe
+                    (async () => {
+                        try {
+                            const { fetchClassFeaturesFromFirestore } = await import('@/lib/class-features-sync');
+                            const classFeatures = await fetchClassFeaturesFromFirestore(choices.newClass!);
+                            const level1Features = classFeatures[1]?.features || [];
+
+                            updateCharacter(char => {
+                                const existingNames = new Set(char.features.map(f => f.name));
+                                const newMulticlassFeatures = level1Features
+                                    .filter(f => !existingNames.has(f.name))
+                                    .map(f => ({
+                                        ...f,
+                                        level: 1,
+                                        type: 'class' as const,
+                                        source: choices.newClass
+                                    }));
+
+                                return {
+                                    ...char,
+                                    features: [...char.features, ...newMulticlassFeatures]
+                                };
+                            });
+                        } catch (err) {
+                            console.error('Erro ao carregar features de multiclasse:', err);
+                        }
+                    })();
+                }
+            }
+
             return {
                 ...prev,
                 level: newLevel,
+                class: finalClass,
                 attributes: newAttributes,
                 maxHp: (prev.maxHp || 0) + choices.hpIncrease,
                 currentHp: (prev.currentHp || 0) + choices.hpIncrease,
@@ -1071,29 +1167,57 @@ export default function CharacterSheetPage() {
         setSelectionModalOpen(false);
 
         if (modalConfig.type === 'class') {
-            const isChangingClass = character.class && character.class !== item;
+            const currentClass = character.class || '';
+            const isChangingClass = currentClass && currentClass !== item;
+            const currentLevel = character.level || 1;
 
             if (isChangingClass) {
-                const msg = `Atenção: Multiclasse no Nível 1 não é permitida pelas regras padrão do D&D 5e. \n\nDeseja SUBSTITUIR totalmente sua classe "${character.class}" por "${item}"?\n\n(Isso removerá habilidades e equipamentos da classe antiga para manter o balanceamento).`;
-                const confirmChange = confirm(msg);
-                if (!confirmChange) return;
-            }
+                // Verifica se já tem essa classe (multiclasse duplicada)
+                const classes = currentClass.split('/').map(c => c.trim());
+                if (classes.includes(item)) {
+                    showToast(`Você já possui a classe ${item}!`, 'warning');
+                    return;
+                }
 
-            handleFieldChange('class', item);
+                // Multiclasse só é permitida a partir do nível 2
+                if (currentLevel < 2) {
+                    const msg = `Multiclasse não é permitida no nível 1 pelas regras do D&D 5e.\n\nDeseja SUBSTITUIR sua classe "${currentClass}" por "${item}"?\n\n(Isso removerá habilidades e equipamentos da classe antiga)`;
+                    const confirmReplace = confirm(msg);
 
-            // Wipe logic if class changes
-            if (isChangingClass) {
-                updateCharacter(char => {
-                    const lostItems = [...char.inventory.weapons, ...char.inventory.otherEquipment].map(i => i.name).filter(Boolean).join(', ');
-                    if (lostItems) showToast(`Itens removidos: ${lostItems}`, 'info');
+                    if (!confirmReplace) return;
 
-                    return {
-                        ...char,
-                        features: char.features.filter(f => f.type !== 'class'),
-                        skills: createBlankCharacter('').skills, // Reset skills correctly
-                        inventory: { ...char.inventory, weapons: [], otherEquipment: [] } as any // Reset items
-                    };
-                });
+                    // SUBSTITUIÇÃO TOTAL (apenas nível 1)
+                    handleFieldChange('class', item);
+                    updateCharacter(char => {
+                        const lostItems = [...char.inventory.weapons, ...char.inventory.otherEquipment].map(i => i.name).filter(Boolean).join(', ');
+                        if (lostItems) showToast(`Itens removidos: ${lostItems}`, 'info');
+
+                        return {
+                            ...char,
+                            features: char.features.filter(f => f.type !== 'class'),
+                            skills: createBlankCharacter('').skills,
+                            inventory: { ...char.inventory, weapons: [], otherEquipment: [] } as any
+                        };
+                    });
+                } else {
+                    // MULTICLASSE (nível 2+)
+                    const msg = `🎭 Multiclasse Detectada!\n\nDeseja adicionar a classe "${item}" ao seu personagem?\n\nVocê terá as habilidades de: ${currentClass} E ${item}\n\n⚠️ Lembre-se: Você ganhará proficiências limitadas da nova classe conforme as regras de multiclasse do D&D 5e.`;
+                    const confirmMulticlass = confirm(msg);
+
+                    if (!confirmMulticlass) return;
+
+                    // Adiciona a nova classe ao campo class
+                    const newClassString = `${currentClass}/${item}`;
+                    handleFieldChange('class', newClassString);
+
+                    showToast(`✨ Multiclasse adicionada! Agora você é ${newClassString}`, 'success');
+
+                    // NÃO remove features antigas - mantém tudo!
+                    // Apenas adiciona as novas features da classe escolhida abaixo
+                }
+            } else {
+                // Primeira classe sendo escolhida
+                handleFieldChange('class', item);
             }
 
             // Automação: Carregar Features de Nível 1
@@ -1106,10 +1230,16 @@ export default function CharacterSheetPage() {
                 const level1Features = classFeatures[1]?.features || [];
 
                 updateCharacter(char => {
-                    // Remove features de classe antigas se houver (opcional, por enquanto apenas adiciona)
                     // Filtra features que já existem para não duplicar
                     const existingNames = new Set(char.features.map(f => f.name));
-                    const newFeatures = level1Features.filter(f => !existingNames.has(f.name)).map(f => ({ ...f, level: 1, type: 'class' as const }));
+                    const newFeatures = level1Features
+                        .filter(f => !existingNames.has(f.name))
+                        .map(f => ({
+                            ...f,
+                            level: 1,
+                            type: 'class' as const,
+                            source: item // Marca de qual classe veio (importante para multiclasse)
+                        }));
 
                     return {
                         ...char,
@@ -2578,6 +2708,7 @@ export default function CharacterSheetPage() {
                         progression={classProgression?.[character.level]}
                         currentSpells={character.spells}
                         currentAttributes={character.attributes}
+                        availableClasses={character.level >= 2 ? classes.filter(c => !character.class.split('/').includes(c)) : []}
                     />
 
                     {/* CASTER ALERT MODAL */}

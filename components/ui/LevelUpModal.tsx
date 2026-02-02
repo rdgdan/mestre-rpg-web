@@ -11,15 +11,17 @@ import { Spell } from '@/lib/spells-data';
 interface LevelUpModalProps {
     isOpen: boolean;
     onClose: () => void;
-    onApply: (choices: { attributes: Record<string, number>; hpIncrease: number; newSpells?: Spell[]; subclass?: string }) => void;
+    onApply: (choices: { attributes: Record<string, number>; hpIncrease: number; newSpells?: Spell[]; subclass?: string; newClass?: string }) => void;
     level: number;
     charClassName: string;
     progression?: LevelProgression;
     currentSpells?: Spell[];
     currentAttributes?: Record<string, number>;
+    availableClasses?: string[]; // Para multiclasse
+    onMulticlass?: (newClass: string) => void; // Callback para multiclasse
 }
 
-const LevelUpModal: React.FC<LevelUpModalProps> = ({ isOpen, onClose, onApply, level, charClassName, progression, currentSpells = [], currentAttributes = {} }) => {
+const LevelUpModal: React.FC<LevelUpModalProps> = ({ isOpen, onClose, onApply, level, charClassName, progression, currentSpells = [], currentAttributes = {}, availableClasses = [], onMulticlass }) => {
     const [attrChoices, setAttrChoices] = React.useState<Record<string, number>>({
         strength: 0, dexterity: 0, constitution: 0, intelligence: 0, wisdom: 0, charisma: 0
     });
@@ -28,6 +30,7 @@ const LevelUpModal: React.FC<LevelUpModalProps> = ({ isOpen, onClose, onApply, l
     const [isCantripSelection, setIsCantripSelection] = React.useState(false); // Flag para saber se modal é truque
     const [newSpells, setNewSpells] = React.useState<Spell[]>([]);
     const [selectedSubclass, setSelectedSubclass] = React.useState<string>('');
+    const [selectedNewClass, setSelectedNewClass] = React.useState<string>(''); // Para multiclasse
 
     if (!isOpen) return null;
 
@@ -252,6 +255,52 @@ const LevelUpModal: React.FC<LevelUpModalProps> = ({ isOpen, onClose, onApply, l
                         </div>
                     )}
 
+                    {/* SEÇÃO DE MULTICLASSE */}
+                    {level >= 2 && availableClasses.length > 0 && (
+                        <div className="bg-amber-900/10 border border-amber-500/30 rounded-lg p-5 animate-in zoom-in-95 duration-500 delay-150">
+                            <div className="flex justify-between items-center mb-4">
+                                <h3 className="text-xs font-bold text-amber-300 uppercase tracking-widest border-l-4 border-amber-500 pl-3">
+                                    🎭 Multiclasse (Opcional)
+                                </h3>
+                                {selectedNewClass && (
+                                    <span className="px-3 py-1 rounded-full text-[10px] font-black uppercase bg-amber-600 text-white">
+                                        ✓ Selecionado
+                                    </span>
+                                )}
+                            </div>
+                            <p className="text-[10px] text-amber-200/70 mb-3 italic">
+                                Adicione uma segunda classe ao seu personagem. Você manterá todas as habilidades da classe atual.
+                            </p>
+                            <div className="grid grid-cols-1 gap-2">
+                                {availableClasses.map(className => (
+                                    <button
+                                        key={className}
+                                        onClick={() => setSelectedNewClass(selectedNewClass === className ? '' : className)}
+                                        className={`p-3 rounded border text-left transition-all ${selectedNewClass === className
+                                                ? 'bg-amber-600/20 border-amber-500 text-amber-200 shadow-glow-amber/20'
+                                                : 'bg-black/40 border-amber-500/10 text-rpg-grey hover:bg-amber-900/20 hover:text-amber-300'
+                                            }`}
+                                    >
+                                        <div className="flex justify-between items-center">
+                                            <span className="font-bold font-medieval text-sm">{className}</span>
+                                            {selectedNewClass === className && <span className="text-amber-400 font-bold">✓</span>}
+                                        </div>
+                                    </button>
+                                ))}
+                            </div>
+                            {selectedNewClass && (
+                                <div className="mt-3 p-3 bg-amber-900/30 rounded border border-amber-500/20">
+                                    <p className="text-[10px] text-amber-200 font-bold">⚠️ Atenção:</p>
+                                    <p className="text-[9px] text-rpg-grey mt-1">
+                                        Você ganhará proficiências limitadas conforme as regras de multiclasse do D&D 5e.
+                                        Sua classe ficará como: <span className="text-amber-300 font-bold">{charClassName}/{selectedNewClass}</span>
+                                    </p>
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+
 
                     {/* SEÇÃO DE HP */}
                     <div className="bg-rpg-red/5 border border-rpg-red/20 rounded-lg p-5">
@@ -331,7 +380,7 @@ const LevelUpModal: React.FC<LevelUpModalProps> = ({ isOpen, onClose, onApply, l
                                 alert("Por favor, complete todas as escolhas obrigatórias antes de prosseguir (pontos de atributo, magias ou subclasse).");
                                 return;
                             }
-                            onApply({ attributes: attrChoices, hpIncrease, newSpells, subclass: selectedSubclass });
+                            onApply({ attributes: attrChoices, hpIncrease, newSpells, subclass: selectedSubclass, newClass: selectedNewClass });
                             onClose();
                         }}
                         disabled={!canClaimPower()}

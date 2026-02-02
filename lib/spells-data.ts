@@ -560,8 +560,12 @@ import { firestoreCache } from './cache-service';
 export async function fetchGlobalSpells(): Promise<Spell[]> {
     try {
         const cachedSpells = firestoreCache.get('magias');
-        if (cachedSpells) return cachedSpells as Spell[];
+        if (cachedSpells) {
+            console.log('📦 [CacheService] Recuperando do cache: magias');
+            return cachedSpells as Spell[];
+        }
 
+        console.log('🔥 [Firestore] Buscando magias do banco de dados...');
         const spellsRef = collection(db, 'magias');
         const q = query(spellsRef, orderBy('name'));
         const snapshot = await getDocs(q);
@@ -571,17 +575,17 @@ export async function fetchGlobalSpells(): Promise<Spell[]> {
             ...doc.data()
         } as Spell));
 
-        // Mesclar com spellsDatabase (hardcoded)
-        const spellMap = new Map<string, Spell>();
-        spellsDatabase.forEach(spell => spellMap.set(spell.id, spell));
-        dbSpells.forEach(spell => spellMap.set(spell.id, spell));
+        console.log(`✅ [Firestore] ${dbSpells.length} magias carregadas do banco de dados`);
 
-        const finalSpells = Array.from(spellMap.values());
-        firestoreCache.set('magias', finalSpells);
-        return finalSpells;
+        // ⚠️ REMOVIDO: Não mesclar com spellsDatabase hardcoded
+        // Retornar APENAS as magias do Firestore
+        firestoreCache.set('magias', dbSpells);
+        return dbSpells;
     } catch (error) {
-        console.error('Erro ao buscar magias globais:', error);
-        return spellsDatabase;
+        console.error('❌ [Firestore] Erro ao buscar magias:', error);
+        // Fallback: retornar array vazio ao invés de hardcoded
+        console.warn('⚠️ Retornando array vazio devido ao erro');
+        return [];
     }
 }
 
@@ -617,10 +621,22 @@ export function searchSpells(queryText: string, filters?: {
     }
 
     if (filters?.class) {
-        const filterClassLower = filters.class.toLowerCase();
-        results = results.filter(spell =>
-            spell.classes.some(c => c.toLowerCase() === filterClassLower)
-        );
+        const filterClassLower = filters.class.toLowerCase().trim();
+        results = results.filter(spell => {
+            // Se não tem campo classes OU está vazio, mostrar para TODAS as classes
+            if (!spell.classes || !Array.isArray(spell.classes) || spell.classes.length === 0) {
+                console.log(`ℹ️ Magia "${spell.name}" sem restrição de classe - disponível para todos`);
+                return true; // ✅ Magia universal
+            }
+
+            return spell.classes.some(c => {
+                if (typeof c !== 'string') {
+                    console.warn(`⚠️ Magia "${spell.name}" tem classe não-string:`, c);
+                    return false;
+                }
+                return c.toLowerCase().trim() === filterClassLower;
+            });
+        });
     }
 
     // Ordenação: Nível ASC -> Nome ASC

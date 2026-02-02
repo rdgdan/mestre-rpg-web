@@ -47,6 +47,8 @@ export default function DatabaseManagementPage() {
     const [duplicateWarning, setDuplicateWarning] = useState<string | null>(null);
     const [duplicateItem, setDuplicateItem] = useState<any | null>(null);
     const [searchQuery, setSearchQuery] = useState('');
+    const [isMigrating, setIsMigrating] = useState(false);
+    const [migrationLog, setMigrationLog] = useState<string[]>([]);
 
     // Bloquear scroll do body quando o modal estiver aberto
     useEffect(() => {
@@ -63,7 +65,7 @@ export default function DatabaseManagementPage() {
     // Redireciona se não for o Mestre (ID específico)
     useEffect(() => {
         if (!isLoading) {
-            if (!user || user.uid !== 'WR0168EySccvAQXnvPoozEEpb1u2') {
+            if (!user || user.uid !== 'cynl59ZjdlgUJbuzs8lkufCWI0W2') {
                 router.push('/home');
             }
         }
@@ -301,6 +303,85 @@ export default function DatabaseManagementPage() {
         }
     };
 
+    // Função de migração de magias
+    const handleMigrateSpells = async () => {
+        if (!confirm('🔄 Migrar campo "classes" das magias do código para o Firestore?\n\nIsso vai atualizar as magias que não têm o campo classes.')) {
+            return;
+        }
+
+        setIsMigrating(true);
+        setMigrationLog(['🚀 Iniciando migração...']);
+
+        try {
+            // Magias do código com classes
+            const { spellsDatabase } = await import('@/lib/spells-data');
+
+            const log: string[] = ['📥 Buscando magias do Firestore...'];
+            setMigrationLog([...log]);
+
+            // Buscar magias do Firestore
+            const snapshot = await getDocs(collection(db, 'magias'));
+            const firestoreMap = new Map();
+            snapshot.docs.forEach(doc => {
+                const data = doc.data();
+                const key = data.name?.toLowerCase().trim();
+                if (key) firestoreMap.set(key, { id: doc.id, ...data });
+            });
+
+            log.push(`✅ ${firestoreMap.size} magias encontradas`);
+            log.push('🔄 Processando...');
+            setMigrationLog([...log]);
+
+            let updated = 0;
+            let skipped = 0;
+            let notFound = 0;
+
+            for (const spell of spellsDatabase) {
+                const key = spell.name.toLowerCase().trim();
+                const existing = firestoreMap.get(key);
+
+                if (!existing) {
+                    log.push(`⚠️ Não encontrado: ${spell.name}`);
+                    notFound++;
+                    continue;
+                }
+
+                const hasClasses = existing.classes && Array.isArray(existing.classes) && existing.classes.length > 0;
+                if (hasClasses) {
+                    skipped++;
+                    continue;
+                }
+
+                await updateDoc(doc(db, 'magias', existing.id), {
+                    classes: spell.classes
+                });
+
+                log.push(`✅ ${spell.name} → [${spell.classes.join(', ')}]`);
+                updated++;
+                setMigrationLog([...log]);
+            }
+
+            log.push('');
+            log.push('📊 RESUMO:');
+            log.push(`✅ Atualizadas: ${updated}`);
+            log.push(`⏭️ Puladas: ${skipped}`);
+            log.push(`⚠️ Não encontradas: ${notFound}`);
+            log.push('');
+            log.push('🎉 Migração concluída!');
+            setMigrationLog([...log]);
+
+            // Limpar cache e recarregar
+            firestoreCache.invalidate('magias');
+            setForceReload(true);
+
+        } catch (error) {
+            console.error('Erro na migração:', error);
+            setMigrationLog(prev => [...prev, '', '❌ Erro: ' + String(error)]);
+        } finally {
+            setIsMigrating(false);
+        }
+    };
+
     const updateField = (field: string, value: any) => {
         setFormData(prev => ({ ...prev, [field]: value }));
     };
@@ -338,7 +419,31 @@ export default function DatabaseManagementPage() {
             </header>
 
             <main className="container mx-auto p-4 sm:p-8 flex-grow">
-                <div className="flex justify-end mb-4">
+                <div className="flex justify-between items-center mb-4 gap-4">
+                    {/* Botão de Migração de Magias */}
+                    {activeTab === 'magias' && (
+                        <button
+                            onClick={handleMigrateSpells}
+                            disabled={isMigrating}
+                            className="bg-purple-600 hover:bg-purple-700 disabled:bg-gray-600 text-white px-4 py-2 rounded-lg font-cinzel font-bold shadow-lg transition-all flex items-center gap-2"
+                            title="Migrar campo 'classes' das magias do código para o Firestore"
+                        >
+                            {isMigrating ? (
+                                <>
+                                    <span className="animate-spin">⚙️</span>
+                                    Migrando...
+                                </>
+                            ) : (
+                                <>
+                                    🔄 Migrar Classes
+                                </>
+                            )}
+                        </button>
+                    )}
+
+                    <div className="flex-grow"></div>
+
+                    {/* Botão Atualizar */}
                     <button
                         onClick={() => setForceReload(true)}
                         className="bg-rpg-gold hover:bg-rpg-gold-light text-rpg-dark px-4 py-2 rounded-lg font-cinzel font-bold shadow-glow-gold transition-all"
@@ -347,6 +452,18 @@ export default function DatabaseManagementPage() {
                         🔄 Atualizar
                     </button>
                 </div>
+
+                {/* Log de Migração */}
+                {migrationLog.length > 0 && (
+                    <div className="mb-4 bg-black/40 border border-purple-500/30 rounded-lg p-4 max-h-60 overflow-y-auto">
+                        <h3 className="text-purple-400 font-bold mb-2">📋 Log de Migração:</h3>
+                        {migrationLog.map((line, i) => (
+                            <div key={i} className="text-sm text-rpg-parchment/80 font-mono">
+                                {line}
+                            </div>
+                        ))}
+                    </div>
+                )}
                 {/* Tabs */}
                 <div className="flex flex-wrap gap-2 mb-8 bg-black/20 p-2 rounded-xl border border-white/5">
                     {CATEGORIES.map(cat => (
