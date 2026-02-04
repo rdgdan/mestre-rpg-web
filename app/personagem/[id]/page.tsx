@@ -47,7 +47,7 @@ import { StartingAttributesModal } from '@/components/ui/StartingAttributesModal
 import { RACE_BONUSES } from '@/lib/race-bonuses';
 import Modal from '@/components/Modal';
 import { CLASS_EFFECTS, COMMON_CONDITIONS, getCategorizedGlobalConditions, getEffectStyle } from '@/lib/effects-conditions';
-import { getXPForNextLevel, getXPProgress } from '@/lib/xp-progression';
+import { getXPForNextLevel, getXPProgress, shouldLevelUp } from '@/lib/xp-progression';
 import { firestoreCache } from '@/lib/cache-service';
 
 // Lodash debounce import
@@ -171,6 +171,7 @@ export default function CharacterSheetPage() {
 
     // Modals de Confirmação
     const [confirmRemoveFeatureModal, setConfirmRemoveFeatureModal] = useState<{ open: boolean; featureName: string | null }>({ open: false, featureName: null });
+    const [activeTooltip, setActiveTooltip] = useState<string | null>(null);
 
     const dataFetchInitiated = useRef(false);
 
@@ -671,12 +672,13 @@ export default function CharacterSheetPage() {
                             hydratedChar.inventory.weapons = enrichedWeapons;
                             hydratedChar.inventory.otherEquipment = enrichedEquipment;
 
-                            setCharacter(hydratedChar);
+                            const finalComputedChar = calculateComputedStats(hydratedChar);
+                            setCharacter(finalComputedChar);
                             characterLoaded.current = true;
 
                             // Se houve enriquecimento, salva de volta para evitar re-enriquecer
                             if (needsUpdate) {
-                                debouncedSave(hydratedChar);
+                                debouncedSave(finalComputedChar);
                             }
                         } else {
                             setError("Ficha não encontrada ou acesso negado.");
@@ -744,6 +746,32 @@ export default function CharacterSheetPage() {
             });
 
             const newLevel = prev.level; // O nível já foi atualizado pelo gatilho (XP ou Manual)
+
+            // Sincronizar classes
+            const updatedClasses = [...(prev.classes || [])];
+            let levelUpClassName = prev.class.split('/')[0].trim(); // Padrão: primeira classe
+
+            // Só incrementa se a soma atual for menor que o nível (indicando que o level up veio por XP)
+            const currentTotalClassLevel = updatedClasses.reduce((s, c) => s + c.level, 0);
+
+            if (choices.newClass) {
+                const existing = updatedClasses.find(c => c.name === choices.newClass);
+                if (existing) {
+                    if (currentTotalClassLevel < prev.level) existing.level += 1;
+                    levelUpClassName = choices.newClass;
+                } else {
+                    updatedClasses.push({ name: choices.newClass, level: 1, subclass: '' });
+                    levelUpClassName = choices.newClass;
+                    showToast(`✨ Multiclasse adicionada! Agora você é ${choices.newClass}`, 'success');
+                }
+            } else if (updatedClasses.length > 0) {
+                // Só incrementa a classe se o nível total ainda não refletir a subida
+                if (currentTotalClassLevel < prev.level) {
+                    updatedClasses[0].level += 1;
+                }
+                levelUpClassName = updatedClasses[0].name;
+            }
+
             const newFeatures = [...(prev.features || [])];
 
             // 1. Buscar características da CLASSE para o NOVO nível
@@ -758,7 +786,8 @@ export default function CharacterSheetPage() {
                         newFeatures.push({
                             ...feat,
                             level: newLevel,
-                            type: 'class'
+                            type: 'class',
+                            source: levelUpClassName // Identificador de origem
                         });
                     }
                 });
@@ -834,55 +863,22 @@ export default function CharacterSheetPage() {
                 const existingIds = new Set(updatedSpells.map(s => s.id));
                 choices.newSpells.forEach(spell => {
                     if (spell && !existingIds.has(spell.id)) {
-                        updatedSpells.push(spell);
+                        updatedSpells.push({
+                            ...spell,
+                            sourceClass: levelUpClassName // Tag de origem
+                        });
                         existingIds.add(spell.id);
                     }
                 });
             }
 
-            // Processar multiclasse se foi escolhida
-            let finalClass = prev.class;
-            if (choices.newClass) {
-                // Adicionar nova classe ao campo class
-                const currentClasses = prev.class.split('/').map(c => c.trim());
-                if (!currentClasses.includes(choices.newClass)) {
-                    finalClass = `${prev.class}/${choices.newClass}`;
-                    showToast(`✨ Multiclasse adicionada! Agora você é ${finalClass}`, 'success');
-
-                    // Buscar e adicionar features de nível 1 da nova classe
-                    (async () => {
-                        try {
-                            const { fetchClassFeaturesFromFirestore } = await import('@/lib/class-features-sync');
-                            const classFeatures = await fetchClassFeaturesFromFirestore(choices.newClass!);
-                            const level1Features = classFeatures[1]?.features || [];
-
-                            updateCharacter(char => {
-                                const existingNames = new Set(char.features.map(f => f.name));
-                                const newMulticlassFeatures = level1Features
-                                    .filter(f => !existingNames.has(f.name))
-                                    .map(f => ({
-                                        ...f,
-                                        level: 1,
-                                        type: 'class' as const,
-                                        source: choices.newClass
-                                    }));
-
-                                return {
-                                    ...char,
-                                    features: [...char.features, ...newMulticlassFeatures]
-                                };
-                            });
-                        } catch (err) {
-                            console.error('Erro ao carregar features de multiclasse:', err);
-                        }
-                    })();
-                }
-            }
+            const finalClass = updatedClasses[0].name;
 
             return {
                 ...prev,
                 level: newLevel,
                 class: finalClass,
+                classes: updatedClasses,
                 attributes: newAttributes,
                 maxHp: (prev.maxHp || 0) + choices.hpIncrease,
                 currentHp: (prev.currentHp || 0) + choices.hpIncrease,
@@ -896,6 +892,33 @@ export default function CharacterSheetPage() {
     // --- Lógica de Campos ---
     const handleFieldChange = (field: keyof Omit<Character, 'attributes' | 'skills' | 'inventory'>, value: any) => {
         updateCharacter(char => ({ ...char, [field]: value }));
+    };
+
+    const handleLevelChange = (newLevel: number) => {
+        if (!character) return;
+        const boundedLevel = Math.max(1, Math.min(20, newLevel));
+
+        updateCharacter(char => {
+            const newClasses = [...(char.classes || [])];
+
+            if (newClasses.length > 0) {
+                // Cálculo RELATIVO: Aumenta ou diminui a primeira classe baseado na diferença desejada
+                const currentTotal = newClasses.reduce((s, c) => s + c.level, 0);
+                const diff = boundedLevel - currentTotal;
+
+                // Só ajusta se houver diferença e não deixar o nível da classe < 1
+                const newFirstClassLevel = Math.max(1, newClasses[0].level + diff);
+                newClasses[0] = { ...newClasses[0], level: newFirstClassLevel };
+            } else {
+                newClasses.push({ name: char.class || 'Guerreiro', level: boundedLevel, subclass: char.subclass || '' });
+            }
+
+            return {
+                ...char,
+                level: boundedLevel,
+                classes: newClasses
+            };
+        });
     };
     const handleNestedChange = (path: string, value: any) => {
         updateCharacter(char => {
@@ -957,7 +980,6 @@ export default function CharacterSheetPage() {
             if (character.activeEncounterId && !isReadOnly) {
                 const updateCombat = async () => {
                     try {
-                        const { doc, getDoc, updateDoc } = await import('firebase/firestore');
                         const combatRef = doc(db, 'encounters', character.activeEncounterId!);
                         const combatSnap = await getDoc(combatRef);
 
@@ -1018,7 +1040,6 @@ export default function CharacterSheetPage() {
             if (character.activeEncounterId && !isReadOnly) {
                 const updateCombat = async () => {
                     try {
-                        const { doc, getDoc, updateDoc } = await import('firebase/firestore');
                         const combatRef = doc(db, 'encounters', character.activeEncounterId!);
                         const combatSnap = await getDoc(combatRef);
 
@@ -1608,7 +1629,7 @@ export default function CharacterSheetPage() {
                         />
                         <div className="flex items-center gap-3 mt-2 flex-wrap">
                             <p className="text-rpg-grey uppercase font-bold tracking-[0.2em] text-[10px] break-all">
-                                {character.race} • {character.class}{character.subclass ? ` (${character.subclass})` : ''}
+                                {character.race} • {character.displayClass || character.class}{character.subclass ? ` (${character.subclass})` : ''}
                             </p>
                             {!character.subclass && character.level >= (SUBCLASS_CHOICE_LEVELS[character.class] || 3) && (
                                 <button
@@ -1625,7 +1646,7 @@ export default function CharacterSheetPage() {
                         <div className="flex flex-col gap-1">
                             <label className="block text-[10px] font-bold text-rpg-gold uppercase tracking-wider mb-1 font-cinzel">Classe</label>
                             <button disabled={isReadOnly} onClick={() => openSelectionModal('class')} className={`w-full bg-rpg-slate border border-rpg-gold/20 rounded-md px-3 py-2 text-left hover:border-rpg-gold/50 font-medieval text-sm ${isReadOnly ? 'opacity-70 cursor-not-allowed' : ''}`}>
-                                {character.class || 'Selecione...'}
+                                {character.displayClass || character.class || 'Selecione...'}
                             </button>
                         </div>
                         <div className="flex flex-col gap-1">
@@ -1641,13 +1662,13 @@ export default function CharacterSheetPage() {
                                 <label className="block text-[10px] font-bold text-rpg-gold uppercase tracking-wider mb-1 font-cinzel transition-colors group-hover:text-yellow-400">Nível</label>
                                 <div className="relative flex items-center justify-between bg-rpg-slate border-2 border-rpg-gold/30 rounded-lg p-1 shadow-lg shadow-black/40 group-hover:border-rpg-gold transition-all h-[42px]">
                                     <button
-                                        onClick={() => handleFieldChange('level', Math.max(1, (character.level || 1) - 1))}
+                                        onClick={() => handleLevelChange((character.level || 1) - 1)}
                                         disabled={isReadOnly}
                                         className={`w-7 h-full flex items-center justify-center bg-rpg-dark/50 hover:bg-rpg-red/20 text-rpg-grey hover:text-rpg-red rounded transition-all font-bold z-10 ${isReadOnly ? 'opacity-50 cursor-not-allowed' : ''}`}
                                     >-</button>
                                     <span className="text-2xl font-black text-rpg-gold font-medieval drop-shadow-glow-gold px-1">{character.level || 1}</span>
                                     <button
-                                        onClick={() => handleFieldChange('level', Math.min(20, (character.level || 1) + 1))}
+                                        onClick={() => handleLevelChange((character.level || 1) + 1)}
                                         disabled={isReadOnly}
                                         className={`w-7 h-full flex items-center justify-center bg-rpg-dark/50 hover:bg-green-900/20 text-rpg-grey hover:text-green-500 rounded transition-all font-bold z-10 ${isReadOnly ? 'opacity-50 cursor-not-allowed' : ''}`}
                                     >+</button>
@@ -1666,15 +1687,25 @@ export default function CharacterSheetPage() {
                                             })()}
                                         </span>
                                         {!isReadOnly && (
-                                            <button
-                                                onClick={() => {
-                                                    setXpAmountToAdd('100');
-                                                    setIsXPModalOpen(true);
-                                                }}
-                                                className="text-[9px] bg-rpg-gold/20 hover:bg-rpg-gold/30 text-rpg-gold px-2 py-0.5 rounded font-bold transition-all whitespace-nowrap"
-                                            >
-                                                + XP
-                                            </button>
+                                            <div className="flex gap-2">
+                                                {shouldLevelUp(character.level, character.experience) && (
+                                                    <button
+                                                        onClick={() => handleLevelChange((character.level || 1) + 1)}
+                                                        className="text-[9px] bg-green-600 hover:bg-green-500 text-white px-2 py-0.5 rounded font-bold transition-all whitespace-nowrap animate-bounce shadow-glow-green"
+                                                    >
+                                                        Level Up! 🌟
+                                                    </button>
+                                                )}
+                                                <button
+                                                    onClick={() => {
+                                                        setXpAmountToAdd('100');
+                                                        setIsXPModalOpen(true);
+                                                    }}
+                                                    className="text-[9px] bg-rpg-gold/20 hover:bg-rpg-gold/30 text-rpg-gold px-2 py-0.5 rounded font-bold transition-all whitespace-nowrap"
+                                                >
+                                                    + XP
+                                                </button>
+                                            </div>
                                         )}
                                     </div>
                                     {/* Progress Bar */}
@@ -1854,7 +1885,15 @@ export default function CharacterSheetPage() {
                                 <div className="flex gap-2 overflow-x-auto pb-4 no-scrollbar -mx-2 px-2 snap-x sm:justify-center sm:overflow-visible">
                                     {ATTRIBUTE_KEYS.map((key) => (
                                         <div key={key} className="snap-center">
-                                            <AttributeInput label={ATTRIBUTE_DISPLAY_NAMES[key].slice(0, 3)} value={character.attributes[key]} onChange={(val) => handleNestedChange(`attributes.${key}`, val)} disabled={isReadOnly} />
+                                            <AttributeInput
+                                                label={ATTRIBUTE_DISPLAY_NAMES[key].slice(0, 3)}
+                                                breakdown={character.attributeBreakdown?.[key]}
+                                                value={character.attributes[key]}
+                                                onChange={(val) => handleNestedChange(`attributes.${key}`, val)}
+                                                disabled={isReadOnly}
+                                                activeTooltip={activeTooltip}
+                                                setActiveTooltip={setActiveTooltip}
+                                            />
                                         </div>
                                     ))}
                                 </div>
@@ -2049,6 +2088,13 @@ export default function CharacterSheetPage() {
                                                         </div>
                                                         <p className="text-[10px] font-bold text-rpg-grey uppercase tracking-wider bg-black/20 px-2 py-1 rounded inline-block">{weapon.damageType} | {weapon.properties?.join(', ')}</p>
                                                         {weapon.magicalEffect && <p className="text-[10px] text-purple-300 italic mt-1 font-sans">{weapon.magicalEffect}</p>}
+                                                        {(weapon.sourceClass || character.class) && (
+                                                            <div className="mt-2 flex items-center gap-1">
+                                                                <span className="text-[8px] bg-rpg-gold/20 text-rpg-gold/70 px-1.5 py-0.5 rounded border border-rpg-gold/10 font-black uppercase tracking-widest leading-none">
+                                                                    {weapon.sourceClass || character.class}
+                                                                </span>
+                                                            </div>
+                                                        )}
                                                     </div>
                                                     {!isReadOnly && (
                                                         <div className="flex gap-2 items-center self-end md:self-center">
@@ -2085,6 +2131,13 @@ export default function CharacterSheetPage() {
                                                     </div>
                                                     {item.weight && <span className="text-[10px] text-rpg-grey/60">{item.weight} kg</span>}
                                                     {item.magicalEffect && <p className="text-[9px] text-purple-300/80 italic mt-0.5 font-sans leading-tight line-clamp-1">{item.magicalEffect}</p>}
+                                                    {(item.sourceClass || character.class) && (
+                                                        <div className="mt-1">
+                                                            <span className="text-[7px] bg-white/5 text-white/40 px-1 py-0.2 rounded font-black uppercase tracking-tighter border border-white/5">
+                                                                {item.sourceClass || character.class}
+                                                            </span>
+                                                        </div>
+                                                    )}
                                                 </div>
                                                 {!isReadOnly && (
                                                     <div className="flex gap-2 opacity-40 group-hover:opacity-100 transition-opacity">
@@ -2249,6 +2302,7 @@ export default function CharacterSheetPage() {
                                                                                         {feat.type === 'race' ? 'Raça' : 'Classe'}
                                                                                     </span>
                                                                                     {feat.level && <span className="text-[8px] bg-white/5 text-rpg-grey px-1.5 py-0.2 rounded font-black uppercase tracking-tighter border border-white/5">Nível {feat.level}</span>}
+                                                                                    {(feat.source || character.class) && <span className="text-[8px] bg-purple-900/20 text-purple-300 px-1.5 py-0.2 rounded font-black uppercase tracking-tighter border border-purple-500/10">{feat.source || character.class}</span>}
                                                                                 </div>
                                                                             </div>
                                                                         </div>
@@ -2448,6 +2502,7 @@ export default function CharacterSheetPage() {
                                                                 {spell.concentration && <span className="text-[8px] bg-blue-900/60 text-blue-200 px-1.5 py-0.5 rounded font-black tracking-tighter" title="Concentração">C</span>}
                                                                 {spell.ritual && <span className="text-[8px] bg-amber-900/60 text-amber-200 px-1.5 py-0.5 rounded font-black tracking-tighter" title="Ritual">R</span>}
                                                                 <span className="text-[8px] bg-green-900/60 text-green-200 px-1.5 py-0.5 rounded font-black tracking-tighter" title="Ilimitado">∞</span>
+                                                                <span className="text-[8px] bg-purple-600/40 text-white px-1.5 py-0.5 rounded font-black tracking-tighter" title="Classe">{(spell.sourceClass || character.class).slice(0, 3).toUpperCase()}</span>
                                                             </div>
                                                         </div>
                                                         <div className="flex flex-wrap gap-x-3 gap-y-1 mb-2 text-[10px] text-rpg-grey/70 uppercase font-sans tracking-tight border-b border-purple-500/10 pb-2">
@@ -2563,6 +2618,7 @@ export default function CharacterSheetPage() {
                                                                                 </span>
                                                                             )}
                                                                             {spell.level === 0 && <span className="text-[8px] bg-green-900/60 text-green-200 px-1.5 py-0.5 rounded font-black tracking-tighter" title="Ilimitado">∞</span>}
+                                                                            <span className="text-[8px] bg-purple-600/40 text-white px-1.5 py-0.5 rounded font-black tracking-tighter" title="Classe">{(spell.sourceClass || character.class).slice(0, 3).toUpperCase()}</span>
                                                                         </div>
                                                                     </div>
                                                                     <div className="flex flex-wrap gap-x-3 gap-y-1 mb-2 text-[10px] text-rpg-grey/70 uppercase font-sans tracking-tight border-b border-purple-500/10 pb-2">
@@ -3057,8 +3113,10 @@ const TabButton = ({ activeTab, tabName, onClick }: { activeTab: string, tabName
     );
 };
 
-const AttributeInput = ({ label, value, onChange, disabled }: { label: string, value: number, onChange: (val: number) => void, disabled?: boolean }) => {
+const AttributeInput = ({ label, value, onChange, disabled, breakdown, activeTooltip, setActiveTooltip }: { label: string, value: number, onChange: (val: number) => void, disabled?: boolean, breakdown?: Record<string, number>, activeTooltip: string | null, setActiveTooltip: (label: string | null) => void }) => {
     const modifier = Math.floor((value - 10) / 2);
+    const isOpen = activeTooltip === label;
+
     return (
         <div className="flex flex-col items-center p-4 sm:p-5 bg-rpg-panel border-b-2 border-rpg-gold/20 rounded-t-lg min-w-[100px] sm:min-w-[110px] transition-all hover:bg-rpg-gold/5 group relative shadow-md">
             <div className="absolute top-0 left-0 w-full h-[1px] bg-white/5"></div>
@@ -3074,6 +3132,44 @@ const AttributeInput = ({ label, value, onChange, disabled }: { label: string, v
             {disabled && (
                 <div className="absolute -top-1 -right-1 group-hover:block hidden bg-rpg-dark border border-rpg-gold/50 text-rpg-gold text-[8px] px-1 rounded shadow-lg z-10">
                     Predefinido (Nv.1)
+                </div>
+            )}
+            {breakdown && Object.keys(breakdown).length > 0 && (
+                <div className="absolute top-2 right-2 z-50">
+                    <button
+                        onMouseEnter={() => setActiveTooltip(label)}
+                        onMouseLeave={() => setActiveTooltip(null)}
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            setActiveTooltip(isOpen ? null : label);
+                        }}
+                        className={`w-4 h-4 rounded-full flex items-center justify-center text-[8px] font-black border transition-all ${isOpen ? 'bg-rpg-gold text-rpg-dark border-rpg-gold shadow-glow-gold' : 'bg-rpg-gold/20 text-rpg-gold border-rpg-gold/30 hover:bg-rpg-gold/40'}`}
+                    >
+                        ?
+                    </button>
+                    {isOpen && (
+                        <div className="absolute top-full right-0 mt-2 w-48 bg-rpg-panel border-2 border-rpg-gold/50 rounded-lg shadow-[0_10px_40px_-10px_rgba(0,0,0,0.8)] p-3 z-[100] animate-fade-in backdrop-blur-xl ring-1 ring-black/50">
+                            <div className="absolute -top-2 right-1.5 w-3 h-3 bg-rpg-panel border-l-2 border-t-2 border-rpg-gold/50 rotate-45"></div>
+                            <h5 className="text-[10px] font-black text-rpg-gold uppercase border-b border-rpg-gold/20 pb-1.5 mb-2 flex justify-between items-center">
+                                <span>Detalhamento {label}</span>
+                                <span className="text-[8px] opacity-50 font-sans tracking-normal">D&D 5e</span>
+                            </h5>
+                            <div className="space-y-1.5">
+                                {Object.entries(breakdown).map(([source, val]) => (
+                                    <div key={source} className="flex justify-between text-[10px] text-rpg-parchment font-medium">
+                                        <span className="opacity-70">{source}</span>
+                                        <span className={`${val >= 0 ? (source === 'Base' ? 'text-rpg-grey' : 'text-green-400') : 'text-red-400'} font-bold`}>
+                                            {source === 'Base' ? val : (val >= 0 ? `+${val}` : val)}
+                                        </span>
+                                    </div>
+                                ))}
+                            </div>
+                            <div className="mt-3 pt-2 border-t border-white/10 flex justify-between text-[11px] font-black text-rpg-gold bg-black/20 -mx-3 -mb-3 p-3 rounded-b-lg">
+                                <span className="uppercase tracking-widest">Total</span>
+                                <span className="text-sm drop-shadow-glow-gold">{value}</span>
+                            </div>
+                        </div>
+                    )}
                 </div>
             )}
             <div className="text-sm sm:text-sm text-rpg-gold mt-2 sm:mt-3 font-bold font-medieval border border-rpg-gold/30 px-4 sm:px-4 py-1.5 rounded shadow-sm bg-black/40 group-hover:bg-rpg-gold/10 transition-colors">

@@ -18,6 +18,7 @@ export interface Spell {
     concentration?: boolean;
     subclass?: string; // New field for user categorization
     prepared?: boolean; // Se a magia está preparada (para classes que preparam)
+    sourceClass?: string;
 }
 
 export const spellsDatabase: Spell[] = [

@@ -32,6 +32,16 @@ const LevelUpModal: React.FC<LevelUpModalProps> = ({ isOpen, onClose, onApply, l
     const [selectedSubclass, setSelectedSubclass] = React.useState<string>('');
     const [selectedNewClass, setSelectedNewClass] = React.useState<string>(''); // Para multiclasse
 
+    // Sugestão Automática de HP
+    React.useEffect(() => {
+        if (isOpen && hpIncrease === 0 && progression?.hitDice) {
+            const dieValue = parseInt(progression.hitDice.replace('d', '')) || 8;
+            const conMod = Math.floor(((currentAttributes.constitution || 10) - 10) / 2);
+            const averageGain = Math.floor(dieValue / 2) + 1 + conMod;
+            setHpIncrease(Math.max(1, averageGain));
+        }
+    }, [isOpen, progression?.hitDice, currentAttributes.constitution]);
+
     if (!isOpen) return null;
 
     const hasASI = progression?.features.some(f => f.name.includes("Melhoria no Valor de Atributo"));
@@ -277,8 +287,8 @@ const LevelUpModal: React.FC<LevelUpModalProps> = ({ isOpen, onClose, onApply, l
                                         key={className}
                                         onClick={() => setSelectedNewClass(selectedNewClass === className ? '' : className)}
                                         className={`p-3 rounded border text-left transition-all ${selectedNewClass === className
-                                                ? 'bg-amber-600/20 border-amber-500 text-amber-200 shadow-glow-amber/20'
-                                                : 'bg-black/40 border-amber-500/10 text-rpg-grey hover:bg-amber-900/20 hover:text-amber-300'
+                                            ? 'bg-amber-600/20 border-amber-500 text-amber-200 shadow-glow-amber/20'
+                                            : 'bg-black/40 border-amber-500/10 text-rpg-grey hover:bg-amber-900/20 hover:text-amber-300'
                                             }`}
                                     >
                                         <div className="flex justify-between items-center">
@@ -307,12 +317,15 @@ const LevelUpModal: React.FC<LevelUpModalProps> = ({ isOpen, onClose, onApply, l
                         <h3 className="text-xs font-bold text-rpg-red uppercase tracking-widest mb-4 border-l-4 border-rpg-red pl-3">Aumento de Vitalidade</h3>
                         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4 sm:gap-6">
                             <div className="flex-grow">
-                                <label className="block text-[10px] text-rpg-grey uppercase mb-1 font-bold">Valor Ganho (+ Dados + CON)</label>
+                                <label className="block text-[10px] text-rpg-grey uppercase mb-1 font-bold">
+                                    Valor Ganho (Dado + CON {currentAttributes.constitution ? `[+${Math.floor(((currentAttributes.constitution || 10) - 10) / 2)}]` : '+0'})
+                                </label>
                                 <input
                                     type="number"
                                     value={hpIncrease}
                                     onChange={e => setHpIncrease(parseInt(e.target.value) || 0)}
                                     className="w-full bg-black/40 border border-rpg-red/20 rounded px-4 py-2 text-2xl font-bold text-rpg-parchment font-medieval focus:border-rpg-red/50 outline-none"
+                                    placeholder="Ex: 8"
                                 />
                             </div>
                             <div className="text-center bg-black/40 p-3 sm:p-4 rounded-lg border border-rpg-red/10 w-full sm:w-32 flex flex-row sm:flex-col justify-between items-center sm:justify-center">

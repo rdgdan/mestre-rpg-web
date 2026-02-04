@@ -152,6 +152,13 @@ export default function DatabaseManagementPage() {
         });
     }
 
+    // Ordenar alfabeticamente por nome ou título
+    filteredItems.sort((a, b) => {
+        const nameA = (a.name || a.title || '').toLowerCase();
+        const nameB = (b.name || b.title || '').toLowerCase();
+        return nameA.localeCompare(nameB, 'pt-BR');
+    });
+
     const openModal = (item?: any) => {
         // Sempre recarrega do banco ao salvar/editar
         setDuplicateWarning(null);

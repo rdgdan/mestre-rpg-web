@@ -2,6 +2,7 @@
 // lib/character-data.ts
 import { dndWeapons, Inventory, parseDamageString } from './items-data';
 import { Spell } from './spells-data';
+import { RACE_BONUSES } from './race-bonuses';
 
 export const ATTRIBUTE_KEYS = ['strength', 'dexterity', 'constitution', 'intelligence', 'wisdom', 'charisma'] as const;
 export type AttributeKey = typeof ATTRIBUTE_KEYS[number];
@@ -46,6 +47,7 @@ export interface Character {
     name: string;
     race: string;
     class: string; // Classe Principal (ou primeira classe)
+    displayClass?: string; // Classe formatada para exibição (ex: Bardo 3 / Mago 2)
     classes: { name: string; level: number; subclass?: string }[]; // Multiclasse
     subclass?: string;
     background: string;
@@ -89,6 +91,7 @@ export interface Character {
     rageBonus?: number;
     hitDiceCurrent?: number;
     hitDiceMax?: number;
+    attributeBreakdown?: Record<string, Record<string, number>>;
 }
 
 // --- REGRAS DO JOGO --- 
@@ -129,6 +132,47 @@ export function calculateComputedStats(character: Omit<Character, 'proficiencyBo
     char.level = totalLevel;
     char.class = char.classes[0].name;
     char.subclass = char.classes[0].subclass || '';
+
+    // Formata a classe de exibição para multiclasse
+    if (char.classes.length > 1) {
+        char.displayClass = char.classes.map(c => `${c.name} ${c.level}`).join(' / ');
+    } else {
+        char.displayClass = `${char.class} ${char.level}`;
+    }
+
+    // Inicializa breakdown de atributos (Cálculo real baseado em Raça)
+    const attributeBreakdown: Record<string, Record<string, number>> = {};
+    const raceBonus = char.race ? RACE_BONUSES[char.race] || {} : {};
+
+    ATTRIBUTE_KEYS.forEach(key => {
+        const total = char.attributes[key] || 10;
+        const rBonus = (raceBonus as any)[key] || 0;
+
+        // Bônus de Itens Equipados
+        let itemBonus = 0;
+        if (char.inventory?.otherEquipment) {
+            char.inventory.otherEquipment.forEach(item => {
+                if (item.isEquipped && (item as any)[`${key}Bonus`]) {
+                    itemBonus += (item as any)[`${key}Bonus`];
+                }
+            });
+        }
+
+        const base = total - rBonus - itemBonus;
+
+        attributeBreakdown[key] = {
+            "Base": base,
+        };
+
+        if (rBonus > 0) {
+            attributeBreakdown[key][`Raça (${char.race})`] = rBonus;
+        }
+
+        if (itemBonus > 0) {
+            attributeBreakdown[key]["Itens"] = itemBonus;
+        }
+    });
+    char.attributeBreakdown = attributeBreakdown;
 
     const proficiencyBonus = getProficiencyBonusFromLevel(totalLevel);
 

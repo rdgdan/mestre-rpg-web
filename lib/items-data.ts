@@ -14,11 +14,9 @@ export interface Weapon {
     magicalEffect: string;
     weight?: number;
     // Novos campos para sincronia com Biblioteca
-    diceQty?: number;
-    diceType?: string;
-    diceBonus?: number;
     isCustomDamage?: boolean;
     isProficient?: boolean;
+    sourceClass?: string;
 }
 
 export interface Currency {
@@ -42,6 +40,7 @@ export interface OtherEquipmentItem {
     magicalBonus?: number;
     magicalEffect?: string;
     weight?: number;
+    sourceClass?: string;
 }
 
 export interface Inventory {

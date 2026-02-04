@@ -37,12 +37,7 @@ const SpellSelectModalWithLevel: React.FC<SpellSelectModalWithLevelProps> = ({
   }, [isOpen]);
 
   // Filtrar magias com base em nível (truques inclusos)
-  const availableLevels = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9].filter(level => {
-    if (level === 0) return true; // Sempre mostrar truques
-    if (!characterClass) return true;
-    const maxSlots = getMaxSpellSlots(characterClass, characterLevel, level);
-    return maxSlots > 0;
-  });
+  const availableLevels = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
 
   const filtered = searchSpells(search, {
     class: filterClass,
@@ -68,7 +63,7 @@ const SpellSelectModalWithLevel: React.FC<SpellSelectModalWithLevelProps> = ({
         {/* Header */}
         <div className="sticky top-0 bg-rpg-panel border-b border-rpg-gold/10 p-4 sm:p-6">
           <h2 className="text-xl sm:text-2xl font-bold text-rpg-gold mb-4 font-cinzel">✨ Adicionar Magia ao Grimório</h2>
-          
+
           {/* Filtros */}
           <div className="space-y-3 sm:space-y-0 sm:flex gap-3">
             {/* Busca */}
@@ -80,7 +75,7 @@ const SpellSelectModalWithLevel: React.FC<SpellSelectModalWithLevelProps> = ({
               onChange={e => setSearch(e.target.value)}
               autoFocus
             />
-            
+
             {/* Filtro de Nível */}
             <select
               value={selectedLevel ?? ''}

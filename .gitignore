@@ -29,8 +29,8 @@ yarn-error.log*
 .env.local
 serviceAccountKey-android.json
 serviceAccountKey-web.json
-.env.local2
-
+.env.local1
+firestore.rules
 
 # vercel
 .vercel
