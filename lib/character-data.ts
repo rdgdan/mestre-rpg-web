@@ -93,6 +93,8 @@ export interface Character {
     hitDiceCurrent?: number;
     hitDiceMax?: number;
     attributeBreakdown?: Record<string, Record<string, number>>;
+    arcaneRecoveryUsed?: boolean;
+    authorizedMasterIds?: string[]; // UIDs de Mestres que abriram esta ficha e ganharam "acesso vitalício" de leitura
 }
 
 // --- REGRAS DO JOGO --- 

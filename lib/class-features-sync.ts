@@ -7,7 +7,8 @@ import {
     LevelProgression,
     RACE_FEATURES
 } from './class-features';
-import { db } from './firebase';
+import { db, auth } from './firebase';
+import { isMaster } from './master-utils';
 import { syncSRDToFirestore } from './srd-sync';
 
 /**
@@ -45,8 +46,12 @@ export async function syncAllGameRulesToFirestore(): Promise<void> {
         });
 
         if (batchCount > 0) {
-            await batch.commit();
-            console.log(`✅ Regras de Jogo: ${batchCount} itens sincronizados`);
+            if (isMaster(auth.currentUser?.uid)) {
+                await batch.commit();
+                console.log(`✅ Regras de Jogo: ${batchCount} itens sincronizados`);
+            } else {
+                console.warn('⚠️ Sincronização automática ignorada (usuário logado não é Mestre).');
+            }
         }
     } catch (error) {
         console.error('❌ Erro ao sincronizar regras de jogo:', error);
@@ -192,14 +197,18 @@ export async function fetchAllFeatsFromFirestore(): Promise<ClassFeature[]> {
 export async function saveGeneratedSubclassToFirestore(className: string, subclassName: string, data: Record<number, LevelProgression>): Promise<void> {
     try {
         const docRef = doc(db, 'game_rules', 'subclasses', className, subclassName);
-        await setDoc(docRef, {
-            name: subclassName,
-            className,
-            features: data,
-            isAIGenerated: true,
-            createdAt: new Date().toISOString()
-        }, { merge: true });
-        console.log(`✅ Subclasse ${subclassName} salva no repositório global.`);
+        if (isMaster(auth.currentUser?.uid)) {
+            await setDoc(docRef, {
+                name: subclassName,
+                className,
+                features: data,
+                isAIGenerated: true,
+                createdAt: new Date().toISOString()
+            }, { merge: true });
+            console.log(`✅ Subclasse ${subclassName} salva no repositório global.`);
+        } else {
+            console.warn(`⚠️ Apenas mestres podem salvar subclasses globais.`);
+        }
     } catch (error) {
         console.error(`❌ Erro ao salvar subclasse ${subclassName}:`, error);
     }

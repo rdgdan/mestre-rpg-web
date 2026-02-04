@@ -3,7 +3,7 @@
 
 import React, { useState, useMemo } from 'react';
 import { Spell } from '@/lib/spells-data';
-import { formatSpellSlotsDisplay, canUseSpell } from '@/lib/spell-usage';
+import { formatSpellSlotsDisplay, canUseSpell, requiresPreparation } from '@/lib/spell-usage';
 
 interface UseSpellModalProps {
   isOpen: boolean;
@@ -27,6 +27,8 @@ const UseSpellModal: React.FC<UseSpellModalProps> = ({
   spellType = null,
 }) => {
   const [selectedSpellId, setSelectedSpellId] = useState<string | null>(null);
+
+  const isPreparationClass = useMemo(() => requiresPreparation(characterClass), [characterClass]);
 
   const availableSpells = useMemo(() => {
     // Filtrar apenas por tipo, mostrando todas as magias aprendidas
@@ -57,8 +59,19 @@ const UseSpellModal: React.FC<UseSpellModalProps> = ({
     return normalSlots > 0 || pactSlots >= level; // Pacto cobre qualquer nível igual ou menor
   }, [selectedSpell, spellSlotsCurrent]);
 
+  // Verificar se pode conjurar (slots + preparação se necessário)
+  const canCastSelected = useMemo(() => {
+    if (!selectedSpell) return false;
+    if (selectedSpell.level === 0) return true;
+
+    // Se a classe exige preparação e a magia não está preparada, não pode conjurar
+    if (isPreparationClass && !selectedSpell.prepared) return false;
+
+    return hasSlotsForSelected;
+  }, [selectedSpell, isPreparationClass, hasSlotsForSelected]);
+
   const handleUseSpell = () => {
-    if (!selectedSpell || !hasSlotsForSelected) return;
+    if (!selectedSpell || !canCastSelected) return;
     onUseSpell(selectedSpell, 1);
     setSelectedSpellId(null);
     onClose();
@@ -93,8 +106,12 @@ const UseSpellModal: React.FC<UseSpellModalProps> = ({
               const pactSlots = spellSlotsCurrent[100] || 0;
 
               const hasNormal = normalSlots > 0;
+              // Verifica se a magia está preparada (se necessário)
+              const isPrepared = spell.level === 0 || !isPreparationClass || spell.prepared;
+
               // Verifica disponibilidade localmente para o item da lista
               const hasSlots = level === 0 || hasNormal || pactSlots >= level;
+              const canCast = isPrepared && hasSlots;
 
               const currentSlotsDisplay = level === 0
                 ? '∞'
@@ -111,7 +128,7 @@ const UseSpellModal: React.FC<UseSpellModalProps> = ({
                   className={`w-full p-3 rounded border text-left transition-all ${isSelected
                     ? 'bg-purple-600/40 border-purple-400 text-purple-100'
                     : 'bg-black/30 text-rpg-grey hover:bg-purple-900/10'
-                    } ${!hasSlots && !isSelected ? 'opacity-50 grayscale border-gray-800' : 'border-purple-500/20'}`}
+                    } ${!canCast && !isSelected ? 'opacity-50 grayscale border-gray-800' : 'border-purple-500/20'}`}
                 >
                   <div className="flex justify-between items-start mb-1">
                     <span className={`font-bold text-sm ${hasSlots ? 'text-amber-300' : 'text-gray-500'}`}>{spell.name}</span>
@@ -121,8 +138,13 @@ const UseSpellModal: React.FC<UseSpellModalProps> = ({
                   </div>
                   <div className="flex items-center gap-2 text-xs">
                     <span className="text-rpg-grey/70">{spell.school || 'Magia'}</span>
-                    <span className={hasSlots ? (spell.level === 0 ? 'text-green-400' : 'text-purple-300') : 'text-red-500 font-bold'}>
-                      {hasSlots ? `${currentSlotsDisplay} slot${currentSlotsDisplay !== '1' && currentSlotsDisplay !== '∞' ? 's' : ''}` : '0 slots'} {isPact && '(Pacto)'}
+                    <span className={canCast ? (spell.level === 0 ? 'text-green-400' : 'text-purple-300') : 'text-red-500 font-bold'}>
+                      {hasSlots ? (
+                        <>
+                          {currentSlotsDisplay} slot{currentSlotsDisplay !== '1' && currentSlotsDisplay !== '∞' ? 's' : ''} {isPact && '(Pacto)'}
+                          {!isPrepared && <span className="ml-2 text-red-400 font-bold">[NÃO PREPARADA]</span>}
+                        </>
+                      ) : 'Sem Slots'}
                     </span>
                   </div>
                   {spell.concentration && (
@@ -182,13 +204,13 @@ const UseSpellModal: React.FC<UseSpellModalProps> = ({
           </button>
           <button
             onClick={handleUseSpell}
-            disabled={!selectedSpell || !hasSlotsForSelected}
-            className={`flex-1 px-4 py-2 rounded font-bold text-sm transition-all ${selectedSpell && hasSlotsForSelected
+            disabled={!selectedSpell || !canCastSelected}
+            className={`flex-1 px-4 py-2 rounded font-bold text-sm transition-all ${selectedSpell && canCastSelected
               ? 'bg-purple-600 hover:bg-purple-700 text-white'
               : 'bg-gray-700 text-gray-400 cursor-not-allowed'
               }`}
           >
-            {hasSlotsForSelected ? 'Conjurar ✨' : 'Sem Slots 🚫'}
+            {canCastSelected ? 'Conjurar ✨' : !selectedSpell ? 'Selecionar 🔮' : !isPreparationClass || selectedSpell.prepared ? 'Sem Slots 🚫' : 'Não Preparada 🚫'}
           </button>
         </div>
 

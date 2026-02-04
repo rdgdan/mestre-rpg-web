@@ -1,46 +1,70 @@
-rules_version = '2'; service cloud.firestore { match /databases/{database}/documents {
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
 
-// 1. Coleções de Referência (Banco de Dados Central)
-// Permite que qualquer um leia (Android), mas apenas VOCÊ (Web) escreva.
-match /magias/{doc}   { allow read: if true; allow write: if request.auth.uid == 'cynl59ZjdlgUJbuzs8lkufCWI0W2'; }
-match /armas/{doc}    { allow read: if true; allow write: if request.auth.uid == 'cynl59ZjdlgUJbuzs8lkufCWI0W2'; }
-match /itens/{doc}    { allow read: if true; allow write: if request.auth.uid == 'cynl59ZjdlgUJbuzs8lkufCWI0W2'; }
-match /monsters/{doc} { allow read: if true; allow write: if request.auth.uid == 'cynl59ZjdlgUJbuzs8lkufCWI0W2'; }
-match /classes/{doc}  { allow read: if true; allow write: if request.auth.uid == 'cynl59ZjdlgUJbuzs8lkufCWI0W2'; }
-match /npcs/{doc}     { allow read: if true; allow write: if request.auth.uid == 'cynl59ZjdlgUJbuzs8lkufCWI0W2'; }
-match /escudos/{doc}  { allow read: if true; allow write: if request.auth.uid == 'cynl59ZjdlgUJbuzs8lkufCWI0W2'; }
-match /game_rules/{doc}  { allow read: if true; allow write: if request.auth.uid == 'cynl59ZjdlgUJbuzs8lkufCWI0W2'; }
-match /races/{doc}    { allow read: if true; allow write: if request.auth.uid == 'cynl59ZjdlgUJbuzs8lkufCWI0W2'; }
-// 2. Campanhas (Criadas na Web)
-match /campaigns/{campaignId} {
-  allow read: if true;
-  allow write: if request.auth != null; 
-}
+    // Funções de Ajuda
+    function isMaster() {
+      return request.auth != null && 
+        (request.auth.uid == 'cynl59ZjdlgUJbuzs8lkufCWI0W2' || 
+         request.auth.uid == 'WR0168EySccvAQXnvPoozEEpb1u2');
+    }
 
-match /game_rules/race_features/races/{doc} {
-  allow read: if true;
-  allow write: if request.auth.uid == 'cynl59ZjdlgUJbuzs8lkufCWI0W2';
-}
+    function isOwner(userId) {
+      return request.auth != null && request.auth.uid == userId;
+    }
 
-match /game_rules/feats/{doc} {
-  allow read: if true;
-  allow write: if request.auth.uid == 'cynl59ZjdlgUJbuzs8lkufCWI0W2';
+    // 1. Coleções de Referência (Biblioteca Global)
+    // Usamos curingas recursivos {doc=**} para garantir que o App Android
+    // consiga acessar caminhos profundos como game_rules/feats/list
+    match /magias/{doc=**}   { allow read: if true; allow write: if isMaster(); }
+    match /armas/{doc=**}    { allow read: if true; allow write: if isMaster(); }
+    match /itens/{doc=**}    { allow read: if true; allow write: if isMaster(); }
+    match /monsters/{doc=**} { allow read: if true; allow write: if isMaster(); }
+    match /classes/{doc=**}  { allow read: if true; allow write: if isMaster(); }
+    match /races/{doc=**}    { allow read: if true; allow write: if isMaster(); }
+    match /npcs/{doc=**}     { allow read: if true; allow write: if isMaster(); }
+    match /game_rules/{doc=**} {
+      allow read: if true;
+      allow write: if isMaster();
+    }
+
+    // 2. Campanhas, Confrontos e Batalhas
+    // Liberado para qualquer usuário logado criar e participar
+    match /campaigns/{campaignId} {
+      allow read, write: if request.auth != null; 
+    }
+    match /encounters/{encounterId} {
+      allow read, write: if request.auth != null;
+    }
+    match /sessions/{sessionId} {
+      allow read, write: if request.auth != null;
+    }
+    match /arenas_online/{arenaId} {
+      allow read, write: if request.auth != null;
+    }
+
+    // 3. Coleções Privadas / Customizadas de Jogadores
+    match /custom_spells/{userId} {
+      allow read, write: if isOwner(userId);
+    }
+    match /custom_monsters/{userId} {
+      allow read, write: if isOwner(userId);
+    }
+    match /library_metadata/{userId} {
+      allow read, write: if isOwner(userId);
+    }
+
+    // 4. Personagens (Fichas)
+    // IMPORTANTE: Permitimos leitura por qualquer usuário logado para que o Mestre (Host) 
+    // consiga visualizar a ficha do jogador durante uma batalha.
+    match /personagens/{charId=**} {
+      allow read, write: if request.auth != null;
+    }
+
+    // Regra Padrão: Bloqueia tudo o que não foi definido acima
+    match /{path=**} {
+      allow read, write: if isMaster(); // Mestres têm acesso total de fallback
+    }
+  }
 }
-match /game_rules/class_features/{doc} {
-  allow read: if true;
-  allow write: if request.auth.uid == 'cynl59ZjdlgUJbuzs8lkufCWI0W2';
-}
-match /game_rules/race_features/{doc} {
-  allow read: if true;
-  allow write: if request.auth.uid == 'cynl59ZjdlgUJbuzs8lkufCWI0W2';
-}
-// 3. Personagens (Se você decidir sincronizar no futuro)
-match /personagens/{charId} {
-  allow read, write: if request.auth != null;
-}
-// Regra Padrão: Bloqueia tudo o que não foi definido acima
-match /{path=**} {
-  allow read, write: if false;
-}
-} }
 

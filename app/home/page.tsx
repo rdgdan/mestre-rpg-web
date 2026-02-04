@@ -7,6 +7,7 @@ import { fetchNpcTraitsFromFirestore, syncNpcTraitsToFirestore } from '@/lib/npc
 import { Campaign } from '@/types/campaign';
 import { signOut, updateProfile } from 'firebase/auth';
 import { addDoc, collection, deleteDoc, doc, onSnapshot, query, updateDoc, where } from 'firebase/firestore';
+import { isMaster } from '@/lib/master-utils';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { FormEvent, useEffect, useState } from 'react';
@@ -363,7 +364,7 @@ export default function HomePage() {
                   >
                     + Nova Campanha
                   </button>
-                  {(user?.uid === 'cynl59ZjdlgUJbuzs8lkufCWI0W2' || user?.uid === 'WR0168EySccvAQXnvPoozEEpb1u2') && (
+                  {isMaster(user?.uid) && (
                     <Link
                       href="/master/database"
                       className="bg-purple-900/60 border border-purple-400/30 text-rpg-parchment px-4 sm:px-6 py-2.5 rounded-lg font-cinzel font-bold text-sm hover:border-purple-400 hover:shadow-glow-purple transition-all active:scale-95 flex items-center gap-2 shadow-lg"

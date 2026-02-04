@@ -31,7 +31,7 @@ import LevelUpModal from '@/components/ui/LevelUpModal';
 import SpellSlotsDisplay from '@/components/ui/SpellSlotsDisplay';
 import UseSpellModal from '@/components/ui/UseSpellModal';
 import { CombatNotification } from '@/components/CombatNotifications';
-import { getMaxSpellSlotsForCharacter, consumeSpellSlot, restLongSpells, restShortSpells, canUseSpell } from '@/lib/spell-usage';
+import { getMaxSpellSlotsForCharacter, consumeSpellSlot, restLongSpells, restShortSpells, canUseSpell, getMaxPreparedSpells, calculateArcaneRecoveryLimit } from '@/lib/spell-usage';
 import {
     fetchClassFeaturesFromFirestore,
     fetchRaceFeaturesFromFirestore,
@@ -50,6 +50,7 @@ import { CLASS_EFFECTS, COMMON_CONDITIONS, getCategorizedGlobalConditions, getEf
 import { getXPForNextLevel, getXPProgress, shouldLevelUp } from '@/lib/xp-progression';
 import { firestoreCache } from '@/lib/cache-service';
 import { getCasterType } from '@/lib/level-progression';
+import { isMaster } from '@/lib/master-utils';
 
 // Lodash debounce import
 function debounce<T extends (...args: any[]) => any>(fn: T, delay: number): T {
@@ -170,6 +171,7 @@ export default function CharacterSheetPage() {
     const [isLevelUpModalOpen, setLevelUpModalOpen] = useState(false);
     const [classProgression, setClassProgression] = useState<any>(null);
     const lastLevelRef = useRef<number | null>(null);
+    const [isArcaneRecoveryModalOpen, setIsArcaneRecoveryModalOpen] = useState(false);
 
     // Modals de Confirmação
     const [confirmRemoveFeatureModal, setConfirmRemoveFeatureModal] = useState<{ open: boolean; featureName: string | null }>({ open: false, featureName: null });
@@ -256,6 +258,32 @@ export default function CharacterSheetPage() {
         }
     }, 1500), [user]);
 
+    const preparedSpellsInfo = useMemo(() => {
+        if (!character?.spells || !character?.spellcasting?.ability || !character?.attributeModifiers) return null;
+
+        const ability = character.spellcasting.ability as any;
+        const mod = character.attributeModifiers[ability] || 0;
+
+        // Calcular limite para cada classe que prepara magias
+        const classes = character.classes || [{ name: character.class, level: character.level }];
+        let totalMax = 0;
+        let canPrepare = false;
+
+        classes.forEach(c => {
+            const max = getMaxPreparedSpells(c.name, c.level, mod);
+            if (max > 0) {
+                totalMax += max;
+                canPrepare = true;
+            }
+        });
+
+        if (!canPrepare) return null;
+
+        const current = character.spells.filter(s => s && (s.level || 0) > 0 && s.prepared).length;
+
+        return { current, max: totalMax };
+    }, [character]);
+
     const updateCharacter = useCallback((updater: (char: Character) => Character) => {
         if (isReadOnly) return; // Não permite edição em modo somente leitura
         setCharacter(prevChar => {
@@ -303,7 +331,7 @@ export default function CharacterSheetPage() {
                 ownerId: user.uid,
                 createdAt: new Date().toISOString(),
                 spellSlotsCurrent: character.class
-                    ? getMaxSpellSlotsForCharacter(character.class as any, character.level || 1)
+                    ? getMaxSpellSlotsForCharacter(character.class as any, character.level || 1, character.classes)
                     : {}
             };
             await setDoc(newDocRef, JSON.parse(JSON.stringify(charToSave)));
@@ -344,18 +372,33 @@ export default function CharacterSheetPage() {
     const handleRest = useCallback((restType: 'short' | 'long') => {
         if (!character) return;
 
+        const characterClassStr = character.classes?.length
+            ? character.classes.map(c => `${c.name} ${c.level}`).join(' / ')
+            : character.class;
+
         let newSlots = character.spellSlotsCurrent || {};
         if (restType === 'short') {
-            newSlots = restShortSpells(character.class as any, character.level || 1, newSlots);
+            newSlots = restShortSpells(characterClassStr as string, character.level || 1, newSlots, character.classes);
             showToast("☕ Descanso curto completado! Bruxaria e recursos especiais recuperados.", 'success');
+
+            // Lógica de Recuperação Arcana (Mago)
+            const wizard = character.classes?.find(c => c.name.toLowerCase().includes('mago'));
+            if (wizard && !character.arcaneRecoveryUsed) {
+                const limit = calculateArcaneRecoveryLimit(wizard.level);
+                // Prompt amigável
+                if (confirm(`Recuperação Arcana Disponível: Você pode recuperar até ${limit} níveis de slots de magia. Deseja usar agora?`)) {
+                    setIsArcaneRecoveryModalOpen(true);
+                }
+            }
         } else {
-            newSlots = restLongSpells(character.class as any, character.level || 1);
+            newSlots = restLongSpells(characterClassStr as string, character.level || 1, character.classes);
             showToast("🌙 Descanso longo completado! Todos os slots e PV recuperados.", 'success');
         }
 
         updateCharacter(char => ({
             ...char,
-            spellSlotsCurrent: newSlots
+            spellSlotsCurrent: newSlots,
+            arcaneRecoveryUsed: restType === 'long' ? false : char.arcaneRecoveryUsed
         }));
 
         // Notificar Mestre
@@ -409,17 +452,23 @@ export default function CharacterSheetPage() {
                         }
                     });
 
-                    if (mergedMap.size > 0) {
-                        const batch = writeBatch(db);
-                        let batchCount = 0;
-                        mergedMap.forEach((item) => {
-                            const { _docId, ...dataToSave } = item;
-                            const docRef = _docId ? doc(collectionRef, _docId) : doc(collectionRef);
-                            batch.set(docRef, dataToSave, { merge: true });
-                            batchCount++;
-                        });
-                        if (batchCount > 0) {
-                            await batch.commit();
+                    // APENAS MESTRES podem tentar sincronizar ou popular a biblioteca global
+                    if (mergedMap.size > 0 && isMaster(user?.uid)) {
+                        try {
+                            const batch = writeBatch(db);
+                            let batchCount = 0;
+                            mergedMap.forEach((item) => {
+                                const { _docId, ...dataToSave } = item;
+                                const docRef = _docId ? doc(collectionRef, _docId) : doc(collectionRef);
+                                batch.set(docRef, dataToSave, { merge: true });
+                                batchCount++;
+                            });
+                            if (batchCount > 0) {
+                                await batch.commit();
+                                console.log(`✅ Coleção ${collectionName} sincronizada pelo mestre.`);
+                            }
+                        } catch (writeErr) {
+                            console.warn(`⚠️ Erro ao sincronizar ${collectionName} (mesmo sendo mestre):`, writeErr);
                         }
                     }
 
@@ -564,9 +613,39 @@ export default function CharacterSheetPage() {
                             }
                         }
 
-                        if (isOwner || isCampaignMaster) {
-                            // Define modo somente leitura se for o mestre da campanha
-                            setIsReadOnly(isCampaignMaster && !isOwner);
+                        // Verificar se é o Host do Encontro Ativo (Arena ou Encounter)
+                        let isEncounterHost = false;
+                        if (charData.activeEncounterId) {
+                            const encounterRef = doc(db, 'encounters', charData.activeEncounterId);
+                            const encounterSnap = await getDoc(encounterRef);
+                            if (encounterSnap.exists() && encounterSnap.data().ownerId === user.uid) {
+                                isEncounterHost = true;
+                            } else {
+                                const arenaRef = doc(db, 'arenas_online', charData.activeEncounterId);
+                                const arenaSnap = await getDoc(arenaRef);
+                                if (arenaSnap.exists() && arenaSnap.data().hostId === user.uid) {
+                                    isEncounterHost = true;
+                                }
+                            }
+                        }
+
+                        const isOfficialMaster = isMaster(user.uid);
+                        const isAuthorizedMaster = charData.authorizedMasterIds?.includes(user.uid);
+
+                        if (isOwner || isCampaignMaster || isEncounterHost || isOfficialMaster || isAuthorizedMaster) {
+                            // Define modo somente leitura se NÃO for o dono
+                            setIsReadOnly(!isOwner);
+
+                            // Sincronização Vitalícia: Se é um mestre/host acessando pela primeira vez, registra o UID
+                            if ((isCampaignMaster || isEncounterHost || isOfficialMaster) && !isAuthorizedMaster && !isOwner) {
+                                try {
+                                    const updatedMasterIds = [...(charData.authorizedMasterIds || []), user.uid];
+                                    await updateDoc(docRef, { authorizedMasterIds: updatedMasterIds });
+                                    console.log("🔓 Acesso vitalício de leitura concedido ao mestre:", user.uid);
+                                } catch (err) {
+                                    console.warn("⚠️ Falha ao registrar acesso vitalício:", err);
+                                }
+                            }
 
                             const hydratedChar = hydrateCharacter(charData as Partial<Character>, docSnap.id);
 
@@ -1111,10 +1190,25 @@ export default function CharacterSheetPage() {
     };
 
     const togglePreparedSpell = (spellName: string) => {
-        updateCharacter(char => ({
-            ...char,
-            spells: char.spells.map(s => s.name === spellName ? { ...s, prepared: !s.prepared } : s)
-        }));
+        updateCharacter(char => {
+            const spell = char.spells.find(s => s.name === spellName);
+            if (!spell) return char;
+
+            // Truques (Level 0) são sempre preparados nas regras D&D, não contam pro limite
+            if (spell.level === 0) return char;
+
+            const isPreparing = !spell.prepared;
+
+            // Se estiver preparando, verificar se atingiu o limite (Apenas aviso amigável)
+            if (isPreparing && preparedSpellsInfo && preparedSpellsInfo.current >= preparedSpellsInfo.max) {
+                showToast(`Limite de magias preparadas atingido (${preparedSpellsInfo.max}).`, 'warning');
+            }
+
+            return {
+                ...char,
+                spells: char.spells.map(s => s.name === spellName ? { ...s, prepared: !s.prepared } : s)
+            };
+        });
     };
 
     // Helper para formatar valores de magia que podem ser objetos complexos (5etools)
@@ -2481,10 +2575,17 @@ export default function CharacterSheetPage() {
                     {/* ABA MAGIAS */}
                     {activeTab === 'Magias' && (
                         <div className="space-y-6 animate-fade-in">
-                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                            <div className={`grid grid-cols-1 ${preparedSpellsInfo ? 'sm:grid-cols-4' : 'sm:grid-cols-3'} gap-4`}>
                                 <StatBlock label="Atributo de Conjuração" value={character.spellcasting?.ability ? ATTRIBUTE_DISPLAY_NAMES[character.spellcasting.ability].slice(0, 3).toUpperCase() : '-'} />
                                 <StatBlock label="CD de Resistência" value={character.spellcasting?.saveDc || 0} />
                                 <StatBlock label="Bônus de Ataque" value={`+${character.spellcasting?.attackBonus || 0}`} />
+                                {preparedSpellsInfo && (
+                                    <StatBlock
+                                        label="Magias Preparadas"
+                                        value={`${preparedSpellsInfo.current}/${preparedSpellsInfo.max}`}
+                                        subLabel={preparedSpellsInfo.current > preparedSpellsInfo.max ? '⚠️ Limite Excedido' : 'Grimório'}
+                                    />
+                                )}
                             </div>
 
                             {/* Exibição de Slots de Magia */}
@@ -2957,6 +3058,20 @@ export default function CharacterSheetPage() {
                             setIsEquipmentStartModalOpen(false);
                         }}
                     />
+                    <ArcaneRecoveryModal
+                        isOpen={isArcaneRecoveryModalOpen}
+                        onClose={() => setIsArcaneRecoveryModalOpen(false)}
+                        character={character as Character}
+                        onRecover={(newSlots) => {
+                            updateCharacter(char => ({
+                                ...char,
+                                spellSlotsCurrent: newSlots,
+                                arcaneRecoveryUsed: true
+                            }));
+                            setIsArcaneRecoveryModalOpen(false);
+                            showToast("✨ Recuperação Arcana utilizada com sucesso!", "success");
+                        }}
+                    />
                 </>
 
                 {/* Modal de Adicionar XP */}
@@ -3355,6 +3470,139 @@ function TextScannerModal({ isOpen, onClose, onScan, isScanning }: TextScannerMo
 
                 <div className="p-4 bg-purple-900/5 text-center border-t border-purple-500/10">
                     <p className="text-[9px] text-purple-400/60 italic">A I.A. identificará automaticamente nomes e descrições úteis.</p>
+                </div>
+            </div>
+        </div>
+    );
+}
+
+// --- Arcane Recovery Modal ---
+interface ArcaneRecoveryModalProps {
+    isOpen: boolean;
+    onClose: () => void;
+    character: Character;
+    onRecover: (newSlots: Record<number, number>) => void;
+}
+
+function ArcaneRecoveryModal({ isOpen, onClose, character, onRecover }: ArcaneRecoveryModalProps) {
+    const wizard = character.classes?.find(c => c.name.toLowerCase().includes('mago'));
+    const limit = wizard ? Math.ceil(wizard.level / 2) : 0;
+
+    // Slots que podem ser recuperados (Nível 1-5, e que o personagem possui slots máximos)
+    const maxSlots = character.spellcasting?.slots || {};
+    const currentSlots = character.spellSlotsCurrent || {};
+
+    const [selectedRecoveries, setSelectedRecoveries] = useState<Record<number, number>>({});
+
+    const totalSelected = Object.entries(selectedRecoveries).reduce((sum, [lvl, qty]) => sum + (parseInt(lvl) * qty), 0);
+    const remainingLevels = limit - totalSelected;
+
+    if (!isOpen) return null;
+
+    const handleToggleSlot = (level: number, increment: boolean) => {
+        const currentQty = selectedRecoveries[level] || 0;
+        const maxAvailable = (maxSlots[level]?.max || 0) - (currentSlots[level] || 0);
+
+        if (increment) {
+            if (remainingLevels >= level && currentQty < maxAvailable) {
+                setSelectedRecoveries({ ...selectedRecoveries, [level]: currentQty + 1 });
+            }
+        } else {
+            if (currentQty > 0) {
+                const next = currentQty - 1;
+                if (next === 0) {
+                    const copy = { ...selectedRecoveries };
+                    delete copy[level];
+                    setSelectedRecoveries(copy);
+                } else {
+                    setSelectedRecoveries({ ...selectedRecoveries, [level]: next });
+                }
+            }
+        }
+    };
+
+    const handleConfirm = () => {
+        const newSlots = { ...currentSlots };
+        Object.entries(selectedRecoveries).forEach(([lvl, qty]) => {
+            const level = parseInt(lvl);
+            newSlots[level] = (newSlots[level] || 0) + qty;
+        });
+        onRecover(newSlots);
+    };
+
+    return (
+        <div className="fixed inset-0 z-[250] flex items-center justify-center p-4 bg-black/90 backdrop-blur-md animate-fade-in">
+            <div className="bg-rpg-panel border-2 border-rpg-gold/30 rounded-lg max-w-lg w-full overflow-hidden shadow-[0_0_50px_-10px_rgba(212,175,55,0.2)] flex flex-col">
+                <div className="p-6 border-b border-rpg-gold/20 bg-rpg-gold/5 flex justify-between items-center">
+                    <div>
+                        <h3 className="text-xl font-bold font-cinzel text-rpg-gold uppercase tracking-widest flex items-center gap-3">
+                            ✨ Recuperação Arcana
+                        </h3>
+                        <p className="text-[10px] text-rpg-grey uppercase font-black">Você recupera energia mágica estudando seu grimório</p>
+                    </div>
+                    <button onClick={onClose} className="text-rpg-grey hover:text-white transition-colors text-2xl">×</button>
+                </div>
+
+                <div className="p-6 space-y-6">
+                    <div className="bg-black/40 rounded-lg p-4 text-center border border-white/5">
+                        <span className="text-xs text-rpg-grey uppercase font-bold tracking-widest block mb-1">Níveis Restantes</span>
+                        <div className={`text-4xl font-medieval ${remainingLevels > 0 ? 'text-rpg-gold' : 'text-green-500'}`}>
+                            {remainingLevels} / {limit}
+                        </div>
+                    </div>
+
+                    <div className="space-y-3">
+                        {[1, 2, 3, 4, 5].map(lvl => {
+                            const max = maxSlots[lvl]?.max || 0;
+                            const current = currentSlots[lvl] || 0;
+                            const expended = max - current;
+                            const selected = selectedRecoveries[lvl] || 0;
+
+                            if (max === 0) return null;
+
+                            return (
+                                <div key={lvl} className="flex items-center justify-between p-3 rounded bg-white/5 border border-white/10">
+                                    <div className="flex flex-col">
+                                        <span className="text-sm font-bold text-rpg-parchment">Círculo {lvl}</span>
+                                        <span className="text-[10px] text-rpg-grey uppercase">Gastos: {expended} | Máx: {max}</span>
+                                    </div>
+                                    <div className="flex items-center gap-4">
+                                        <button
+                                            onClick={() => handleToggleSlot(lvl, false)}
+                                            disabled={selected === 0}
+                                            className={`w-8 h-8 rounded border flex items-center justify-center transition-all ${selected > 0 ? 'border-rpg-gold text-rpg-gold hover:bg-rpg-gold/10' : 'border-white/10 text-white/10'}`}
+                                        >
+                                            -
+                                        </button>
+                                        <span className="text-xl font-medieval text-rpg-gold w-4 text-center">{selected}</span>
+                                        <button
+                                            onClick={() => handleToggleSlot(lvl, true)}
+                                            disabled={remainingLevels < lvl || selected >= expended}
+                                            className={`w-8 h-8 rounded border flex items-center justify-center transition-all ${remainingLevels >= lvl && selected < expended ? 'border-rpg-gold text-rpg-gold hover:bg-rpg-gold/10' : 'border-white/10 text-white/10'}`}
+                                        >
+                                            +
+                                        </button>
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+
+                    <div className="flex justify-end gap-3 pt-4 border-t border-white/10">
+                        <button
+                            onClick={onClose}
+                            className="px-6 py-2 text-rpg-grey hover:text-white transition-colors uppercase text-xs font-bold tracking-widest"
+                        >
+                            Cancelar
+                        </button>
+                        <button
+                            disabled={totalSelected === 0}
+                            onClick={handleConfirm}
+                            className={`px-8 py-2 rounded bg-rpg-gold text-rpg-dark font-bold uppercase text-xs tracking-widest transition-all ${totalSelected === 0 ? 'opacity-50 cursor-not-allowed' : 'hover:scale-105 shadow-glow-gold/20'}`}
+                        >
+                            Recuperar Energia
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>

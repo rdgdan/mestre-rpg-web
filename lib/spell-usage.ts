@@ -35,27 +35,30 @@ const WARLOCK_SLOTS_TABLE: Record<number, number> = {
 // Obter slots máximos para uma classe/nível (Suporte a Multiclasse)
 export function getMaxSpellSlotsForCharacter(
   characterClass: string,
-  characterLevel: number
+  characterLevel: number,
+  classesConfig?: { name: string; level: number; subclass?: string }[]
 ): Record<number, number> {
   const result: Record<number, number> = { 0: Infinity };
 
   // Parsear classes e níveis
-  // Formatos esperados: "Mago", "Mago 5", "Mago 2 / Clérigo 3"
-  const classes: { name: string; level: number }[] = [];
+  let classes: { name: string; level: number; subclass?: string }[] = [];
 
-  if (characterClass.includes('/')) {
-    characterClass.split('/').forEach(part => {
-      const match = part.trim().match(/^(.+?)\s+(\d+)$/);
-      if (match) {
-        classes.push({ name: match[1].toLowerCase(), level: parseInt(match[2]) });
-      } else {
-        // Fallback para string sem número (ex: erro de migração), assume nível 1
-        classes.push({ name: part.trim().toLowerCase(), level: 1 });
-      }
-    });
+  if (classesConfig && classesConfig.length > 0) {
+    classes = classesConfig.map(c => ({ ...c, name: c.name.toLowerCase(), subclass: c.subclass?.toLowerCase() }));
   } else {
-    // Single class
-    classes.push({ name: characterClass.toLowerCase(), level: characterLevel });
+    // Modo Legado / Fallback
+    if (characterClass.includes('/')) {
+      characterClass.split('/').forEach(part => {
+        const match = part.trim().match(/^(.+?)\s+(\d+)$/);
+        if (match) {
+          classes.push({ name: match[1].toLowerCase(), level: parseInt(match[2]) });
+        } else {
+          classes.push({ name: part.trim().toLowerCase(), level: 1 });
+        }
+      });
+    } else {
+      classes.push({ name: characterClass.toLowerCase(), level: characterLevel });
+    }
   }
 
   // 1. Calcular Slots de Pacto (Bruxo)
@@ -76,10 +79,17 @@ export function getMaxSpellSlotsForCharacter(
       casterLevel += c.level;
     } else if (['paladino', 'ranger', 'patrulheiro'].some(name => c.name.includes(name))) {
       casterLevel += Math.floor(c.level / 2);
-    } else if (['guerreiro', 'ladino'].some(name => c.name.includes(name))) {
-      // Subclasses específicas (Cavaleiro Arcano, Trapaceiro Arcano) dariam 1/3, 
-      // mas simplificaremos para 0 aqui pois não temos a subclasse neste contexto.
-      // Adicionar lógica futura se necessário.
+    } else if (c.name.includes('artífice') || c.name.includes('artificer')) {
+      // Artífice é único: meio-conjurador que arredonda pra CIMA (Tasha's Cauldron)
+      casterLevel += Math.ceil(c.level / 2);
+    } else if (['guerreiro', 'ladino', 'monge', 'barbaro'].some(name => c.name.includes(name))) {
+      // Subclasses específicas 1/3 Caster
+      if (c.subclass && (
+        c.subclass.includes('cavaleiro arcano') || c.subclass.includes('eldritch knight') ||
+        c.subclass.includes('trapaceiro arcano') || c.subclass.includes('arcane trickster')
+      )) {
+        casterLevel += Math.floor(c.level / 3);
+      }
     }
   });
 
@@ -126,24 +136,31 @@ export function consumeSpellSlot(
 // Recuperar slots com descanso longo (full rest)
 export function restLongSpells(
   characterClass: string,
-  characterLevel: number
+  characterLevel: number,
+  classesConfig?: { name: string; level: number; subclass?: string }[]
 ): Record<number, number> {
-  return getMaxSpellSlotsForCharacter(characterClass, characterLevel);
+  return getMaxSpellSlotsForCharacter(characterClass, characterLevel, classesConfig);
 }
 
 // Recuperar alguns slots com descanso curto (apenas algumas classes)
 export function restShortSpells(
   characterClass: string,
   characterLevel: number,
-  currentSlots: Record<number, number>
+  currentSlots: Record<number, number>,
+  classesConfig?: { name: string; level: number; subclass?: string }[]
 ): Record<number, number> {
-  // Bruxo recupera Pact Magic (todos os slots) em descanso curto
-  if (characterClass.toLowerCase() === 'bruxo') {
-    return restLongSpells(characterClass, characterLevel);
+  // Calcular quais seriam os slots máximos para essa classe/nível
+  const maxSlots = getMaxSpellSlotsForCharacter(characterClass, characterLevel, classesConfig);
+  const updated = { ...currentSlots };
+
+  // Se o personagem tem slots de Pacto (key 100), eles recuperam no descanso curto
+  if (maxSlots[100] !== undefined && maxSlots[100] > 0) {
+    updated[100] = maxSlots[100];
   }
 
-  // Outras classes não recuperam slots em descanso curto
-  return currentSlots;
+  // Futuro: Implementar Arcane Recovery para Magos aqui
+
+  return updated;
 }
 
 // Calcular quantos slots uma magia precisa
@@ -197,4 +214,45 @@ export function generateRestNotification(characterName: string, restType: 'short
     return `🌙 ${characterName} completou um descanso longo — Slots recuperados`;
   }
   return `⏰ ${characterName} completou um descanso curto`;
+}
+
+// Calcular limite de magias preparadas
+export function getMaxPreparedSpells(
+  characterClass: string,
+  characterLevel: number,
+  attributeMod: number
+): number {
+  // Regra geral: Nível + Modificador do Atributo de Conjuração
+  // Mago (Int), Clérigo (Wis), Druida (Wis): Level + Mod
+  // Paladino (Cha): (Level / 2) + Mod
+
+  const className = characterClass.toLowerCase();
+
+  if (className.includes('paladino')) {
+    return Math.max(1, Math.floor(characterLevel / 2) + attributeMod);
+  }
+
+  // Artífice também prepara: (Level / 2) + Mod (arredondado pra baixo no preparo, diferente dos slots)
+  if (className.includes('artífice') || className.includes('artificer')) {
+    return Math.max(1, Math.floor(characterLevel / 2) + attributeMod);
+  }
+
+  // Magos, Clérigos, Druidas
+  if (['mago', 'clérigo', 'druida'].some(c => className.includes(c))) {
+    return Math.max(1, characterLevel + attributeMod);
+  }
+
+  return 0; // Classes que não preparam (Bardo, Bruxo, Feiticeiro, Ranger, etc)
+}
+
+// Verificar se a classe exige preparação de magias
+export function requiresPreparation(characterClass: string): boolean {
+  const className = characterClass.toLowerCase();
+  return ['mago', 'clérigo', 'druida', 'paladino', 'artífice', 'artificer'].some(c => className.includes(c));
+}
+
+// Calcular limite da Recuperação Arcana (Mago)
+export function calculateArcaneRecoveryLimit(wizardLevel: number): number {
+  // Limite de níveis de magia recuperados = metade do nível de mago (arredondado para cima)
+  return Math.ceil(wizardLevel / 2);
 }

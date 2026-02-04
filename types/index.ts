@@ -14,7 +14,7 @@ export interface Character {
   background: string;
   alignment: string;
   experience: number;
-  
+
   // Atributos
   attributes: {
     strength: number;
@@ -118,6 +118,7 @@ export interface Spell {
   concentration?: boolean;
   source?: string;
   damage?: string;
+  prepared?: boolean;
 }
 
 // ============ FEATURE/TALENTO ============

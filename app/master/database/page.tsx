@@ -8,6 +8,7 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { firestoreCache } from '@/lib/cache-service';
 import { DEFAULT_CLASSES, dndRaces } from '@/lib/dnd-data';
+import { isMaster } from '@/lib/master-utils';
 
 type CollectionType = 'magias' | 'armas' | 'itens' | 'armaduras' | 'escudos' | 'monsters' | 'npcs' | 'classes' | 'races';
 
@@ -64,7 +65,7 @@ export default function DatabaseManagementPage() {
 
     useEffect(() => {
         if (!isLoading) {
-            if (!user || user.uid !== 'cynl59ZjdlgUJbuzs8lkufCWI0W2') {
+            if (!user || !isMaster(user.uid)) {
                 router.push('/home');
             }
         }
@@ -304,20 +305,59 @@ export default function DatabaseManagementPage() {
                         <div className="col-span-full py-20 text-center animate-pulse text-rpg-grey font-medieval text-xl">Consultando os pergaminhos antigos...</div>
                     ) : filteredItems.length > 0 ? (
                         filteredItems.map(item => {
-                            let faltando = !item.name && !item.title;
+                            const issues = getValidationIssues(item, activeTab);
+                            const hasIssues = issues.length > 0;
+
                             return (
-                                <div key={item.id} className={`bg-rpg-panel border p-5 rounded-2xl transition-all group relative overflow-hidden ${faltando ? 'border-red-600 shadow-glow-red' : 'border-rpg-gold/10 hover:border-rpg-gold/40'}`}>
-                                    <div className="absolute top-0 right-0 p-2 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <div key={item.id} className={`bg-rpg-panel border p-5 rounded-2xl transition-all group relative overflow-hidden flex flex-col ${hasIssues ? 'border-red-600/50 shadow-[0_0_15px_rgba(220,38,38,0.1)]' : 'border-rpg-gold/10 hover:border-rpg-gold/40'}`}>
+                                    <div className="absolute top-0 right-0 p-2 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity z-10">
                                         <button onClick={() => openModal(item)} className="p-2 bg-blue-600/20 hover:bg-blue-600/40 rounded-lg text-blue-400">✏️</button>
                                         <button onClick={() => handleDelete(item.id, item.name || item.title)} className="p-2 bg-red-600/20 hover:bg-red-600/40 rounded-lg text-red-400">🗑️</button>
                                     </div>
+
+                                    {hasIssues && (
+                                        <div className="mb-3 flex flex-wrap gap-1">
+                                            {issues.map((issue, idx) => (
+                                                <span key={idx} className="bg-red-600/20 text-red-400 text-[9px] px-2 py-0.5 rounded border border-red-600/30 font-bold uppercase tracking-tighter">
+                                                    ⚠️ {issue}
+                                                </span>
+                                            ))}
+                                        </div>
+                                    )}
+
+                                    {activeTab === 'magias' && (!item.classes || item.classes.length === 0) && (
+                                        <div className="mb-3">
+                                            <span className="bg-blue-600/20 text-blue-400 text-[9px] px-2 py-0.5 rounded border border-blue-600/30 font-bold uppercase tracking-tighter">
+                                                🌐 Universal
+                                            </span>
+                                        </div>
+                                    )}
+
                                     <h3 className="text-xl font-bold font-cinzel text-rpg-gold mb-2">{sanitizeField(item.name || item.title)}</h3>
-                                    <p className="text-sm font-medieval line-clamp-3 text-rpg-parchment/70">{typeof item.description === 'string' ? item.description : 'Sem descrição.'}</p>
+                                    <p className="text-sm font-medieval line-clamp-3 text-rpg-parchment/70 flex-grow">{typeof item.description === 'string' && item.description.trim() ? item.description : <span className="text-red-500/50 italic">Sem descrição disponível.</span>}</p>
+
                                     {['monsters', 'npcs'].includes(activeTab) && (
-                                        <div className="mt-3 flex flex-wrap gap-3 text-xs font-bold text-rpg-grey">
-                                            <span>❤️ {sanitizeField(item.hp) || '-'} HP</span>
-                                            <span>🛡️ {sanitizeField(item.ac) || '-'} CA</span>
-                                            <span>🎲 CR {sanitizeField(item.challenge) || '-'}</span>
+                                        <div className="mt-3 flex flex-wrap gap-3 text-xs font-bold text-rpg-grey pt-3 border-t border-white/5">
+                                            <span className={!item.hp ? 'text-red-500/70' : ''}>❤️ {sanitizeField(item.hp) || '-'} HP</span>
+                                            <span className={!item.ac ? 'text-red-500/70' : ''}>🛡️ {sanitizeField(item.ac) || '-'} CA</span>
+                                            <span className={!item.challenge ? 'text-red-500/70' : ''}>🎲 CR {sanitizeField(item.challenge) || '-'}</span>
+                                        </div>
+                                    )}
+
+                                    {['armas', 'armaduras', 'escudos', 'itens'].includes(activeTab) && (
+                                        <div className="mt-3 flex flex-row flex-wrap gap-4 text-xs font-bold text-rpg-grey pt-3 border-t border-white/5">
+                                            {activeTab === 'armas' && (
+                                                <span className={!item.damage ? 'text-red-500/70' : 'text-rpg-gold-light'}>⚔️ {item.damage || '-'}</span>
+                                            )}
+                                            {(activeTab === 'armaduras' || activeTab === 'escudos') && (
+                                                <span className={!item.ac ? 'text-red-500/70' : 'text-blue-400'}>🛡️ {item.ac || '-'} CA</span>
+                                            )}
+                                            <span className={(!item.price && item.price !== 0 && !item.noPrice) ? 'text-red-500/70' : 'text-yellow-600'}>
+                                                💰 {item.noPrice ? 'Grátis' : (item.price !== undefined ? `${item.price} po` : '-')}
+                                            </span>
+                                            <span className={(!item.weight && item.weight !== 0 && !item.noWeight) ? 'text-red-500/70' : 'text-emerald-600'}>
+                                                ⚖️ {item.noWeight ? 'Sem peso' : (item.weight !== undefined ? `${item.weight} kg` : '-')}
+                                            </span>
                                         </div>
                                     )}
                                 </div>
@@ -350,21 +390,65 @@ export default function DatabaseManagementPage() {
                                         <InputField label="Nível Mínimo" type="number" value={formData.requirements?.level} onChange={(v: any) => updateNestedField('requirements', 'level', parseInt(v))} />
                                     </div>
                                     <div className="md:col-span-9">
-                                        <MultiSelectField
-                                            label="Classes Permitidas"
-                                            options={dbClasses}
-                                            selected={registrationType === 'magias' ? (formData.classes || []) : (formData.requirements?.classes || [])}
-                                            onChange={(newS: string[]) => registrationType === 'magias' ? updateField('classes', newS) : updateNestedField('requirements', 'classes', newS)}
-                                        />
+                                        <div className="flex items-center gap-2 mb-3 bg-black/40 p-2 rounded-lg border border-white/10">
+                                            <input
+                                                type="checkbox"
+                                                id="universalClass"
+                                                checked={registrationType === 'magias' ? (!formData.classes || formData.classes.length === 0) : (!formData.requirements?.classes || formData.requirements.classes.length === 0)}
+                                                onChange={(e) => {
+                                                    if (e.target.checked) {
+                                                        if (registrationType === 'magias') updateField('classes', []);
+                                                        else updateNestedField('requirements', 'classes', []);
+                                                    } else {
+                                                        // Ao desmarcar, se estiver vazio, podemos avisar ou apenas deixar vazio para forçar seleção
+                                                        if (registrationType === 'magias') updateField('classes', ['Mago']);
+                                                        else updateNestedField('requirements', 'classes', ['Mago']);
+                                                    }
+                                                }}
+                                                className="w-4 h-4 rounded border-rpg-gold text-rpg-gold focus:ring-rpg-gold bg-rpg-dark"
+                                            />
+                                            <label htmlFor="universalClass" className="text-xs font-cinzel text-rpg-gold uppercase tracking-widest cursor-pointer">🌐 Universal (Todas as Classes)</label>
+                                        </div>
+
+                                        {((registrationType === 'magias' && (formData.classes?.length > 0)) || (registrationType !== 'magias' && (formData.requirements?.classes?.length > 0))) && (
+                                            <MultiSelectField
+                                                label="Classes Permitidas"
+                                                options={dbClasses}
+                                                selected={registrationType === 'magias' ? (formData.classes || []) : (formData.requirements?.classes || [])}
+                                                onChange={(newS: string[]) => registrationType === 'magias' ? updateField('classes', newS) : updateNestedField('requirements', 'classes', newS)}
+                                            />
+                                        )}
                                     </div>
                                 </div>
-                                <MultiSelectField
-                                    label="Raças Permitidas"
-                                    options={dbRaces}
-                                    selected={formData.requirements?.races || []}
-                                    onChange={(newS: string[]) => updateNestedField('requirements', 'races', newS)}
-                                    placeholder="Vazio para todas"
-                                />
+
+                                <div className="space-y-3">
+                                    <div className="flex items-center gap-2 bg-black/40 p-2 rounded-lg border border-white/10">
+                                        <input
+                                            type="checkbox"
+                                            id="universalRace"
+                                            checked={!formData.requirements?.races || formData.requirements.races.length === 0}
+                                            onChange={(e) => {
+                                                if (e.target.checked) {
+                                                    updateNestedField('requirements', 'races', []);
+                                                } else {
+                                                    updateNestedField('requirements', 'races', ['Humano']);
+                                                }
+                                            }}
+                                            className="w-4 h-4 rounded border-rpg-gold text-rpg-gold focus:ring-rpg-gold bg-rpg-dark"
+                                        />
+                                        <label htmlFor="universalRace" className="text-xs font-cinzel text-rpg-gold uppercase tracking-widest cursor-pointer">🌍 Universal (Todas as Raças)</label>
+                                    </div>
+
+                                    {(formData.requirements?.races?.length > 0) && (
+                                        <MultiSelectField
+                                            label="Raças Permitidas"
+                                            options={dbRaces}
+                                            selected={formData.requirements?.races || []}
+                                            onChange={(newS: string[]) => updateNestedField('requirements', 'races', newS)}
+                                            placeholder="Vazio para todas"
+                                        />
+                                    )}
+                                </div>
                             </div>
                         )}
 
@@ -461,8 +545,8 @@ function MultiSelectField({ label, options, selected, onChange, placeholder }: a
                         type="button"
                         onClick={() => toggle(o)}
                         className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all border shadow-sm ${isS(o)
-                                ? 'bg-rpg-gold text-rpg-dark border-rpg-gold shadow-glow-gold'
-                                : 'bg-rpg-panel/50 text-rpg-parchment/60 border-white/5 hover:border-rpg-gold/50 hover:text-rpg-parchment'
+                            ? 'bg-rpg-gold text-rpg-dark border-rpg-gold shadow-glow-gold'
+                            : 'bg-rpg-panel/50 text-rpg-parchment/60 border-white/5 hover:border-rpg-gold/50 hover:text-rpg-parchment'
                             }`}
                     >
                         {o}
@@ -478,4 +562,68 @@ function sanitizeField(val: any): string {
     if (typeof val === 'string' || typeof val === 'number') return String(val);
     if (Array.isArray(val)) return val.join(', ');
     return String(val);
+}
+
+function getValidationIssues(item: any, collection: CollectionType): string[] {
+    const issues: string[] = [];
+
+    // NPCs são ignorados por pedido do usuário
+    if (collection === 'npcs') return [];
+
+    // 1. Validação Geral
+    if (!item.name && !item.title) issues.push("Nome ausente");
+
+    const desc = (item.description || '').trim();
+    const name = (item.name || item.title || '').trim();
+
+    if (!desc || desc === '' || desc === 'Sem descrição.') {
+        issues.push("Sem descrição");
+    } else {
+        // Detecção de Descrição Genérica
+        const genericPatterns = [
+            'padrão do sistema',
+            'descrição de ' + name.toLowerCase(),
+            'sem descrição disponível',
+            'clique aqui para editar'
+        ];
+
+        const isGeneric = genericPatterns.some(pattern => desc.toLowerCase().includes(pattern));
+
+        if (isGeneric) {
+            issues.push("Descrição genérica");
+        } else if (desc.length < 50) {
+            issues.push("Descrição curta");
+        }
+    }
+
+    // 2. Validação por Categoria
+    if (collection === 'magias') {
+        if (!item.level && item.level !== 0) issues.push("Sem círculo");
+        if (!item.school) issues.push("Sem escola");
+        // Não geramos alerta para classes, pois o sistema trata vazio como Universal
+        // O badge no card indica se é Universal ou Restrita
+        if (!item.castingTime) issues.push("Sem tempo conj.");
+        if (!item.range) issues.push("Sem alcance");
+    }
+
+    if (['armas', 'armaduras', 'escudos', 'itens'].includes(collection)) {
+        if (!item.noPrice && (!item.price && item.price !== 0)) issues.push("Sem preço");
+        if (!item.noWeight && (!item.weight && item.weight !== 0)) issues.push("Sem peso");
+
+        if (collection === 'armas') {
+            if (!item.damage) issues.push("Sem dano");
+        }
+        if (collection === 'armaduras' || collection === 'escudos') {
+            if (!item.ac && item.ac !== 0) issues.push("Sem CA");
+        }
+    }
+
+    if (collection === 'monsters') {
+        if (!item.hp) issues.push("Sem HP");
+        if (!item.ac) issues.push("Sem CA");
+        if (!item.challenge) issues.push("Sem CR");
+        if (!item.attributes || Object.values(item.attributes).some(v => !v)) issues.push("Atrib. incompletos");
+    }
+
+    return issues;
 }
