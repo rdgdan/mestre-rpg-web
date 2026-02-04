@@ -118,7 +118,13 @@ export default function CreateCharacterPage() {
     const handleEquipmentConfirm = (items: any[]) => {
         setCharacter(prev => {
             if (!prev) return null;
-            const newInv = { ...prev.inventory };
+            // Limpa o inventário anterior para evitar duplicações se o usuário voltar passos
+            const newInv = {
+                ...prev.inventory,
+                weapons: [],
+                otherEquipment: []
+            };
+
             items.forEach(item => {
                 if (item.type === 'WEAPON') newInv.weapons.push(item);
                 else newInv.otherEquipment.push(item);

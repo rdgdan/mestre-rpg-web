@@ -29,24 +29,36 @@ const UseSpellModal: React.FC<UseSpellModalProps> = ({
   const [selectedSpellId, setSelectedSpellId] = useState<string | null>(null);
 
   const availableSpells = useMemo(() => {
-    let filtered = spells.filter(s => canUseSpell(spellSlotsCurrent, s));
-    
-    // Aplicar filtro por tipo
+    // Filtrar apenas por tipo, mostrando todas as magias aprendidas
+    let filtered = spells;
+
     if (spellType === 'cantrip') {
       filtered = filtered.filter(s => s.level === 0 || s.level === undefined);
     } else if (spellType === 'spell') {
       filtered = filtered.filter(s => (s.level || 0) > 0);
     }
-    
+
     return filtered;
-  }, [spells, spellSlotsCurrent, spellType]);
+  }, [spells, spellType]);
 
   const selectedSpell = useMemo(() => {
     return availableSpells.find(s => s.id === selectedSpellId);
   }, [availableSpells, selectedSpellId]);
 
+  // Verificar se tem slots para a magia selecionada
+  const hasSlotsForSelected = useMemo(() => {
+    if (!selectedSpell) return false;
+    if (selectedSpell.level === 0) return true;
+
+    const level = selectedSpell.level || 1;
+    const normalSlots = spellSlotsCurrent[level] || 0;
+    const pactSlots = spellSlotsCurrent[100] || 0;
+
+    return normalSlots > 0 || pactSlots >= level; // Pacto cobre qualquer nível igual ou menor
+  }, [selectedSpell, spellSlotsCurrent]);
+
   const handleUseSpell = () => {
-    if (!selectedSpell) return;
+    if (!selectedSpell || !hasSlotsForSelected) return;
     onUseSpell(selectedSpell, 1);
     setSelectedSpellId(null);
     onClose();
@@ -69,35 +81,48 @@ const UseSpellModal: React.FC<UseSpellModalProps> = ({
         <div className="p-4 space-y-2 max-h-[60vh] overflow-y-auto custom-scrollbar pr-2">
           {availableSpells.length === 0 ? (
             <div className="text-center py-8 text-rpg-grey/50">
-              <p className="text-sm">❌ Nenhuma magia disponível</p>
-              <p className="text-xs mt-2">Todos os seus slots estão esgotados!</p>
+              <p className="text-sm">❌ Nenhuma magia aprendida</p>
+              <p className="text-xs mt-2">Você ainda não aprendeu magias deste tipo!</p>
             </div>
           ) : (
             availableSpells.map((spell) => {
               const isSelected = selectedSpellId === spell.id;
-              const maxSlots = spell.level === 0 ? Infinity : (spellSlotsCurrent[spell.level] || 0);
-              const currentSlots = spell.level === 0 ? '∞' : spellSlotsCurrent[spell.level]?.toString() || '0';
+
+              const level = spell.level || 1;
+              const normalSlots = spellSlotsCurrent[level] || 0;
+              const pactSlots = spellSlotsCurrent[100] || 0;
+
+              const hasNormal = normalSlots > 0;
+              // Verifica disponibilidade localmente para o item da lista
+              const hasSlots = level === 0 || hasNormal || pactSlots >= level;
+
+              const currentSlotsDisplay = level === 0
+                ? '∞'
+                : hasNormal
+                  ? normalSlots.toString()
+                  : pactSlots.toString();
+
+              const isPact = !hasNormal && pactSlots > 0;
 
               return (
                 <button
                   key={spell.id}
                   onClick={() => setSelectedSpellId(spell.id)}
-                  className={`w-full p-3 rounded border text-left transition-all ${
-                    isSelected
-                      ? 'bg-purple-600/40 border-purple-400 text-purple-100'
-                      : 'bg-black/30 border-purple-500/20 text-rpg-grey hover:border-purple-500/40 hover:bg-purple-900/20'
-                  }`}
+                  className={`w-full p-3 rounded border text-left transition-all ${isSelected
+                    ? 'bg-purple-600/40 border-purple-400 text-purple-100'
+                    : 'bg-black/30 text-rpg-grey hover:bg-purple-900/10'
+                    } ${!hasSlots && !isSelected ? 'opacity-50 grayscale border-gray-800' : 'border-purple-500/20'}`}
                 >
                   <div className="flex justify-between items-start mb-1">
-                    <span className="font-bold text-sm text-amber-300">{spell.name}</span>
+                    <span className={`font-bold text-sm ${hasSlots ? 'text-amber-300' : 'text-gray-500'}`}>{spell.name}</span>
                     <span className="text-[10px] bg-purple-900/60 px-2 py-0.5 rounded">
                       Nível {spell.level}
                     </span>
                   </div>
                   <div className="flex items-center gap-2 text-xs">
                     <span className="text-rpg-grey/70">{spell.school || 'Magia'}</span>
-                    <span className={spell.level === 0 ? 'text-green-400' : 'text-purple-300'}>
-                      {currentSlots} slot{currentSlots !== '1' && currentSlots !== '∞' ? 's' : ''}
+                    <span className={hasSlots ? (spell.level === 0 ? 'text-green-400' : 'text-purple-300') : 'text-red-500 font-bold'}>
+                      {hasSlots ? `${currentSlotsDisplay} slot${currentSlotsDisplay !== '1' && currentSlotsDisplay !== '∞' ? 's' : ''}` : '0 slots'} {isPact && '(Pacto)'}
                     </span>
                   </div>
                   {spell.concentration && (
@@ -114,20 +139,37 @@ const UseSpellModal: React.FC<UseSpellModalProps> = ({
             <h3 className="text-sm font-bold text-amber-300 mb-2">Descrição</h3>
             <p className="text-xs text-rpg-grey leading-relaxed mb-4">{selectedSpell.description}</p>
 
-            <div className="grid grid-cols-2 gap-2 text-xs mb-4">
-              {selectedSpell.castingTime && (
-                <div>
-                  <span className="text-rpg-grey/70">Tempo:</span>
-                  <p className="text-purple-300 font-bold">{selectedSpell.castingTime}</p>
+            {/* Função Helper para Renderizar Propriedades sem Quebrar */}
+            {(() => {
+              const renderSpellProperty = (prop: any) => {
+                if (!prop) return '-';
+                if (typeof prop === 'string') return prop;
+                if (typeof prop === 'object') {
+                  // Tenta extrair valores comuns ou retorna JSON stringificado seguro
+                  return prop.distance
+                    ? `${prop.distance} ${prop.type || ''}`
+                    : (prop.type || JSON.stringify(prop));
+                }
+                return String(prop);
+              };
+
+              return (
+                <div className="grid grid-cols-2 gap-2 text-xs mb-4">
+                  {selectedSpell.castingTime && (
+                    <div>
+                      <span className="text-rpg-grey/70">Tempo:</span>
+                      <p className="text-purple-300 font-bold">{renderSpellProperty(selectedSpell.castingTime)}</p>
+                    </div>
+                  )}
+                  {selectedSpell.range && (
+                    <div>
+                      <span className="text-rpg-grey/70">Alcance:</span>
+                      <p className="text-purple-300 font-bold">{renderSpellProperty(selectedSpell.range)}</p>
+                    </div>
+                  )}
                 </div>
-              )}
-              {selectedSpell.range && (
-                <div>
-                  <span className="text-rpg-grey/70">Alcance:</span>
-                  <p className="text-purple-300 font-bold">{selectedSpell.range}</p>
-                </div>
-              )}
-            </div>
+              );
+            })()}
           </div>
         )}
 
@@ -140,16 +182,16 @@ const UseSpellModal: React.FC<UseSpellModalProps> = ({
           </button>
           <button
             onClick={handleUseSpell}
-            disabled={!selectedSpell}
-            className={`flex-1 px-4 py-2 rounded font-bold text-sm transition-all ${
-              selectedSpell
-                ? 'bg-purple-600 hover:bg-purple-700 text-white'
-                : 'bg-gray-700 text-gray-400 cursor-not-allowed'
-            }`}
+            disabled={!selectedSpell || !hasSlotsForSelected}
+            className={`flex-1 px-4 py-2 rounded font-bold text-sm transition-all ${selectedSpell && hasSlotsForSelected
+              ? 'bg-purple-600 hover:bg-purple-700 text-white'
+              : 'bg-gray-700 text-gray-400 cursor-not-allowed'
+              }`}
           >
-            Conjurar ✨
+            {hasSlotsForSelected ? 'Conjurar ✨' : 'Sem Slots 🚫'}
           </button>
         </div>
+
       </div>
     </div>
   );

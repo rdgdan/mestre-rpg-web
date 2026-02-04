@@ -47,13 +47,12 @@ const SpellSlotsDisplay: React.FC<SpellSlotsDisplayProps> = ({
             return (
               <span
                 key={level}
-                className={`text-[10px] px-2 py-1 rounded font-bold ${
-                  level === 0
-                    ? 'bg-green-900/60 text-green-200'
-                    : current > 0
-                      ? 'bg-purple-900/60 text-purple-200'
-                      : 'bg-gray-800 text-gray-500'
-                }`}
+                className={`text-[10px] px-2 py-1 rounded font-bold ${level === 0
+                  ? 'bg-green-900/60 text-green-200'
+                  : current > 0
+                    ? 'bg-purple-900/60 text-purple-200'
+                    : 'bg-gray-800 text-gray-500'
+                  }`}
               >
                 {level === 0 ? '🔮 Truques: ∞' : `Nível ${level}: ${display}`}
               </span>
@@ -64,10 +63,22 @@ const SpellSlotsDisplay: React.FC<SpellSlotsDisplayProps> = ({
     );
   }
 
+  // Calcular slots efetivos (combinando atuais com máximos)
+  const effectiveSlots = React.useMemo(() => {
+    const effective: Record<number, number> = { 0: Infinity };
+    Object.keys(maxSlots).forEach(k => {
+      const lvl = Number(k);
+      effective[lvl] = spellSlotsCurrent[lvl] ?? maxSlots[lvl];
+    });
+    return effective;
+  }, [spellSlotsCurrent, maxSlots]);
+
   // Versão completa: mostra com botão de usar
   return (
     <>
       <div className="bg-purple-900/20 border border-purple-500/30 rounded-lg p-4">
+        {/* ... (código existente da view) ... */}
+        {/* Manter apenas o bloco de view, removendo códigos antigos se necessário, mas o foco é o return do componente */}
         <div className="flex justify-between items-center mb-4 gap-2 flex-wrap">
           <h3 className="text-sm font-bold text-purple-300 uppercase tracking-widest">Slots de Magia</h3>
           <div className="flex gap-3">
@@ -97,31 +108,37 @@ const SpellSlotsDisplay: React.FC<SpellSlotsDisplayProps> = ({
             const current = spellSlotsCurrent[level] ?? maxSlots[level];
             const max = maxSlots[level];
             const display = formatSpellSlotsDisplay(level, current, max);
+            const isPact = level === 100;
             const isEmpty = level !== 0 && current === 0;
 
             return (
               <div
                 key={level}
-                className={`p-3 rounded border text-center transition-all ${
-                  level === 0
-                    ? 'bg-green-900/30 border-green-500/40'
+                className={`p-3 rounded border text-center transition-all ${level === 0
+                  ? 'bg-green-900/30 border-green-500/40'
+                  : isPact
+                    ? 'bg-purple-900/50 border-purple-400/60 shadow-lg shadow-purple-900/20'
                     : isEmpty
                       ? 'bg-gray-900/30 border-gray-500/40'
                       : 'bg-purple-900/30 border-purple-500/40'
-                }`}
+                  }`}
               >
-                <p className="text-xs text-rpg-grey/70 mb-1">
-                  {level === 0 ? 'Truques' : `Nível ${level}`}
+                <p className={`text-xs mb-1 uppercase tracking-wider font-bold ${isPact ? 'text-purple-200' : 'text-rpg-grey/70'}`}>
+                  {level === 0 ? 'Truques' : isPact ? 'Pacto' : `Nível ${level}`}
                 </p>
-                <p className={`text-lg font-bold ${
-                  level === 0
-                    ? 'text-green-300'
+                <p className={`text-lg font-bold ${level === 0
+                  ? 'text-green-300'
+                  : isPact
+                    ? 'text-purple-100 text-xl'
                     : isEmpty
                       ? 'text-gray-400'
                       : 'text-purple-300'
-                }`}>
+                  }`}>
                   {display}
                 </p>
+                {isPact && (
+                  <span className="text-[9px] text-purple-300/60 block -mt-1 capitalize">Recupera no descanso curto</span>
+                )}
               </div>
             );
           })}
@@ -140,7 +157,7 @@ const SpellSlotsDisplay: React.FC<SpellSlotsDisplayProps> = ({
           setShowModal(false);
         }}
         spells={spells}
-        spellSlotsCurrent={spellSlotsCurrent}
+        spellSlotsCurrent={effectiveSlots}
         characterClass={characterClass}
         spellType={spellType}
         characterLevel={characterLevel}

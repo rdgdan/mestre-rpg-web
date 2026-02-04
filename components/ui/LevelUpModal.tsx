@@ -3,7 +3,7 @@
 "use client";
 
 import React from 'react';
-import { LevelProgression, SUBCLASSES, SUBCLASS_CHOICE_LEVELS } from '@/lib/class-features';
+import { LevelProgression, SUBCLASSES, SUBCLASS_CHOICE_LEVELS, CLASS_PROGRESSION } from '@/lib/class-features';
 import { getSpellsKnownCount, getFullCasterSlotLevel, getSpellcastingAbility, getCantripsKnownCount } from '@/lib/level-progression';
 import SpellSelectModal from './SpellSelectModal';
 import { Spell } from '@/lib/spells-data';
@@ -34,13 +34,21 @@ const LevelUpModal: React.FC<LevelUpModalProps> = ({ isOpen, onClose, onApply, l
 
     // Sugestão Automática de HP
     React.useEffect(() => {
-        if (isOpen && hpIncrease === 0 && progression?.hitDice) {
-            const dieValue = parseInt(progression.hitDice.replace('d', '')) || 8;
-            const conMod = Math.floor(((currentAttributes.constitution || 10) - 10) / 2);
-            const averageGain = Math.floor(dieValue / 2) + 1 + conMod;
-            setHpIncrease(Math.max(1, averageGain));
+        if (isOpen) {
+            // Se o usuário selecionou uma nova classe (multiclasse), usamos o dado de vida dela. 
+            // Caso contrário, usamos o dado de vida da classe atual (vinda da progression prop).
+            const effectiveHitDice = selectedNewClass
+                ? CLASS_PROGRESSION[selectedNewClass]?.[1]?.hitDice
+                : progression?.hitDice;
+
+            if (effectiveHitDice) {
+                const dieValue = parseInt(effectiveHitDice.replace('d', '')) || 8;
+                const conMod = Math.floor(((currentAttributes.constitution || 10) - 10) / 2);
+                const averageGain = Math.floor(dieValue / 2) + 1 + conMod;
+                setHpIncrease(Math.max(1, averageGain));
+            }
         }
-    }, [isOpen, progression?.hitDice, currentAttributes.constitution]);
+    }, [isOpen, progression?.hitDice, currentAttributes.constitution, selectedNewClass]);
 
     if (!isOpen) return null;
 
@@ -90,6 +98,9 @@ const LevelUpModal: React.FC<LevelUpModalProps> = ({ isOpen, onClose, onApply, l
     };
 
     const canClaimPower = () => {
+        // Se escolheu multiclasse, ignoramos validações da classe antiga
+        if (selectedNewClass) return true;
+
         // 1. Validar ASI se houver
         if (hasASI && pointsRemaining > 0) return false;
 
@@ -137,149 +148,28 @@ const LevelUpModal: React.FC<LevelUpModalProps> = ({ isOpen, onClose, onApply, l
                         <span className="text-lg sm:text-2xl font-medieval text-rpg-grey italic">{isMaxLevel ? 'Lenda Viva' : 'nesta jornada'}</span>
                     </div>
                     <p className="text-yellow-300 text-base sm:text-xl font-medieval font-bold border-t border-b border-yellow-400/20 py-1 sm:py-2 inline-block px-4 sm:px-8">
-                        {charClassName}
+                        {selectedNewClass ? `${charClassName} / ${selectedNewClass}` : charClassName}
                     </p>
                 </div>
 
                 {/* Conteúdo das Habilidades */}
                 <div className="p-4 sm:p-6 overflow-y-auto custom-scrollbar relative bg-rpg-panel/80 space-y-6 sm:space-y-8 flex-grow">
-                    {/* SEÇÃO DE MAGIAS (NOVA) */}
-                    {(spellsToLearn > 0 || isWizard) && (
-                        <div className="bg-purple-900/10 border border-purple-500/30 rounded-lg p-5 animate-in zoom-in-95 duration-500 delay-100 space-y-4">
-                            {/* TRUQUES */}
-                            {cantripsToLearn > 0 && (
-                                <div>
-                                    <div className="flex justify-between items-center mb-3">
-                                        <h3 className="text-xs font-bold text-purple-300 uppercase tracking-widest border-l-4 border-purple-500 pl-3">Novos Truques</h3>
-                                        <div className="flex items-center gap-2">
-                                            <span className="text-[10px] text-purple-200 font-bold">{newSpells.filter(s => s.level === 0).length}/{cantripsToLearn}</span>
-                                            <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase ${newSpells.filter(s => s.level === 0).length < cantripsToLearn ? 'bg-purple-600 text-white animate-pulse' : 'bg-green-600 text-white'}`}>
-                                                {newSpells.filter(s => s.level === 0).length < cantripsToLearn ? `Escolha ${cantripsToLearn - newSpells.filter(s => s.level === 0).length}` : '✓ Completo'}
-                                            </span>
-                                        </div>
-                                    </div>
-                                    <button
-                                        onClick={() => { setIsCantripSelection(true); setSpellModalOpen(true); }}
-                                        disabled={newSpells.filter(s => s.level === 0).length >= cantripsToLearn}
-                                        className={`w-full p-4 border border-dashed border-purple-400/30 rounded-lg transition-all group flex items-center justify-center gap-2 ${newSpells.filter(s => s.level === 0).length >= cantripsToLearn
-                                            ? 'opacity-50 cursor-not-allowed bg-purple-900/10'
-                                            : 'hover:bg-purple-900/20'
-                                            }`}
-                                    >
-                                        <span className="text-purple-300 group-hover:text-purple-100 font-bold uppercase tracking-widest text-xs">+ Selecionar Truque</span>
-                                    </button>
-                                    <div className="mt-2 space-y-1">
-                                        {newSpells.filter(s => s.level === 0).map(spell => (
-                                            <div key={spell.id} className="text-xs text-purple-200 bg-purple-900/40 px-2 py-1 rounded flex justify-between">
-                                                <span>{spell.name}</span>
-                                                <button onClick={() => setNewSpells(prev => prev.filter(s => s.id !== spell.id))} className="text-red-400 hover:text-red-200">×</button>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
 
-                            {/* MAGIAS NIVELADAS */}
-                            {spellsToLearn > 0 && (
-                                <div>
-                                    <div className="flex justify-between items-center mb-3">
-                                        <h3 className="text-xs font-bold text-purple-300 uppercase tracking-widest border-l-4 border-purple-500 pl-3">Novas Magias</h3>
-                                        <div className="flex items-center gap-2">
-                                            <span className="text-[10px] text-purple-200 font-bold">{newSpells.filter(s => s.level > 0).length}/{spellsToLearn}</span>
-                                            <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase ${newSpells.filter(s => s.level > 0).length < spellsToLearn ? 'bg-purple-600 text-white animate-pulse' : 'bg-green-600 text-white'}`}>
-                                                {newSpells.filter(s => s.level > 0).length < spellsToLearn ? `Escolha ${spellsToLearn - newSpells.filter(s => s.level > 0).length}` : '✓ Completo'}
-                                            </span>
-                                        </div>
-                                    </div>
-                                    <button
-                                        onClick={() => { setIsCantripSelection(false); setSpellModalOpen(true); }}
-                                        disabled={newSpells.filter(s => s.level > 0).length >= spellsToLearn}
-                                        className={`w-full p-4 border border-dashed border-purple-400/30 rounded-lg transition-all group flex items-center justify-center gap-2 ${newSpells.filter(s => s.level > 0).length >= spellsToLearn
-                                            ? 'opacity-50 cursor-not-allowed bg-purple-900/10'
-                                            : 'hover:bg-purple-900/20'
-                                            }`}
-                                    >
-                                        <span className="text-purple-300 group-hover:text-purple-100 font-bold uppercase tracking-widest text-xs">+ Selecionar Magia</span>
-                                    </button>
-                                    <div className="mt-2 space-y-1">
-                                        {newSpells.filter(s => s.level > 0).map(spell => (
-                                            <div key={spell.id} className="text-xs text-purple-200 bg-purple-900/40 px-2 py-1 rounded flex justify-between">
-                                                <span>{spell.name}</span>
-                                                <button onClick={() => setNewSpells(prev => prev.filter(s => s.id !== spell.id))} className="text-red-400 hover:text-red-200">×</button>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
-                        </div>
-                    )}
-
-                    {/* SEÇÃO DE ATRIBUTOS (ASI) */}
-                    {hasASI && (
-                        <div className="bg-blue-900/10 border border-blue-500/30 rounded-lg p-5 animate-in zoom-in-95 duration-500">
-                            <div className="flex justify-between items-center mb-4">
-                                <h3 className="text-xs font-bold text-blue-300 uppercase tracking-widest border-l-4 border-blue-500 pl-3">Melhoria de Atributo</h3>
-                                <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase ${pointsRemaining > 0 ? 'bg-blue-600 text-white animate-pulse' : 'bg-gray-600 text-gray-300'}`}>
-                                    {pointsRemaining > 0 ? `${pointsRemaining} Pontos Restantes` : 'Pontos Distribuídos'}
-                                </span>
-                            </div>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3">
-                                {Object.keys(attrChoices).map(attr => (
-                                    <div key={attr} className="flex items-center justify-between bg-black/20 p-2 rounded border border-blue-500/10">
-                                        <span className="text-[10px] sm:text-xs font-bold text-rpg-parchment uppercase">{attr.slice(0, 3)}</span>
-                                        <div className="flex items-center gap-2 sm:gap-3">
-                                            <button onClick={() => handleAttrChange(attr, -1)} className="w-8 h-8 sm:w-6 sm:h-6 flex items-center justify-center bg-rpg-slate rounded hover:bg-rpg-dark text-rpg-gold font-bold transition-colors">-</button>
-                                            <span className="w-4 text-center font-bold text-blue-300 text-sm sm:text-base">{(currentAttributes[attr] || 10) + attrChoices[attr]} <span className="text-[8px] text-rpg-grey">({attrChoices[attr] > 0 ? '+' + attrChoices[attr] : attrChoices[attr]})</span></span>
-                                            <button onClick={() => handleAttrChange(attr, 1)} className="w-8 h-8 sm:w-6 sm:h-6 flex items-center justify-center bg-rpg-slate rounded hover:bg-rpg-dark text-rpg-gold font-bold transition-colors">+</button>
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                    )}
-
-                    {/* SEÇÃO DE ESCOLHA DE SUBCLASSE */}
-                    {canChooseSubclass && hasSubclassesAvailable && (
-                        <div className="bg-emerald-900/10 border border-emerald-500/30 rounded-lg p-5 animate-in zoom-in-95 duration-500 delay-200">
-                            <h3 className="text-xs font-bold text-emerald-300 uppercase tracking-widest border-l-4 border-emerald-500 pl-3 mb-4">
-                                Escolha seu Caminho: Subclasse
-                            </h3>
-                            <div className="grid grid-cols-1 gap-3">
-                                {Object.keys(availableSubclasses).map(subclassName => (
-                                    <button
-                                        key={subclassName}
-                                        onClick={() => setSelectedSubclass(subclassName)}
-                                        className={`p-4 rounded border text-left transition-all ${selectedSubclass === subclassName
-                                            ? 'bg-emerald-600/20 border-emerald-500 text-emerald-200 shadow-glow-emerald/20'
-                                            : 'bg-black/40 border-emerald-500/10 text-rpg-grey hover:bg-emerald-900/20 hover:text-emerald-300'
-                                            }`}
-                                    >
-                                        <div className="flex justify-between items-center mb-1">
-                                            <span className="font-bold font-medieval text-lg">{subclassName}</span>
-                                            {selectedSubclass === subclassName && <span className="text-emerald-400 font-bold">✓</span>}
-                                        </div>
-                                        {/* Poderia adicionar descrição aqui se disponível na estrutura */}
-                                    </button>
-                                ))}
-                            </div>
-                        </div>
-                    )}
-
-                    {/* SEÇÃO DE MULTICLASSE */}
+                    {/* SEÇÃO DE MULTICLASSE (MOVIDA PARA CIMA PARA DESTAQUE) */}
                     {level >= 2 && availableClasses.length > 0 && (
-                        <div className="bg-amber-900/10 border border-amber-500/30 rounded-lg p-5 animate-in zoom-in-95 duration-500 delay-150">
+                        <div className={`bg-amber-900/10 border border-amber-500/30 rounded-lg p-5 animate-in zoom-in-95 duration-500 ${selectedNewClass ? 'ring-2 ring-amber-500 shadow-[0_0_20px_rgba(245,158,11,0.2)]' : ''}`}>
                             <div className="flex justify-between items-center mb-4">
                                 <h3 className="text-xs font-bold text-amber-300 uppercase tracking-widest border-l-4 border-amber-500 pl-3">
                                     🎭 Multiclasse (Opcional)
                                 </h3>
                                 {selectedNewClass && (
-                                    <span className="px-3 py-1 rounded-full text-[10px] font-black uppercase bg-amber-600 text-white">
+                                    <span className="px-3 py-1 rounded-full text-[10px] font-black uppercase bg-amber-600 text-white animate-pulse">
                                         ✓ Selecionado
                                     </span>
                                 )}
                             </div>
                             <p className="text-[10px] text-amber-200/70 mb-3 italic">
-                                Adicione uma segunda classe ao seu personagem. Você manterá todas as habilidades da classe atual.
+                                Adicione uma segunda classe ao seu personagem.
                             </p>
                             <div className="grid grid-cols-1 gap-2">
                                 {availableClasses.map(className => (
@@ -298,16 +188,133 @@ const LevelUpModal: React.FC<LevelUpModalProps> = ({ isOpen, onClose, onApply, l
                                     </button>
                                 ))}
                             </div>
-                            {selectedNewClass && (
-                                <div className="mt-3 p-3 bg-amber-900/30 rounded border border-amber-500/20">
-                                    <p className="text-[10px] text-amber-200 font-bold">⚠️ Atenção:</p>
-                                    <p className="text-[9px] text-rpg-grey mt-1">
-                                        Você ganhará proficiências limitadas conforme as regras de multiclasse do D&D 5e.
-                                        Sua classe ficará como: <span className="text-amber-300 font-bold">{charClassName}/{selectedNewClass}</span>
-                                    </p>
+                        </div>
+                    )}
+
+                    {/* CONTEÚDO DA CLASSE PRINCIPAL (SÓ MOSTRA SE NÃO TIVER MULTICLASSE SELECIONADA) */}
+                    {!selectedNewClass && (
+                        <>
+                            {/* SEÇÃO DE MAGIAS */}
+                            {(spellsToLearn > 0 || isWizard) && (
+                                <div className="bg-purple-900/10 border border-purple-500/30 rounded-lg p-5 animate-in zoom-in-95 duration-500 delay-100 space-y-4">
+                                    {/* TRUQUES */}
+                                    {cantripsToLearn > 0 && (
+                                        <div>
+                                            <div className="flex justify-between items-center mb-3">
+                                                <h3 className="text-xs font-bold text-purple-300 uppercase tracking-widest border-l-4 border-purple-500 pl-3">Novos Truques</h3>
+                                                <div className="flex items-center gap-2">
+                                                    <span className="text-[10px] text-purple-200 font-bold">{newSpells.filter(s => s.level === 0).length}/{cantripsToLearn}</span>
+                                                    <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase ${newSpells.filter(s => s.level === 0).length < cantripsToLearn ? 'bg-purple-600 text-white animate-pulse' : 'bg-green-600 text-white'}`}>
+                                                        {newSpells.filter(s => s.level === 0).length < cantripsToLearn ? `Escolha ${cantripsToLearn - newSpells.filter(s => s.level === 0).length}` : '✓ Completo'}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                            <button
+                                                onClick={() => { setIsCantripSelection(true); setSpellModalOpen(true); }}
+                                                disabled={newSpells.filter(s => s.level === 0).length >= cantripsToLearn}
+                                                className={`w-full p-4 border border-dashed border-purple-400/30 rounded-lg transition-all group flex items-center justify-center gap-2 ${newSpells.filter(s => s.level === 0).length >= cantripsToLearn
+                                                    ? 'opacity-50 cursor-not-allowed bg-purple-900/10'
+                                                    : 'hover:bg-purple-900/20'
+                                                    }`}
+                                            >
+                                                <span className="text-purple-300 group-hover:text-purple-100 font-bold uppercase tracking-widest text-xs">+ Selecionar Truque</span>
+                                            </button>
+                                            <div className="mt-2 space-y-1">
+                                                {newSpells.filter(s => s.level === 0).map(spell => (
+                                                    <div key={spell.id} className="text-xs text-purple-200 bg-purple-900/40 px-2 py-1 rounded flex justify-between">
+                                                        <span>{spell.name}</span>
+                                                        <button onClick={() => setNewSpells(prev => prev.filter(s => s.id !== spell.id))} className="text-red-400 hover:text-red-200">×</button>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* MAGIAS NIVELADAS */}
+                                    {spellsToLearn > 0 && (
+                                        <div>
+                                            <div className="flex justify-between items-center mb-3">
+                                                <h3 className="text-xs font-bold text-purple-300 uppercase tracking-widest border-l-4 border-purple-500 pl-3">Novas Magias</h3>
+                                                <div className="flex items-center gap-2">
+                                                    <span className="text-[10px] text-purple-200 font-bold">{newSpells.filter(s => s.level > 0).length}/{spellsToLearn}</span>
+                                                    <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase ${newSpells.filter(s => s.level > 0).length < spellsToLearn ? 'bg-purple-600 text-white animate-pulse' : 'bg-green-600 text-white'}`}>
+                                                        {newSpells.filter(s => s.level > 0).length < spellsToLearn ? `Escolha ${spellsToLearn - newSpells.filter(s => s.level > 0).length}` : '✓ Completo'}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                            <button
+                                                onClick={() => { setIsCantripSelection(false); setSpellModalOpen(true); }}
+                                                disabled={newSpells.filter(s => s.level > 0).length >= spellsToLearn}
+                                                className={`w-full p-4 border border-dashed border-purple-400/30 rounded-lg transition-all group flex items-center justify-center gap-2 ${newSpells.filter(s => s.level > 0).length >= spellsToLearn
+                                                    ? 'opacity-50 cursor-not-allowed bg-purple-900/10'
+                                                    : 'hover:bg-purple-900/20'
+                                                    }`}
+                                            >
+                                                <span className="text-purple-300 group-hover:text-purple-100 font-bold uppercase tracking-widest text-xs">+ Selecionar Magia</span>
+                                            </button>
+                                            <div className="mt-2 space-y-1">
+                                                {newSpells.filter(s => s.level > 0).map(spell => (
+                                                    <div key={spell.id} className="text-xs text-purple-200 bg-purple-900/40 px-2 py-1 rounded flex justify-between">
+                                                        <span>{spell.name}</span>
+                                                        <button onClick={() => setNewSpells(prev => prev.filter(s => s.id !== spell.id))} className="text-red-400 hover:text-red-200">×</button>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
                             )}
-                        </div>
+
+                            {/* SEÇÃO DE ATRIBUTOS (ASI) */}
+                            {hasASI && (
+                                <div className="bg-blue-900/10 border border-blue-500/30 rounded-lg p-5 animate-in zoom-in-95 duration-500">
+                                    <div className="flex justify-between items-center mb-4">
+                                        <h3 className="text-xs font-bold text-blue-300 uppercase tracking-widest border-l-4 border-blue-500 pl-3">Melhoria de Atributo</h3>
+                                        <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase ${pointsRemaining > 0 ? 'bg-blue-600 text-white animate-pulse' : 'bg-gray-600 text-gray-300'}`}>
+                                            {pointsRemaining > 0 ? `${pointsRemaining} Pontos Restantes` : 'Pontos Distribuídos'}
+                                        </span>
+                                    </div>
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3">
+                                        {Object.keys(attrChoices).map(attr => (
+                                            <div key={attr} className="flex items-center justify-between bg-black/20 p-2 rounded border border-blue-500/10">
+                                                <span className="text-[10px] sm:text-xs font-bold text-rpg-parchment uppercase">{attr.slice(0, 3)}</span>
+                                                <div className="flex items-center gap-2 sm:gap-3">
+                                                    <button onClick={() => handleAttrChange(attr, -1)} className="w-8 h-8 sm:w-6 sm:h-6 flex items-center justify-center bg-rpg-slate rounded hover:bg-rpg-dark text-rpg-gold font-bold transition-colors">-</button>
+                                                    <span className="w-4 text-center font-bold text-blue-300 text-sm sm:text-base">{(currentAttributes[attr] || 10) + attrChoices[attr]} <span className="text-[8px] text-rpg-grey">({attrChoices[attr] > 0 ? '+' + attrChoices[attr] : attrChoices[attr]})</span></span>
+                                                    <button onClick={() => handleAttrChange(attr, 1)} className="w-8 h-8 sm:w-6 sm:h-6 flex items-center justify-center bg-rpg-slate rounded hover:bg-rpg-dark text-rpg-gold font-bold transition-colors">+</button>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* SEÇÃO DE ESCOLHA DE SUBCLASSE */}
+                            {canChooseSubclass && hasSubclassesAvailable && (
+                                <div className="bg-emerald-900/10 border border-emerald-500/30 rounded-lg p-5 animate-in zoom-in-95 duration-500 delay-200">
+                                    <h3 className="text-xs font-bold text-emerald-300 uppercase tracking-widest border-l-4 border-emerald-500 pl-3 mb-4">
+                                        Escolha seu Caminho: Subclasse
+                                    </h3>
+                                    <div className="grid grid-cols-1 gap-3">
+                                        {Object.keys(availableSubclasses).map(subclassName => (
+                                            <button
+                                                key={subclassName}
+                                                onClick={() => setSelectedSubclass(subclassName)}
+                                                className={`p-4 rounded border text-left transition-all ${selectedSubclass === subclassName
+                                                    ? 'bg-emerald-600/20 border-emerald-500 text-emerald-200 shadow-glow-emerald/20'
+                                                    : 'bg-black/40 border-emerald-500/10 text-rpg-grey hover:bg-emerald-900/20 hover:text-emerald-300'
+                                                    }`}
+                                            >
+                                                <div className="flex justify-between items-center mb-1">
+                                                    <span className="font-bold font-medieval text-lg">{subclassName}</span>
+                                                    {selectedSubclass === subclassName && <span className="text-emerald-400 font-bold">✓</span>}
+                                                </div>
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+                        </>
                     )}
 
 
@@ -330,7 +337,9 @@ const LevelUpModal: React.FC<LevelUpModalProps> = ({ isOpen, onClose, onApply, l
                             </div>
                             <div className="text-center bg-black/40 p-3 sm:p-4 rounded-lg border border-rpg-red/10 w-full sm:w-32 flex flex-row sm:flex-col justify-between items-center sm:justify-center">
                                 <span className="text-[10px] text-rpg-grey uppercase block mb-0 sm:mb-1">Dado de Vida</span>
-                                <span className="text-2xl font-black text-rpg-red font-medieval">{progression?.hitDice || 'd8'}</span>
+                                <span className="text-2xl font-black text-rpg-red font-medieval">
+                                    {selectedNewClass ? (CLASS_PROGRESSION[selectedNewClass]?.[1]?.hitDice || 'd8') : (progression?.hitDice || 'd8')}
+                                </span>
                             </div>
                         </div>
                     </div>

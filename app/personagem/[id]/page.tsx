@@ -49,6 +49,7 @@ import Modal from '@/components/Modal';
 import { CLASS_EFFECTS, COMMON_CONDITIONS, getCategorizedGlobalConditions, getEffectStyle } from '@/lib/effects-conditions';
 import { getXPForNextLevel, getXPProgress, shouldLevelUp } from '@/lib/xp-progression';
 import { firestoreCache } from '@/lib/cache-service';
+import { getCasterType } from '@/lib/level-progression';
 
 // Lodash debounce import
 function debounce<T extends (...args: any[]) => any>(fn: T, delay: number): T {
@@ -136,6 +137,7 @@ export default function CharacterSheetPage() {
 
     // Modais e Estados de Dados
     const [isSelectionModalOpen, setSelectionModalOpen] = useState(false);
+    const [editingClassIndex, setEditingClassIndex] = useState<number | null>(null);
     const [modalConfig, setModalConfig] = useState<{ type: 'class' | 'race' | 'weapon', title: string } | null>(null);
     const [classes, setClasses] = useState<string[]>([]);
     const [races, setRaces] = useState<string[]>([]);
@@ -755,9 +757,16 @@ export default function CharacterSheetPage() {
             const currentTotalClassLevel = updatedClasses.reduce((s, c) => s + c.level, 0);
 
             if (choices.newClass) {
-                const existing = updatedClasses.find(c => c.name === choices.newClass);
-                if (existing) {
-                    if (currentTotalClassLevel < prev.level) existing.level += 1;
+                // Se for classe única e o nível já subiu automaticamente (via handleLevelChange),
+                // precisamos "abrir espaço" para a nova classe multiclasse.
+                if (updatedClasses.length === 1 && currentTotalClassLevel === prev.level) {
+                    updatedClasses[0].level = Math.max(1, updatedClasses[0].level - 1);
+                }
+
+                const existingIndex = updatedClasses.findIndex(c => c.name === choices.newClass);
+
+                if (existingIndex > -1) {
+                    updatedClasses[existingIndex].level += 1;
                     levelUpClassName = choices.newClass;
                 } else {
                     updatedClasses.push({ name: choices.newClass, level: 1, subclass: '' });
@@ -872,7 +881,9 @@ export default function CharacterSheetPage() {
                 });
             }
 
-            const finalClass = updatedClasses[0].name;
+            const finalClass = updatedClasses.length > 1
+                ? updatedClasses.map(c => `${c.name} ${c.level}`).join(' / ')
+                : updatedClasses[0].name;
 
             return {
                 ...prev,
@@ -903,12 +914,17 @@ export default function CharacterSheetPage() {
 
             if (newClasses.length > 0) {
                 // Cálculo RELATIVO: Aumenta ou diminui a primeira classe baseado na diferença desejada
-                const currentTotal = newClasses.reduce((s, c) => s + c.level, 0);
-                const diff = boundedLevel - currentTotal;
+                // MAS APENAS SE FOR CLASSE ÚNICA. Multiclasse deve ser gerido pelo Modal de Level Up.
+                if (newClasses.length === 1) {
+                    const currentTotal = newClasses.reduce((s, c) => s + c.level, 0);
+                    const diff = boundedLevel - currentTotal;
 
-                // Só ajusta se houver diferença e não deixar o nível da classe < 1
-                const newFirstClassLevel = Math.max(1, newClasses[0].level + diff);
-                newClasses[0] = { ...newClasses[0], level: newFirstClassLevel };
+                    // Só ajusta se houver diferença e não deixar o nível da classe < 1
+                    const newFirstClassLevel = Math.max(1, newClasses[0].level + diff);
+                    newClasses[0] = { ...newClasses[0], level: newFirstClassLevel };
+                }
+                // Se for multiclasse, não mexemos nos níveis de classe aqui.
+                // O Modal de Level Up abrirá (via useEffect) e pedirá ao usuário para alocar o novo nível.
             } else {
                 newClasses.push({ name: char.class || 'Guerreiro', level: boundedLevel, subclass: char.subclass || '' });
             }
@@ -1188,60 +1204,38 @@ export default function CharacterSheetPage() {
         setSelectionModalOpen(false);
 
         if (modalConfig.type === 'class') {
-            const currentClass = character.class || '';
-            const isChangingClass = currentClass && currentClass !== item;
-            const currentLevel = character.level || 1;
+            updateCharacter(char => {
+                const newClasses = [...(char.classes || [])];
 
-            if (isChangingClass) {
-                // Verifica se já tem essa classe (multiclasse duplicada)
-                const classes = currentClass.split('/').map(c => c.trim());
-                if (classes.includes(item)) {
-                    showToast(`Você já possui a classe ${item}!`, 'warning');
-                    return;
-                }
-
-                // Multiclasse só é permitida a partir do nível 2
-                if (currentLevel < 2) {
-                    const msg = `Multiclasse não é permitida no nível 1 pelas regras do D&D 5e.\n\nDeseja SUBSTITUIR sua classe "${currentClass}" por "${item}"?\n\n(Isso removerá habilidades e equipamentos da classe antiga)`;
-                    const confirmReplace = confirm(msg);
-
-                    if (!confirmReplace) return;
-
-                    // SUBSTITUIÇÃO TOTAL (apenas nível 1)
-                    handleFieldChange('class', item);
-                    updateCharacter(char => {
-                        const lostItems = [...char.inventory.weapons, ...char.inventory.otherEquipment].map(i => i.name).filter(Boolean).join(', ');
-                        if (lostItems) showToast(`Itens removidos: ${lostItems}`, 'info');
-
-                        return {
-                            ...char,
-                            features: char.features.filter(f => f.type !== 'class'),
-                            skills: createBlankCharacter('').skills,
-                            inventory: { ...char.inventory, weapons: [], otherEquipment: [] } as any
-                        };
-                    });
+                if (editingClassIndex !== null) {
+                    // EDITANDO uma classe existente
+                    newClasses[editingClassIndex] = { ...newClasses[editingClassIndex], name: item };
+                    showToast(`Classe alterada para ${item}`, 'info');
                 } else {
-                    // MULTICLASSE (nível 2+)
-                    const msg = `🎭 Multiclasse Detectada!\n\nDeseja adicionar a classe "${item}" ao seu personagem?\n\nVocê terá as habilidades de: ${currentClass} E ${item}\n\n⚠️ Lembre-se: Você ganhará proficiências limitadas da nova classe conforme as regras de multiclasse do D&D 5e.`;
-                    const confirmMulticlass = confirm(msg);
+                    // ADICIONANDO nova classe (Multiclasse)
+                    if (newClasses.some(c => c.name === item)) {
+                        showToast(`Você já possui a classe ${item}!`, 'warning');
+                        return char;
+                    }
 
-                    if (!confirmMulticlass) return;
+                    if (char.level < 2) {
+                        const confirmReplace = confirm(`Multiclasse não é permitida no nível 1 pelas regras do D&D 5e.\nDeseja SUBSTITUIR sua classe "${char.class}" por "${item}"?`);
+                        if (!confirmReplace) return char;
 
-                    // Adiciona a nova classe ao campo class
-                    const newClassString = `${currentClass}/${item}`;
-                    handleFieldChange('class', newClassString);
+                        newClasses[0] = { ...newClasses[0], name: item };
+                    } else {
+                        const confirmMulticlass = confirm(`Deseja adicionar a classe "${item}" ao seu personagem?`);
+                        if (!confirmMulticlass) return char;
 
-                    showToast(`✨ Multiclasse adicionada! Agora você é ${newClassString}`, 'success');
-
-                    // NÃO remove features antigas - mantém tudo!
-                    // Apenas adiciona as novas features da classe escolhida abaixo
+                        newClasses.push({ name: item, level: 1, subclass: '' });
+                        showToast(`✨ Multiclasse adicionada! Agora você é ${item}`, 'success');
+                    }
                 }
-            } else {
-                // Primeira classe sendo escolhida
-                handleFieldChange('class', item);
-            }
 
-            // Automação: Carregar Features de Nível 1
+                return { ...char, classes: newClasses };
+            });
+            setEditingClassIndex(null);
+            // Automação: Carregar Features da classe selecionada
             setIsLoading(true);
             try {
                 const { fetchClassFeaturesFromFirestore } = await import('@/lib/class-features-sync');
@@ -1251,66 +1245,41 @@ export default function CharacterSheetPage() {
                 const level1Features = classFeatures[1]?.features || [];
 
                 updateCharacter(char => {
-                    // Filtra features que já existem para não duplicar
                     const existingNames = new Set(char.features.map(f => f.name));
                     const newFeatures = level1Features
                         .filter(f => !existingNames.has(f.name))
                         .map(f => ({
-                            ...f,
-                            level: 1,
-                            type: 'class' as const,
-                            source: item // Marca de qual classe veio (importante para multiclasse)
+                            ...f, level: 1, type: 'class' as const, source: item
                         }));
-
-                    return {
-                        ...char,
-                        features: [...char.features, ...newFeatures]
-                    };
+                    return { ...char, features: [...char.features, ...newFeatures] };
                 });
 
-
-
-                // Verifica Subclasse
                 const subclassLevel = SUBCLASS_CHOICE_LEVELS[item] || 3;
                 if ((character.level || 1) >= subclassLevel) {
-                    // Pequeno delay para a UI atualizar
                     setTimeout(() => setIsSubclassModalOpen(true), 500);
                 }
 
-
-                // Automação: Proficiências (Salvaguardas e Skills)
                 const profData = CLASS_PROFICIENCIES[item];
-
                 if (profData) {
                     setSelectedClassForProficiency(item);
                     setCreationStep(4);
                     setIsProficiencyModalOpen(true);
                 }
 
-                // Após classe (se estiver no wizard), abrir raça se não houver
                 if (creationStep === 1) {
                     setCreationStep(2);
                     setTimeout(() => openSelectionModal('race'), 500);
                 }
 
-                // Automação: Verificar Magias (Abrir Modal se for Conjurador)
-                const { getCasterType } = await import('@/lib/level-progression');
                 const casterType = getCasterType(item);
                 if (casterType !== 'none') {
-                    // Abre o modal de Level Up em modo de "Ajuste Inicial" para escolher magias
-                    // Delay aumentado para garantir sequencia com modal de skills se necessário
-                    setTimeout(() => {
-                        setCasterAlertModal(true);
-                        // setLevelUpModalOpen(true); // Moved to Modal confirmation
-                    }, 1500);
+                    setTimeout(() => setCasterAlertModal(true), 1500);
                 }
-
             } catch (err) {
                 console.error("Erro na automação de classe:", err);
             } finally {
                 setIsLoading(false);
             }
-
         } else if (modalConfig.type === 'race') {
             const isChangingRace = character.race && character.race !== item;
 
@@ -1358,23 +1327,44 @@ export default function CharacterSheetPage() {
         // Truques sempre são permitidos
         if (spell.level === undefined || spell.level === 0) return true;
 
-        // Magias customizadas com nível definido devem estar disponíveis
-        const maxSlots = getMaxSpellSlots(character.class, character.level, spell.level);
+        // Verifica se QUALQUER uma das classes do personagem permite essa magia
+        const hasPermission = (character.classes || []).some(c => {
+            const maxSlots = getMaxSpellSlots(c.name, c.level, spell.level);
+            return maxSlots > 0;
+        });
 
-        // Se o personagem não tem slots para este nível de magia, não é permitido
-        return maxSlots > 0;
+        // Fallback para caso character.classes não esteja definido (personagens legados)
+        if (!character.classes || character.classes.length === 0) {
+            return getMaxSpellSlots(character.class, character.level, spell.level) > 0;
+        }
+
+        return hasPermission;
     };
 
     const handleSaveSpell = (spell: any) => {
         // Validar se a magia é permitida
         if (!isSpellAllowedForCharacter(spell)) {
-            showToast(`${character.name} é ${character.class} nível ${character.level} e não pode aprender magias de nível ${spell.level} ainda. Níveis de magia disponíveis: 0-${Math.max(...[1, 2, 3, 4, 5, 6, 7, 8, 9].filter(l => getMaxSpellSlots(character.class, character.level, l) > 0))}`, 'warning');
+            // Calcula o nível máximo que o personagem consegue conjurar de forma dinâmica
+            const availableLevels = [1, 2, 3, 4, 5, 6, 7, 8, 9].filter(l =>
+                (character.classes || []).some(c => getMaxSpellSlots(c.name, c.level, l) > 0)
+            );
+            const maxLvl = availableLevels.length > 0 ? Math.max(...availableLevels) : 0;
+
+            showToast(`${character.name} é ${character.displayClass || character.class} e não pode aprender magias de nível ${spell.level} ainda. Níveis de magia disponíveis: 0-${maxLvl}`, 'warning');
             return;
         }
 
         updateCharacter(char => {
             const filtered = (char.spells || []).filter(s => s.name.trim().toLowerCase() !== spell.name.trim().toLowerCase());
-            return { ...char, spells: [...filtered, spell] };
+
+            // Tenta determinar a classe fonte se não houver uma
+            let sourceClass = spell.sourceClass;
+            if (!sourceClass) {
+                const casterClass = (char.classes || []).find(c => getCasterType(c.name) !== 'none');
+                sourceClass = casterClass?.name || char.class;
+            }
+
+            return { ...char, spells: [...filtered, { ...spell, sourceClass }] };
         });
         setSpellModalOpen(false);
         setSpellToEdit(null);
@@ -1642,13 +1632,55 @@ export default function CharacterSheetPage() {
                         </div>
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 w-full lg:w-[600px]">
-                        {/* Linha 1: Classe e Raça */}
-                        <div className="flex flex-col gap-1">
-                            <label className="block text-[10px] font-bold text-rpg-gold uppercase tracking-wider mb-1 font-cinzel">Classe</label>
-                            <button disabled={isReadOnly} onClick={() => openSelectionModal('class')} className={`w-full bg-rpg-slate border border-rpg-gold/20 rounded-md px-3 py-2 text-left hover:border-rpg-gold/50 font-medieval text-sm ${isReadOnly ? 'opacity-70 cursor-not-allowed' : ''}`}>
-                                {character.displayClass || character.class || 'Selecione...'}
-                            </button>
+                        {/* Linha 1: Classes e Raça */}
+                        <div className="flex flex-col gap-1 col-span-1 sm:col-span-2">
+                            <label className="block text-[10px] font-bold text-rpg-gold uppercase tracking-wider mb-1 font-cinzel">Classes do Personagem</label>
+                            <div className="flex flex-wrap gap-2">
+                                {(character.classes || []).map((c, index) => (
+                                    <div key={`${c.name}-${index}`} className="flex items-center bg-rpg-slate border border-rpg-gold/30 rounded-md overflow-hidden shadow-lg group hover:border-rpg-gold transition-all">
+                                        <button
+                                            disabled={isReadOnly}
+                                            onClick={() => {
+                                                setEditingClassIndex(index);
+                                                openSelectionModal('class');
+                                            }}
+                                            className="px-3 py-1.5 text-left font-medieval text-sm flex flex-col min-w-[100px] hover:bg-rpg-gold/5"
+                                        >
+                                            <span className="text-rpg-gold text-xs leading-tight">{c.name}</span>
+                                            <span className="text-rpg-grey text-[10px] leading-tight font-bold">Nível {c.level}</span>
+                                        </button>
+                                        {!isReadOnly && (character.classes || []).length > 1 && (
+                                            <button
+                                                onClick={() => {
+                                                    if (confirm(`Remover a classe ${c.name}? Isso não afetará seu nível total, mas você precisará distribuir o nível ${c.level} em outra classe.`)) {
+                                                        updateCharacter(char => {
+                                                            const newClasses = char.classes.filter((_, i) => i !== index);
+                                                            return { ...char, classes: newClasses };
+                                                        });
+                                                    }
+                                                }}
+                                                className="px-2 py-1.5 h-full bg-rpg-red/10 text-rpg-red hover:bg-rpg-red/20 border-l border-rpg-gold/20 transition-all text-xs"
+                                                title="Remover Classe"
+                                            >
+                                                ✕
+                                            </button>
+                                        )}
+                                    </div>
+                                ))}
+                                {!isReadOnly && (character.classes || []).length < 4 && (
+                                    <button
+                                        onClick={() => {
+                                            setEditingClassIndex(null);
+                                            openSelectionModal('class');
+                                        }}
+                                        className="px-3 py-1.5 bg-green-900/20 border border-green-500/30 text-green-400 rounded-md hover:bg-green-900/40 transition-all text-xs font-bold flex items-center gap-2"
+                                    >
+                                        <span>+</span> Multiclasse
+                                    </button>
+                                )}
+                            </div>
                         </div>
+
                         <div className="flex flex-col gap-1">
                             <label className="block text-[10px] font-bold text-rpg-gold uppercase tracking-wider mb-1 font-cinzel text-left">Raça</label>
                             <button disabled={isReadOnly} onClick={() => openSelectionModal('race')} className={`w-full bg-rpg-slate border border-rpg-gold/20 rounded-md px-3 py-2 text-left hover:border-rpg-gold/50 font-medieval text-sm ${isReadOnly ? 'opacity-70 cursor-not-allowed' : ''}`}>
@@ -2460,7 +2492,9 @@ export default function CharacterSheetPage() {
                             {character.class && character.spells && character.spellSlotsCurrent && (
                                 <SpellSlotsDisplay
                                     spellSlotsCurrent={character.spellSlotsCurrent}
-                                    characterClass={character.class}
+                                    characterClass={character.classes?.length
+                                        ? character.classes.map(c => `${c.name} ${c.level}`).join(' / ')
+                                        : character.class}
                                     characterLevel={character.level || 1}
                                     spells={character.spells}
                                     onUseSpell={handleSpellUsed}
@@ -2535,12 +2569,25 @@ export default function CharacterSheetPage() {
                                 </h3>
                                 {(() => {
                                     // Agrupar magias por nível (apenas nível 1+)
-                                    const validSpells = (character.spells || []).filter(s => s && typeof s === 'object' && s.level && s.level > 0);
+                                    const validSpells = (character.spells || []).filter(s => s && typeof s === 'object' && (s.level !== undefined) && s.level > 0);
 
                                     // Obter lista de níveis que possuem slots OU magias aprendidas
-                                    const levelsWithSlots = Object.keys(character.spellcasting?.slots || {}).map(Number);
+                                    const slotsKeys = Object.keys(character.spellcasting?.slots || {});
+                                    const levelsWithSlots = slotsKeys
+                                        .filter(k => !isNaN(Number(k)))
+                                        .map(Number);
+
+                                    // Adiciona o nível de pacto se existir slots de pacto
+                                    const pactLevel = character.spellcasting?.pactLevel;
+                                    const hasPact = slotsKeys.includes('pact') && pactLevel;
+                                    if (hasPact && pactLevel && !levelsWithSlots.includes(pactLevel)) {
+                                        levelsWithSlots.push(pactLevel);
+                                    }
+
                                     const levelsWithSpells = validSpells.map(s => s.level);
-                                    const allLevels = Array.from(new Set([...levelsWithSlots, ...levelsWithSpells])).sort((a, b) => a - b);
+                                    const allLevels = Array.from(new Set([...levelsWithSlots, ...levelsWithSpells]))
+                                        .filter(l => !isNaN(l))
+                                        .sort((a, b) => a - b);
 
                                     if (allLevels.length === 0 && (!character.spells || character.spells.length === 0)) {
                                         return (
@@ -2555,17 +2602,32 @@ export default function CharacterSheetPage() {
                                         const spells = validSpells.filter(s => s.level === level);
                                         const isExpanded = expandedSpellLevels[level] !== false; // Default expanded
                                         const levelLabel = `${level}º Nível`;
-                                        const slotInfo = character.spellcasting?.slots?.[level.toString()]; // Suporte a Pact Magic depois
+
+                                        const slotInfo = character.spellcasting?.slots?.[level.toString()];
+                                        const pactInfo = (level === pactLevel) ? character.spellcasting?.slots?.pact : null;
 
                                         // Renderização dos Slots no Cabeçalho
                                         const SlotCounter = () => {
-                                            if (!slotInfo) return null;
-                                            // Usar spellSlotsCurrent como fonte de verdade (atualiza em tempo real quando magia é usada)
-                                            const currentSlots = character.spellSlotsCurrent?.[level] ?? slotInfo.current;
-                                            const maxSlots = slotInfo.max;
+                                            if (!slotInfo && !pactInfo) return null;
+
+                                            // Slots Normais
+                                            const normalSlots = slotInfo ? (
+                                                <div className="flex items-center gap-2 bg-purple-900/30 px-3 py-1 rounded border border-purple-500/40" onClick={e => e.stopPropagation()}>
+                                                    <span className="text-[10px] text-purple-300 font-bold uppercase tracking-tighter">Slots: <span className="text-purple-100 font-cinzel">{(character.spellSlotsCurrent?.[level] ?? slotInfo.current)}/{slotInfo.max}</span></span>
+                                                </div>
+                                            ) : null;
+
+                                            // Slots de Pacto (Bruxo)
+                                            const pactSlots = pactInfo ? (
+                                                <div className="flex items-center gap-2 bg-blue-900/30 px-3 py-1 rounded border border-blue-500/40" onClick={e => e.stopPropagation()} title="Magia de Pacto (Bruxo) - Recupera em Descanso Curto">
+                                                    <span className="text-[10px] text-blue-300 font-bold uppercase tracking-tighter">Pacto: <span className="text-blue-100 font-cinzel">{(character.spellSlotsCurrent?.[100] ?? pactInfo.current)}/{pactInfo.max}</span></span>
+                                                </div>
+                                            ) : null;
+
                                             return (
-                                                <div className="flex items-center gap-2 bg-purple-900/30 px-3 py-1 rounded border border-purple-500/40 ml-4" onClick={e => e.stopPropagation()}>
-                                                    <span className="text-xs text-purple-300 font-bold">Slots: <span className="text-purple-100 font-cinzel">{currentSlots}/{maxSlots}</span></span>
+                                                <div className="flex gap-2 ml-4">
+                                                    {normalSlots}
+                                                    {pactSlots}
                                                 </div>
                                             );
                                         };
@@ -2618,7 +2680,13 @@ export default function CharacterSheetPage() {
                                                                                 </span>
                                                                             )}
                                                                             {spell.level === 0 && <span className="text-[8px] bg-green-900/60 text-green-200 px-1.5 py-0.5 rounded font-black tracking-tighter" title="Ilimitado">∞</span>}
-                                                                            <span className="text-[8px] bg-purple-600/40 text-white px-1.5 py-0.5 rounded font-black tracking-tighter" title="Classe">{(spell.sourceClass || character.class).slice(0, 3).toUpperCase()}</span>
+                                                                            <span className="text-[8px] bg-purple-600/40 text-white px-1.5 py-0.5 rounded font-black tracking-tighter" title="Classe">
+                                                                                {(() => {
+                                                                                    if (spell.sourceClass) return spell.sourceClass.slice(0, 3).toUpperCase();
+                                                                                    const casterClass = (character.classes || []).find(c => getCasterType(c.name) !== 'none');
+                                                                                    return (casterClass?.name || character.class || 'MAG').slice(0, 3).toUpperCase();
+                                                                                })()}
+                                                                            </span>
                                                                         </div>
                                                                     </div>
                                                                     <div className="flex flex-wrap gap-x-3 gap-y-1 mb-2 text-[10px] text-rpg-grey/70 uppercase font-sans tracking-tight border-b border-purple-500/10 pb-2">

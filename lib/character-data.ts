@@ -86,6 +86,7 @@ export interface Character {
         saveDc: number;
         attackBonus: number;
         slots: Record<string, { current: number; max: number }>;
+        pactLevel?: number; // Para Bruxo: Nível atual dos slots de pacto
     };
     spellSlotsCurrent?: Record<number, number>; // Slots usados no combate: { 1: 2, 2: 1, 3: 0 } = 2 nível 1, 1 nível 2, 0 nível 3
     rageBonus?: number;
@@ -123,8 +124,12 @@ export function calculateComputedStats(character: Omit<Character, 'proficiencyBo
     const char = { ...character } as Character;
 
     // 1. Garantir que o array de classes existe e está sincronizado
+    // Se o personagem é nível 1 e char.class foi definido, garantimos que char.classes[0] reflita isso.
     if (!char.classes || char.classes.length === 0) {
         char.classes = [{ name: char.class || 'Guerreiro', level: char.level || 1, subclass: char.subclass || '' }];
+    } else if (char.classes.length === 1 && char.class && char.class !== char.classes[0].name) {
+        // Se o usuário mudou a classe na UI (char.class), atualizamos char.classes[0]
+        char.classes[0].name = char.class;
     }
 
     // Atualiza nível total e classe principal para compatibilidade de UI
@@ -271,10 +276,11 @@ export function calculateComputedStats(character: Omit<Character, 'proficiencyBo
             ability: castingAbility,
             saveDc: 8 + proficiencyBonus + mod,
             attackBonus: proficiencyBonus + mod,
-            slots: mergedSlots
+            slots: mergedSlots,
+            pactLevel: maxSlots.pactLevel
         };
     } else {
-        spellcastingData = existingSpellcasting || { ability: '', saveDc: 0, attackBonus: 0, slots: {} };
+        spellcastingData = existingSpellcasting || { ability: '', saveDc: 0, attackBonus: 0, slots: {}, pactLevel: 0 };
     }
 
     const computed: Character = {
@@ -447,19 +453,22 @@ export function hydrateCharacter(partialData: Partial<Character> & { equipment?:
 
             // Separa o que realmente é arma mas caiu em equipamento
             const equipmentToKeep: any[] = [];
+            const existingWeaponNames = new Set(finalInventory.weapons.map(w => w.name.normalize('NFC').trim().toLowerCase()));
+
             processedEquipment.forEach(item => {
                 const normalizedName = item.name.normalize('NFC').trim().toLowerCase();
                 // Se o nome bate com uma arma oficial ou se tem damage/dice (indicativo de arma)
-                if (weaponNames.has(normalizedName) || (item as any).damage || (item as any).diceType) {
+                if ((weaponNames.has(normalizedName) || (item as any).damage || (item as any).diceType) && !existingWeaponNames.has(normalizedName)) {
                     // Adiciona às armas (se já não estiver lá)
                     const weaponCandidate = {
                         ...item,
-                        damage: (item as any).damage || '',
+                        damage: (item as any).damage || '1d6',
                         damageType: (item as any).damageType || '',
                         properties: (item as any).properties || []
                     };
                     finalInventory.weapons.push(weaponCandidate as any);
-                } else {
+                    existingWeaponNames.add(normalizedName);
+                } else if (!weaponNames.has(normalizedName)) {
                     equipmentToKeep.push(item);
                 }
             });

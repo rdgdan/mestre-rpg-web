@@ -16,86 +16,79 @@ export interface SpellUsageRecord {
   characterId?: string;
 }
 
-// Obter slots máximos para uma classe/nível
+// Tabela de Slots Padrão (Multiclasse / Full Casters)
+const STANDARD_SLOTS_TABLE: Record<number, number[]> = {
+  1: [2], 2: [3], 3: [4, 2], 4: [4, 3], 5: [4, 3, 2], 6: [4, 3, 3],
+  7: [4, 3, 3, 1], 8: [4, 3, 3, 2], 9: [4, 3, 3, 3, 1], 10: [4, 3, 3, 3, 2],
+  11: [4, 3, 3, 3, 2, 1], 12: [4, 3, 3, 3, 2, 1], 13: [4, 3, 3, 3, 2, 1, 1],
+  14: [4, 3, 3, 3, 2, 1, 1], 15: [4, 3, 3, 3, 2, 1, 1, 1], 16: [4, 3, 3, 3, 2, 1, 1, 1],
+  17: [4, 3, 3, 3, 2, 1, 1, 1, 1], 18: [4, 3, 3, 3, 3, 1, 1, 1, 1], 19: [4, 3, 3, 3, 3, 2, 1, 1, 1],
+  20: [4, 3, 3, 3, 3, 2, 2, 1, 1]
+};
+
+// Tabela de Slots de Pacto (Bruxo)
+const WARLOCK_SLOTS_TABLE: Record<number, number> = {
+  1: 1, 2: 2, 3: 2, 4: 2, 5: 2, 6: 2, 7: 2, 8: 2, 9: 2, 10: 2,
+  11: 3, 12: 3, 13: 3, 14: 3, 15: 3, 16: 3, 17: 4, 18: 4, 19: 4, 20: 4
+};
+
+// Obter slots máximos para uma classe/nível (Suporte a Multiclasse)
 export function getMaxSpellSlotsForCharacter(
   characterClass: string,
   characterLevel: number
 ): Record<number, number> {
-  const SPELL_SLOTS_BY_CLASS: Record<string, Record<number, number[]>> = {
-    'Bardo': {
-      1: [2], 2: [3], 3: [4, 2], 4: [4, 3], 5: [4, 3, 2], 6: [4, 3, 3],
-      7: [4, 3, 3, 1], 8: [4, 3, 3, 2], 9: [4, 3, 3, 3, 1], 10: [4, 3, 3, 3, 2],
-      11: [4, 3, 3, 3, 2, 1], 12: [4, 3, 3, 3, 2, 1], 13: [4, 3, 3, 3, 2, 1, 1],
-      14: [4, 3, 3, 3, 2, 1, 1], 15: [4, 3, 3, 3, 2, 1, 1, 1], 16: [4, 3, 3, 3, 2, 1, 1, 1],
-      17: [4, 3, 3, 3, 2, 1, 1, 1, 1], 18: [4, 3, 3, 3, 3, 1, 1, 1, 1], 19: [4, 3, 3, 3, 3, 2, 1, 1, 1],
-      20: [4, 3, 3, 3, 3, 2, 2, 1, 1]
-    },
-    'Clérigo': {
-      1: [2], 2: [3], 3: [4, 2], 4: [4, 3], 5: [4, 3, 2], 6: [4, 3, 3],
-      7: [4, 3, 3, 1], 8: [4, 3, 3, 2], 9: [4, 3, 3, 3, 1], 10: [4, 3, 3, 3, 2],
-      11: [4, 3, 3, 3, 2, 1], 12: [4, 3, 3, 3, 2, 1], 13: [4, 3, 3, 3, 2, 1, 1],
-      14: [4, 3, 3, 3, 2, 1, 1], 15: [4, 3, 3, 3, 2, 1, 1, 1], 16: [4, 3, 3, 3, 2, 1, 1, 1],
-      17: [4, 3, 3, 3, 2, 1, 1, 1, 1], 18: [4, 3, 3, 3, 3, 1, 1, 1, 1], 19: [4, 3, 3, 3, 3, 2, 1, 1, 1],
-      20: [4, 3, 3, 3, 3, 2, 2, 1, 1]
-    },
-    'Druida': {
-      1: [2], 2: [3], 3: [4, 2], 4: [4, 3], 5: [4, 3, 2], 6: [4, 3, 3],
-      7: [4, 3, 3, 1], 8: [4, 3, 3, 2], 9: [4, 3, 3, 3, 1], 10: [4, 3, 3, 3, 2],
-      11: [4, 3, 3, 3, 2, 1], 12: [4, 3, 3, 3, 2, 1], 13: [4, 3, 3, 3, 2, 1, 1],
-      14: [4, 3, 3, 3, 2, 1, 1], 15: [4, 3, 3, 3, 2, 1, 1, 1], 16: [4, 3, 3, 3, 2, 1, 1, 1],
-      17: [4, 3, 3, 3, 2, 1, 1, 1, 1], 18: [4, 3, 3, 3, 3, 1, 1, 1, 1], 19: [4, 3, 3, 3, 3, 2, 1, 1, 1],
-      20: [4, 3, 3, 3, 3, 2, 2, 1, 1]
-    },
-    'Feiticeiro': {
-      1: [2], 2: [3], 3: [4, 2], 4: [4, 3], 5: [4, 3, 2], 6: [4, 3, 3],
-      7: [4, 3, 3, 1], 8: [4, 3, 3, 2], 9: [4, 3, 3, 3, 1], 10: [4, 3, 3, 3, 2],
-      11: [4, 3, 3, 3, 2, 1], 12: [4, 3, 3, 3, 2, 1], 13: [4, 3, 3, 3, 2, 1, 1],
-      14: [4, 3, 3, 3, 2, 1, 1], 15: [4, 3, 3, 3, 2, 1, 1, 1], 16: [4, 3, 3, 3, 2, 1, 1, 1],
-      17: [4, 3, 3, 3, 2, 1, 1, 1, 1], 18: [4, 3, 3, 3, 3, 1, 1, 1, 1], 19: [4, 3, 3, 3, 3, 2, 1, 1, 1],
-      20: [4, 3, 3, 3, 3, 2, 2, 1, 1]
-    },
-    'Mago': {
-      1: [2], 2: [3], 3: [4, 2], 4: [4, 3], 5: [4, 3, 2], 6: [4, 3, 3],
-      7: [4, 3, 3, 1], 8: [4, 3, 3, 2], 9: [4, 3, 3, 3, 1], 10: [4, 3, 3, 3, 2],
-      11: [4, 3, 3, 3, 2, 1], 12: [4, 3, 3, 3, 2, 1], 13: [4, 3, 3, 3, 2, 1, 1],
-      14: [4, 3, 3, 3, 2, 1, 1], 15: [4, 3, 3, 3, 2, 1, 1, 1], 16: [4, 3, 3, 3, 2, 1, 1, 1],
-      17: [4, 3, 3, 3, 2, 1, 1, 1, 1], 18: [4, 3, 3, 3, 3, 1, 1, 1, 1], 19: [4, 3, 3, 3, 3, 2, 1, 1, 1],
-      20: [4, 3, 3, 3, 3, 2, 2, 1, 1]
-    },
-    'Paladino': {
-      1: [2], 2: [3], 3: [4, 2], 4: [4, 3], 5: [4, 3, 2], 6: [4, 3, 3],
-      7: [4, 3, 3, 1], 8: [4, 3, 3, 2], 9: [4, 3, 3, 3, 1], 10: [4, 3, 3, 3, 2],
-      11: [4, 3, 3, 3, 2, 1], 12: [4, 3, 3, 3, 2, 1], 13: [4, 3, 3, 3, 2, 1, 1],
-      14: [4, 3, 3, 3, 2, 1, 1], 15: [4, 3, 3, 3, 2, 1, 1, 1], 16: [4, 3, 3, 3, 2, 1, 1, 1],
-      17: [4, 3, 3, 3, 2, 1, 1, 1, 1], 18: [4, 3, 3, 3, 3, 1, 1, 1, 1], 19: [4, 3, 3, 3, 3, 2, 1, 1, 1],
-      20: [4, 3, 3, 3, 3, 2, 2, 1, 1]
-    },
-    'Ranger': {
-      1: [2], 2: [3], 3: [4, 2], 4: [4, 3], 5: [4, 3, 2], 6: [4, 3, 3],
-      7: [4, 3, 3, 1], 8: [4, 3, 3, 2], 9: [4, 3, 3, 3, 1], 10: [4, 3, 3, 3, 2],
-      11: [4, 3, 3, 3, 2, 1], 12: [4, 3, 3, 3, 2, 1], 13: [4, 3, 3, 3, 2, 1, 1],
-      14: [4, 3, 3, 3, 2, 1, 1], 15: [4, 3, 3, 3, 2, 1, 1, 1], 16: [4, 3, 3, 3, 2, 1, 1, 1],
-      17: [4, 3, 3, 3, 2, 1, 1, 1, 1], 18: [4, 3, 3, 3, 3, 1, 1, 1, 1], 19: [4, 3, 3, 3, 3, 2, 1, 1, 1],
-      20: [4, 3, 3, 3, 3, 2, 2, 1, 1]
-    },
-    'Bruxo': {
-      1: [1], 2: [2], 3: [2, 2], 4: [2, 2], 5: [2, 2, 1], 6: [2, 2, 1],
-      7: [2, 2, 2], 8: [2, 2, 2], 9: [2, 2, 2, 1], 10: [2, 2, 2, 1],
-      11: [3, 3, 2, 1], 12: [3, 3, 2, 1], 13: [3, 3, 2, 1, 1], 14: [3, 3, 2, 1, 1],
-      15: [3, 3, 2, 2, 1], 16: [3, 3, 2, 2, 1], 17: [4, 4, 3, 2, 1], 18: [4, 4, 3, 2, 1],
-      19: [4, 4, 3, 2, 2], 20: [4, 4, 3, 3, 2]
+  const result: Record<number, number> = { 0: Infinity };
+
+  // Parsear classes e níveis
+  // Formatos esperados: "Mago", "Mago 5", "Mago 2 / Clérigo 3"
+  const classes: { name: string; level: number }[] = [];
+
+  if (characterClass.includes('/')) {
+    characterClass.split('/').forEach(part => {
+      const match = part.trim().match(/^(.+?)\s+(\d+)$/);
+      if (match) {
+        classes.push({ name: match[1].toLowerCase(), level: parseInt(match[2]) });
+      } else {
+        // Fallback para string sem número (ex: erro de migração), assume nível 1
+        classes.push({ name: part.trim().toLowerCase(), level: 1 });
+      }
+    });
+  } else {
+    // Single class
+    classes.push({ name: characterClass.toLowerCase(), level: characterLevel });
+  }
+
+  // 1. Calcular Slots de Pacto (Bruxo)
+  const warlockEntry = classes.find(c => c.name.includes('bruxo'));
+  if (warlockEntry) {
+    const warlockLevel = warlockEntry.level;
+    const pactSlots = WARLOCK_SLOTS_TABLE[warlockLevel] || 0;
+    if (pactSlots > 0) {
+      result[100] = pactSlots;
     }
-  };
+  }
 
-  const classSlots = SPELL_SLOTS_BY_CLASS[characterClass];
-  if (!classSlots || !classSlots[characterLevel]) return { 0: Infinity };
+  // 2. Calcular Slots Normais (Caster Level)
+  let casterLevel = 0;
 
-  const slots = classSlots[characterLevel];
-  const result: Record<number, number> = { 0: Infinity }; // Truques sempre infinitos
-
-  slots.forEach((count, idx) => {
-    result[idx + 1] = count;
+  classes.forEach(c => {
+    if (['bardo', 'clérigo', 'druida', 'feiticeiro', 'mago'].some(name => c.name.includes(name))) {
+      casterLevel += c.level;
+    } else if (['paladino', 'ranger', 'patrulheiro'].some(name => c.name.includes(name))) {
+      casterLevel += Math.floor(c.level / 2);
+    } else if (['guerreiro', 'ladino'].some(name => c.name.includes(name))) {
+      // Subclasses específicas (Cavaleiro Arcano, Trapaceiro Arcano) dariam 1/3, 
+      // mas simplificaremos para 0 aqui pois não temos a subclasse neste contexto.
+      // Adicionar lógica futura se necessário.
+    }
   });
+
+  if (casterLevel > 0) {
+    const slots = STANDARD_SLOTS_TABLE[casterLevel] || [];
+    slots.forEach((count, idx) => {
+      result[idx + 1] = count;
+    });
+  }
 
   return result;
 }
@@ -114,9 +107,18 @@ export function consumeSpellSlot(
     return updated;
   }
 
-  // Descontar slots
+  // Tentar consumir slot normal
   const currentSlots = updated[spellLevel] || 0;
-  updated[spellLevel] = Math.max(0, currentSlots - slotsCost);
+
+  if (currentSlots >= slotsCost) {
+    updated[spellLevel] = Math.max(0, currentSlots - slotsCost);
+  } else {
+    // Se não tiver slot normal, tenta usar slot de Pacto (100)
+    const pactSlots = updated[100] || 0;
+    if (pactSlots >= slotsCost) {
+      updated[100] = Math.max(0, pactSlots - slotsCost);
+    }
+  }
 
   return updated;
 }
@@ -162,7 +164,10 @@ export function canUseSpell(
   const cost = getSpellSlotsCost(spell);
   const available = spellSlotsCurrent[spell.level] || 0;
 
-  return available >= cost;
+  // Verifica se tem slots normais do nível OU slots de pacto (100)
+  const pactAvailable = spellSlotsCurrent[100] || 0;
+
+  return available >= cost || pactAvailable >= cost;
 }
 
 // Formatar status de slots para exibição
