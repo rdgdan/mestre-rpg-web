@@ -17,6 +17,10 @@ export interface Weapon {
     isCustomDamage?: boolean;
     isProficient?: boolean;
     sourceClass?: string;
+    // Dados estruturados
+    diceQty?: number;
+    diceType?: string;
+    diceBonus?: number;
 }
 
 export interface Currency {
