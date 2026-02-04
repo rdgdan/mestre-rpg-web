@@ -198,7 +198,7 @@ export default function CharacterSheetPage() {
             const level = char.level || 1;
             const subclassData = SUBCLASSES[className]?.[subclassName];
 
-            let newFeatures = [...(char.features || [])];
+            const newFeatures = [...(char.features || [])];
 
             if (subclassData) {
                 // Injetar habilidades da subclasse até o nível atual
@@ -497,8 +497,7 @@ export default function CharacterSheetPage() {
                 setRaces(raceData.map(r => r.name));
 
                 // DEBUG: Verificar quantas classes foram carregadas
-                console.log('🔍 DEBUG Classes finais:', loadedClasses);
-                console.log('🔍 DEBUG Total de classes:', loadedClasses.length);
+                // Log removido para conformidade lint
 
                 // Remover duplicatas por nome (caso o merge tenha falhado)
                 const weaponsMap = new Map();
@@ -851,7 +850,7 @@ export default function CharacterSheetPage() {
 
             // Magias (Evitar duplicatas)
             // Lógica ajustada para incluir subclass spells
-            let updatedSpells = [...(prev.spells || [])];
+            const updatedSpells = [...(prev.spells || [])];
 
             // Adicionar Automatic Spells
             if (activeSubclass && prev.class) {

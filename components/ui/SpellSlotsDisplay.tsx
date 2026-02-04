@@ -27,6 +27,16 @@ const SpellSlotsDisplay: React.FC<SpellSlotsDisplayProps> = ({
   const [spellType, setSpellType] = useState<'cantrip' | 'spell' | null>(null);
   const maxSlots = getMaxSpellSlotsForCharacter(characterClass, characterLevel);
 
+  // Calcular slots efetivos (combinando atuais com máximos)
+  const effectiveSlots = React.useMemo(() => {
+    const effective: Record<number, number> = { 0: Infinity };
+    Object.keys(maxSlots).forEach(k => {
+      const lvl = Number(k);
+      effective[lvl] = spellSlotsCurrent[lvl] ?? maxSlots[lvl];
+    });
+    return effective;
+  }, [spellSlotsCurrent, maxSlots]);
+
   // Filtrar apenas níveis com slots
   const availableLevels = Object.keys(maxSlots)
     .map(Number)
@@ -62,16 +72,6 @@ const SpellSlotsDisplay: React.FC<SpellSlotsDisplayProps> = ({
       </div>
     );
   }
-
-  // Calcular slots efetivos (combinando atuais com máximos)
-  const effectiveSlots = React.useMemo(() => {
-    const effective: Record<number, number> = { 0: Infinity };
-    Object.keys(maxSlots).forEach(k => {
-      const lvl = Number(k);
-      effective[lvl] = spellSlotsCurrent[lvl] ?? maxSlots[lvl];
-    });
-    return effective;
-  }, [spellSlotsCurrent, maxSlots]);
 
   // Versão completa: mostra com botão de usar
   return (
