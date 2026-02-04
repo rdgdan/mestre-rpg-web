@@ -5,7 +5,7 @@ import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { logger } from '@/lib/logger';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
-import { doc, getDoc, setDoc, getDocs, collection, writeBatch, query, where, updateDoc, addDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, getDocs, collection, writeBatch, query, where, updateDoc, addDoc, onSnapshot } from 'firebase/firestore';
 import { db, auth } from '@/lib/firebase';
 import { useAuthState } from 'react-firebase-hooks/auth';
 import {
@@ -582,195 +582,233 @@ export default function CharacterSheetPage() {
     }, []);
 
     useEffect(() => {
-        if (loadingAuth || !user || characterLoaded.current) return;
-        if (id === 'novo' && character) return;
+        if (loadingAuth || !user || id === 'novo') return;
 
-        const loadChar = async () => {
+        const docRef = doc(db, 'personagens', id);
+        const unsubscribe = onSnapshot(docRef, async (docSnap) => {
+            if (!docSnap.exists()) {
+                setError("Ficha não encontrada ou acesso negado.");
+                router.push('/personagens');
+                return;
+            }
+
+            const charData = docSnap.data();
+
+            // Sincronização em tempo real para campos mutáveis (após o carregamento inicial)
+            if (characterLoaded.current) {
+                setCharacter(prev => {
+                    if (!prev) return prev;
+
+                    // Verifica se houve mudança real nos campos mutáveis
+                    const hasChanged =
+                        prev.currentHp !== charData.currentHp ||
+                        prev.activeEncounterId !== charData.activeEncounterId ||
+                        prev.experience !== charData.experience ||
+                        prev.campaignId !== charData.campaignId ||
+                        JSON.stringify(prev.activeEffects || []) !== JSON.stringify(charData.activeEffects || []) ||
+                        JSON.stringify(prev.conditions || []) !== JSON.stringify(charData.conditions || []) ||
+                        JSON.stringify(prev.spellSlotsCurrent || {}) !== JSON.stringify(charData.spellSlotsCurrent || {}) ||
+                        JSON.stringify(prev.authorizedMasterIds || []) !== JSON.stringify(charData.authorizedMasterIds || []);
+
+                    if (!hasChanged) return prev;
+
+                    console.log("♻️ [SYNC] Atualizando ficha com dados do Firestore...");
+                    return {
+                        ...prev,
+                        currentHp: charData.currentHp,
+                        maxHp: charData.maxHp || prev.maxHp,
+                        activeEncounterId: charData.activeEncounterId,
+                        campaignId: charData.campaignId,
+                        activeEffects: charData.activeEffects || [],
+                        conditions: charData.conditions || [],
+                        experience: charData.experience,
+                        spellSlotsCurrent: charData.spellSlotsCurrent || prev.spellSlotsCurrent,
+                        authorizedMasterIds: charData.authorizedMasterIds || prev.authorizedMasterIds,
+                        attributes: charData.attributes || prev.attributes,
+                        inventory: charData.inventory || prev.inventory,
+                        spells: charData.spells || prev.spells,
+                    };
+                });
+                return;
+            }
+
+            // Primeiro carregamento (Pesado: Enriquecimento)
             setIsLoading(true);
             try {
-                if (id === 'novo') {
-                    router.push('/personagem/criar');
-                    return;
-                } else {
-                    const docRef = doc(db, 'personagens', id);
-                    const docSnap = await getDoc(docRef);
+                const isOwner = charData.ownerId === user.uid;
 
-                    if (docSnap.exists()) {
-                        const charData = docSnap.data();
-                        const isOwner = charData.ownerId === user.uid;
+                // Salva o ID do personagem ativo para integração com a Biblioteca
+                localStorage.setItem('activeCharacterId', id as string);
+                localStorage.setItem('activeCharacterName', charData.name);
 
-                        // Salva o ID do personagem ativo para integração com a Biblioteca
-                        localStorage.setItem('activeCharacterId', id as string);
-                        localStorage.setItem('activeCharacterName', charData.name);
+                // Verificar se o usuário é o mestre da campanha vinculada
+                let isCampaignMaster = false;
+                if (charData.campaignId) {
+                    const campaignRef = doc(db, 'campaigns', charData.campaignId);
+                    const campaignSnap = await getDoc(campaignRef);
+                    if (campaignSnap.exists() && campaignSnap.data().ownerId === user.uid) {
+                        isCampaignMaster = true;
+                    }
+                }
 
-                        // Verificar se o usuário é o mestre da campanha vinculada
-                        let isCampaignMaster = false;
-                        if (charData.campaignId) {
-                            const campaignRef = doc(db, 'campaigns', charData.campaignId);
-                            const campaignSnap = await getDoc(campaignRef);
-                            if (campaignSnap.exists() && campaignSnap.data().ownerId === user.uid) {
-                                isCampaignMaster = true;
-                            }
-                        }
-
-                        // Verificar se é o Host do Encontro Ativo (Arena ou Encounter)
-                        let isEncounterHost = false;
-                        if (charData.activeEncounterId) {
-                            const encounterRef = doc(db, 'encounters', charData.activeEncounterId);
-                            const encounterSnap = await getDoc(encounterRef);
-                            if (encounterSnap.exists() && encounterSnap.data().ownerId === user.uid) {
-                                isEncounterHost = true;
-                            } else {
-                                const arenaRef = doc(db, 'arenas_online', charData.activeEncounterId);
-                                const arenaSnap = await getDoc(arenaRef);
-                                if (arenaSnap.exists() && arenaSnap.data().hostId === user.uid) {
-                                    isEncounterHost = true;
-                                }
-                            }
-                        }
-
-                        const isOfficialMaster = isMaster(user.uid);
-                        const isAuthorizedMaster = charData.authorizedMasterIds?.includes(user.uid);
-
-                        if (isOwner || isCampaignMaster || isEncounterHost || isOfficialMaster || isAuthorizedMaster) {
-                            // Define modo somente leitura se NÃO for o dono
-                            setIsReadOnly(!isOwner);
-
-                            // Sincronização Vitalícia: Se é um mestre/host acessando pela primeira vez, registra o UID
-                            if ((isCampaignMaster || isEncounterHost || isOfficialMaster) && !isAuthorizedMaster && !isOwner) {
-                                try {
-                                    const updatedMasterIds = [...(charData.authorizedMasterIds || []), user.uid];
-                                    await updateDoc(docRef, { authorizedMasterIds: updatedMasterIds });
-                                    console.log("🔓 Acesso vitalício de leitura concedido ao mestre:", user.uid);
-                                } catch (err) {
-                                    console.warn("⚠️ Falha ao registrar acesso vitalício:", err);
-                                }
-                            }
-
-                            const hydratedChar = hydrateCharacter(charData as Partial<Character>, docSnap.id);
-
-                            // Enriquecer magias se necessário
-                            const { fetchGlobalSpells } = await import('@/lib/spells-data');
-                            const globalSpells = await fetchGlobalSpells();
-
-                            let needsUpdate = false;
-                            const enrichedSpells = (hydratedChar.spells || []).map(s => {
-                                if (!s || !s.name) return s;
-                                if (s.description && s.description !== 'Sem descrição.' && s.castingTime) return s;
-
-                                const match = globalSpells.find(gs => gs.name.toLowerCase() === s.name.toLowerCase());
-                                if (match) {
-                                    needsUpdate = true;
-                                    return { ...s, ...match, id: s.id };
-                                }
-                                return s;
-                            });
-
-                            hydratedChar.spells = enrichedSpells;
-
-                            // Enriquecer itens se necessário
-                            const { fetchGlobalItems, parseDamageString: parseDmg } = await import('@/lib/items-data');
-
-                            // Busca na coleção centralizada 'itens' (fonte única de verdade)
-                            const firestoreItens = await fetchGlobalItems();
-
-                            const allWeapons = firestoreItens.filter(i => i.itemType === 'WEAPON' || i.damage || i.diceType);
-                            const allEquipment = firestoreItens.filter(i => i.itemType !== 'WEAPON' && !i.damage && !i.diceType);
-
-                            const normalizeStr = (str: string) => str ? str.normalize('NFC').trim().toLowerCase() : '';
-
-                            const enrichedWeapons = (hydratedChar.inventory.weapons || []).map(w => {
-                                if (!w || !w.name) return w;
-                                // Se for customizado, não tenta enriquecer para não perder edição do usuário
-                                if (w.isCustomDamage) return w;
-
-                                // Tenta validar se já tem dados críticos. Se tiver damageType, assume que está ok, 
-                                // MAS se o nome bater com global, pode ser melhor enriquecer para garantir peso e regras novas?
-                                // Vamos priorizar o banco global se não for customizado.
-
-                                const wNameNormalized = normalizeStr(w.name);
-                                const matches = allWeapons.filter(gi => normalizeStr(gi.name) === wNameNormalized);
-
-                                logger.debug(`Buscando Arma: "${w.name}" (Normalizado: "${wNameNormalized}")`);
-                                if (matches.length > 0) {
-                                    // Prioridade: code > database
-                                    const match = matches.find(m => (m as any).origin === 'code') ||
-                                        matches.find(m => (m as any).origin === 'database') ||
-                                        matches[0];
-
-                                    if (matches.length > 1) {
-                                        logger.warn(`[AVISO] Múltiplos registros para "${w.name}":`, matches.map(m => ((m as any).origin)));
-                                    }
-
-                                    logger.debug("Correspondência ENCONTRADA (${(match as any).origin || 'unknown'}):", match);
-                                    const p = parseDmg(match.damage || '1d8');
-                                    needsUpdate = true;
-
-                                    const oldWeight = w.weight || 0;
-                                    const newWeight = match.weight || 0;
-                                    if (oldWeight !== newWeight) {
-                                        logger.debug(`Corrigindo Peso de "${w.name}": ${oldWeight} -> ${newWeight}`);
-                                    }
-
-                                    // ESTRATÉGIA: Pega tudo do banco/código, mas mantém o que é específico do import
-                                    return {
-                                        ...w,
-                                        ...match,
-                                        id: w.id,
-                                        quantity: w.quantity,
-                                        weight: match.weight !== undefined ? match.weight : w.weight,
-                                        diceQty: p.diceQty,
-                                        diceType: p.diceType,
-                                        diceBonus: p.diceBonus,
-                                        isCustomDamage: false
-                                    };
-                                } else {
-                                    console.warn(`[DEBUG] Não encontrado: "${w.name}" no pool de ${allWeapons.length} armas.`);
-                                    return w;
-                                }
-                            });
-
-                            const enrichedEquipment = (hydratedChar.inventory.otherEquipment || []).map(e => {
-                                if (!e || !e.name) return e;
-                                // Removido o guard para sempre tentar enriquecer por nome (preferência por dados oficiais)
-                                const match = allEquipment.find(gi => normalizeStr(gi.name) === normalizeStr(e.name));
-                                if (match) {
-                                    logger.debug("Equipamento ENCONTRADO (${(match as any).origin || 'unknown'}):", match);
-                                    needsUpdate = true;
-                                    return {
-                                        ...e,
-                                        ...match,
-                                        id: e.id,
-                                        type: (match.itemType === 'ARMOR' ? 'armor' : match.itemType === 'SHIELD' ? 'shield' : 'other'),
-                                        armorClass: match.ac || e.armorClass,
-                                        weight: match.weight || e.weight
-                                    };
-                                }
-                                return e;
-                            });
-
-                            hydratedChar.inventory.weapons = enrichedWeapons;
-                            hydratedChar.inventory.otherEquipment = enrichedEquipment;
-
-                            const finalComputedChar = calculateComputedStats(hydratedChar);
-                            setCharacter(finalComputedChar);
-                            characterLoaded.current = true;
-
-                            // Se houve enriquecimento, salva de volta para evitar re-enriquecer
-                            if (needsUpdate) {
-                                debouncedSave(finalComputedChar);
-                            }
-                        } else {
-                            setError("Ficha não encontrada ou acesso negado.");
-                            router.push('/personagens');
+                // Verificar se é o Host do Encontro Ativo (Arena ou Encounter)
+                let isEncounterHost = false;
+                if (charData.activeEncounterId) {
+                    const encounterRef = doc(db, 'encounters', charData.activeEncounterId);
+                    const encounterSnap = await getDoc(encounterRef);
+                    if (encounterSnap.exists() && encounterSnap.data().ownerId === user.uid) {
+                        isEncounterHost = true;
+                    } else {
+                        const arenaRef = doc(db, 'arenas_online', charData.activeEncounterId);
+                        const arenaSnap = await getDoc(arenaRef);
+                        if (arenaSnap.exists() && arenaSnap.data().hostId === user.uid) {
+                            isEncounterHost = true;
                         }
                     }
                 }
-            } catch (e) { setError("Falha ao carregar a ficha."); console.error(e); }
-            finally { setIsLoading(false); }
-        };
-        loadChar();
-    }, [id, user, loadingAuth, router, character, debouncedSave]);
+
+                const isOfficialMaster = isMaster(user.uid);
+                const isAuthorizedMaster = charData.authorizedMasterIds?.includes(user.uid);
+
+                if (isOwner || isCampaignMaster || isEncounterHost || isOfficialMaster || isAuthorizedMaster) {
+                    // Define modo somente leitura se NÃO for o dono
+                    setIsReadOnly(!isOwner);
+
+                    // Sincronização Vitalícia: Se é um mestre/host acessando pela primeira vez, registra o UID
+                    if ((isCampaignMaster || isEncounterHost || isOfficialMaster) && !isAuthorizedMaster && !isOwner) {
+                        try {
+                            const updatedMasterIds = [...(charData.authorizedMasterIds || []), user.uid];
+                            await updateDoc(docRef, { authorizedMasterIds: updatedMasterIds });
+                            console.log("🔓 Acesso vitalício de leitura concedido ao mestre:", user.uid);
+                        } catch (err) {
+                            console.warn("⚠️ Falha ao registrar acesso vitalício:", err);
+                        }
+                    }
+
+                    const hydratedChar = hydrateCharacter(charData as Partial<Character>, docSnap.id);
+
+                    // Enriquecer magias se necessário
+                    const { fetchGlobalSpells } = await import('@/lib/spells-data');
+                    const globalSpells = await fetchGlobalSpells();
+
+                    let needsUpdate = false;
+                    const enrichedSpells = (hydratedChar.spells || []).map(s => {
+                        if (!s || !s.name) return s;
+                        if (s.description && s.description !== 'Sem descrição.' && s.castingTime) return s;
+
+                        const match = globalSpells.find(gs => gs.name.toLowerCase() === s.name.toLowerCase());
+                        if (match) {
+                            needsUpdate = true;
+                            return { ...s, ...match, id: s.id };
+                        }
+                        return s;
+                    });
+
+                    hydratedChar.spells = enrichedSpells;
+
+                    // Enriquecer itens se necessário
+                    const { fetchGlobalItems, parseDamageString: parseDmg } = await import('@/lib/items-data');
+
+                    // Busca na coleção centralizada 'itens' (fonte única de verdade)
+                    const firestoreItens = await fetchGlobalItems();
+
+                    const allWeapons = firestoreItens.filter(i => i.itemType === 'WEAPON' || i.damage || i.diceType);
+                    const allEquipment = firestoreItens.filter(i => i.itemType !== 'WEAPON' && !i.damage && !i.diceType);
+
+                    const normalizeStr = (str: string) => str ? str.normalize('NFC').trim().toLowerCase() : '';
+
+                    const enrichedWeapons = (hydratedChar.inventory.weapons || []).map(w => {
+                        if (!w || !w.name) return w;
+                        // Se for customizado, não tenta enriquecer para não perder edição do usuário
+                        if (w.isCustomDamage) return w;
+
+                        // Tenta validar se já tem dados críticos. Se tiver damageType, assume que está ok, 
+                        // MAS se o nome bater com global, pode ser melhor enriquecer para garantir peso e regras novas?
+                        // Vamos priorizar o banco global se não for customizado.
+
+                        const wNameNormalized = normalizeStr(w.name);
+                        const matches = allWeapons.filter(gi => normalizeStr(gi.name) === wNameNormalized);
+
+                        logger.debug(`Buscando Arma: "${w.name}" (Normalizado: "${wNameNormalized}")`);
+                        if (matches.length > 0) {
+                            // Prioridade: code > database
+                            const match = matches.find(m => (m as any).origin === 'code') ||
+                                matches.find(m => (m as any).origin === 'database') ||
+                                matches[0];
+
+                            if (matches.length > 1) {
+                                logger.warn(`[AVISO] Múltiplos registros para "${w.name}":`, matches.map(m => ((m as any).origin)));
+                            }
+
+                            logger.debug("Correspondência ENCONTRADA (${(match as any).origin || 'unknown'}):", match);
+                            const p = parseDmg(match.damage || '1d8');
+                            needsUpdate = true;
+
+                            const oldWeight = w.weight || 0;
+                            const newWeight = match.weight || 0;
+                            if (oldWeight !== newWeight) {
+                                logger.debug(`Corrigindo Peso de "${w.name}": ${oldWeight} -> ${newWeight}`);
+                            }
+
+                            // ESTRATÉGIA: Pega tudo do banco/código, mas mantém o que é específico do import
+                            return {
+                                ...w,
+                                ...match,
+                                id: w.id,
+                                quantity: w.quantity,
+                                weight: match.weight !== undefined ? match.weight : w.weight,
+                                diceQty: p.diceQty,
+                                diceType: p.diceType,
+                                diceBonus: p.diceBonus,
+                                isCustomDamage: false
+                            };
+                        } else {
+                            console.warn(`[DEBUG] Não encontrado: "${w.name}" no pool de ${allWeapons.length} armas.`);
+                            return w;
+                        }
+                    });
+
+                    const enrichedEquipment = (hydratedChar.inventory.otherEquipment || []).map(e => {
+                        if (!e || !e.name) return e;
+                        // Removido o guard para sempre tentar enriquecer por nome (preferência por dados oficiais)
+                        const match = allEquipment.find(gi => normalizeStr(gi.name) === normalizeStr(e.name));
+                        if (match) {
+                            logger.debug("Equipamento ENCONTRADO (${(match as any).origin || 'unknown'}):", match);
+                            needsUpdate = true;
+                            return {
+                                ...e,
+                                ...match,
+                                id: e.id,
+                                type: (match.itemType === 'ARMOR' ? 'armor' : match.itemType === 'SHIELD' ? 'shield' : 'other'),
+                                armorClass: match.ac || e.armorClass,
+                                weight: match.weight || e.weight
+                            };
+                        }
+                        return e;
+                    });
+
+                    hydratedChar.inventory.weapons = enrichedWeapons;
+                    hydratedChar.inventory.otherEquipment = enrichedEquipment;
+
+                    const finalComputedChar = calculateComputedStats(hydratedChar);
+                    setCharacter(finalComputedChar);
+                    characterLoaded.current = true;
+
+                    // Se houve enriquecimento, salva de volta para evitar re-enriquecer
+                    if (needsUpdate) {
+                        debouncedSave(finalComputedChar);
+                    }
+                }
+            } catch (e) {
+                setError("Falha ao carregar a ficha.");
+                console.error(e);
+            } finally {
+                setIsLoading(false);
+            }
+        });
+
+        return () => unsubscribe();
+    }, [id, user, loadingAuth, router, debouncedSave]);
 
     // Monitoramento de Level Up
     useEffect(() => {
@@ -1172,24 +1210,12 @@ export default function CharacterSheetPage() {
         });
     };
 
-    const handleLongRest = () => {
-        updateCharacter(char => ({
-            ...char,
-            currentHp: char.maxHp,
-            temporaryHp: 0,
-            spellcasting: {
-                ...char.spellcasting,
-                slots: Object.fromEntries(
-                    Object.entries(char.spellcasting.slots).map(([lvl, data]) => [
-                        lvl, { ...data, current: data.max }
-                    ])
-                )
-            }
-        }));
-        showToast('✨ Descanso Longo concluído! PV e Slots de Magia restaurados.', 'success');
-    };
 
     const togglePreparedSpell = (spellName: string) => {
+        if (character?.activeEncounterId && !isReadOnly) {
+            showToast('⚠️ Não é possível alterar magias preparadas durante um confronto ativo!', 'warning');
+            return;
+        }
         updateCharacter(char => {
             const spell = char.spells.find(s => s.name === spellName);
             if (!spell) return char;
@@ -1466,6 +1492,10 @@ export default function CharacterSheetPage() {
 
 
     const handleRemoveSpell = (spellName: string) => {
+        if (character?.activeEncounterId && !isReadOnly) {
+            showToast('⚠️ Não é possível remover magias durante um confronto ativo!', 'warning');
+            return;
+        }
         updateCharacter(char => ({
             ...char, spells: (char.spells || []).filter(s => s.name.trim().toLowerCase() !== spellName.trim().toLowerCase())
         }));
@@ -3068,6 +3098,12 @@ export default function CharacterSheetPage() {
                                 spellSlotsCurrent: newSlots,
                                 arcaneRecoveryUsed: true
                             }));
+                            notifyEncounter({
+                                type: 'rest-short',
+                                message: 'Realizou uma Recuperação Arcana',
+                                icon: '🧪',
+                                severity: 'success'
+                            });
                             setIsArcaneRecoveryModalOpen(false);
                             showToast("✨ Recuperação Arcana utilizada com sucesso!", "success");
                         }}
@@ -3117,6 +3153,12 @@ export default function CharacterSheetPage() {
                                     const amount = parseInt(xpAmountToAdd);
                                     if (!isNaN(amount)) {
                                         handleFieldChange('experience', (character.experience || 0) + amount);
+                                        notifyEncounter({
+                                            type: 'ability-use',
+                                            message: `Adicionou ${amount} XP manualmente`,
+                                            icon: '📈',
+                                            severity: 'info'
+                                        });
                                         setIsXPModalOpen(false);
                                     }
                                 }}

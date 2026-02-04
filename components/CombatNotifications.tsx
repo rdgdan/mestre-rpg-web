@@ -24,7 +24,7 @@ export const CombatNotifications: React.FC<CombatNotificationsProps> = ({
   maxNotifications = 5
 }) => {
   // Mostrar apenas as N notificações mais recentes
-  const displayNotifications = notifications.slice(-maxNotifications);
+  const displayNotifications = notifications.slice(0, maxNotifications);
 
   const getSeverityStyles = (severity: CombatNotification['severity']) => {
     switch (severity) {
