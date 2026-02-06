@@ -109,7 +109,17 @@ export function useCharacterSheet(id: string) {
 
     const handleFieldChange = useCallback(async (field: keyof Omit<Character, 'attributes' | 'skills' | 'inventory'>, value: any) => {
         const oldValue = character ? character[field] : null;
-        updateCharacter(char => ({ ...char, [field]: value }));
+
+        updateCharacter(char => {
+            const updated = { ...char, [field]: value };
+
+            // LÓGICA DE RECUPERAÇÃO: Se estava com 0 HP e recebeu cura, reseta os death saves
+            if (field === 'currentHp' && value > 0 && (oldValue as number || 0) <= 0) {
+                updated.deathSaves = { successes: 0, failures: 0 };
+            }
+
+            return updated;
+        });
 
         // Sincronização de HP com o Combate
         if (field === 'currentHp' && character?.activeEncounterId && !isReadOnly && typeof value === 'number') {
@@ -172,9 +182,55 @@ export function useCharacterSheet(id: string) {
                 current = current[parts[i]];
             }
             current[parts[parts.length - 1]] = value;
+
+            // --- LÓGICA DE DEATH SAVES AUTOMÁTICA ---
+            if (path.startsWith('deathSaves.')) {
+                const successes = newChar.deathSaves?.successes || 0;
+                const failures = newChar.deathSaves?.failures || 0;
+
+                // Apenas notificar se atingiu o limite, mas não resetar aqui
+                // O reset será feito pelo resolveDeathSaves chamado pela UI
+                if (successes >= 3) {
+                    notifyEncounter({
+                        type: 'effect-applied',
+                        message: 'Atingiu 3 sucessos nas salvaguardas!',
+                        icon: '✨',
+                        severity: 'success'
+                    });
+                } else if (failures >= 3) {
+                    notifyEncounter({
+                        type: 'effect-applied',
+                        message: 'Atingiu 3 falhas nas salvaguardas!',
+                        icon: '💀',
+                        severity: 'alert'
+                    });
+                }
+            }
+
             return newChar;
         });
-    }, [updateCharacter]);
+    }, [updateCharacter, notifyEncounter]);
+
+    const resolveDeathSaves = useCallback((result: 'success' | 'failure') => {
+        updateCharacter(char => {
+            const newChar = { ...char };
+            if (result === 'success') {
+                newChar.currentHp = 1;
+            } else {
+                newChar.currentHp = char.maxHp;
+                // Mensagem amigável já foi planejada na UI
+            }
+            newChar.deathSaves = { successes: 0, failures: 0 };
+            return newChar;
+        });
+
+        notifyEncounter({
+            type: 'effect-applied',
+            message: result === 'success' ? 'Estabilizou e recuperou a consciência!' : 'Sucumbiu ao destino, mas ergueu-se renovado!',
+            icon: result === 'success' ? '✨' : '🛡️',
+            severity: result === 'success' ? 'success' : 'info'
+        });
+    }, [updateCharacter, notifyEncounter]);
 
     const handleRest = useCallback(async (restType: 'short' | 'long') => {
         if (!character) return;
@@ -422,6 +478,7 @@ export function useCharacterSheet(id: string) {
         handleNestedChange,
         handleRest,
         handleSpellUsed,
+        resolveDeathSaves,
         notifyEncounter
     };
 }

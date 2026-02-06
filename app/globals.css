@@ -393,14 +393,14 @@ body {
   }
 }
 
-.defeated-animation>*:not(.overlay-colorido) {
+.defeated-animation>*:not(.keep-color) {
   animation: defeated-pulse 1.5s ease-in-out infinite;
 }
 
-/* Remove todas as outras animações quando derrotado */
-.defeated-animation .effect-unique,
-.defeated-animation .active-turn-animation,
-.defeated-animation [class*="animate-"] {
+/* Remove todas as outras animações quando derrotado, EXCETO nos elementos coloridos */
+.defeated-animation .effect-unique:not(.keep-color),
+.defeated-animation .active-turn-animation:not(.keep-color),
+.defeated-animation [class*="animate-"]:not(.keep-color):not(.keep-color *) {
   animation: defeated-pulse 1.5s ease-in-out infinite !important;
 }
 

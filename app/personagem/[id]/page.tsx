@@ -107,6 +107,153 @@ const ConditionVisuals: React.FC<{ hasBenefits: boolean; hasDebuffs: boolean; is
     );
 };
 
+// Componente para bloquear a ficha e gerenciar as salvaguardas contra a morte
+const DeathOverlay: React.FC<{
+    deathSaves: { successes: number; failures: number };
+    onSaveChange: (path: string, value: number) => void;
+    onResolve: (result: 'success' | 'failure') => void;
+    characterName: string;
+}> = ({ deathSaves, onSaveChange, onResolve, characterName }) => {
+    const isFinished = deathSaves.successes >= 3 || deathSaves.failures >= 3;
+    const result = deathSaves.successes >= 3 ? 'success' : 'failure';
+
+    return (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 backdrop-blur-xl bg-black/85 animate-fade-in keep-color">
+            <div className="max-w-md w-full bg-slate-900/90 border-2 border-red-500/50 shadow-[0_0_80px_rgba(220,38,38,0.4)] rounded-3xl p-8 text-center space-y-8 relative overflow-hidden">
+                {/* Efeito de vinheta vermelha e brilho pulsante */}
+                <div className="absolute inset-0 pointer-events-none shadow-[inset_0_0_120px_rgba(220,38,38,0.3)] animate-pulse" />
+                <div className="absolute top-0 left-1/2 -translate-x-1/2 w-64 h-32 bg-red-600/20 blur-[100px] pointer-events-none" />
+
+                <div className="space-y-3 relative z-10">
+                    <h2 className="text-5xl font-black text-transparent bg-clip-text bg-gradient-to-b from-red-400 to-red-700 font-medieval tracking-tighter uppercase filter drop-shadow-[0_0_10px_rgba(220,38,38,0.5)]">
+                        {isFinished ? (result === 'success' ? 'Recuperado' : 'Sucumbiu') : 'Inconsciente'}
+                    </h2>
+                    <p className="text-rpg-grey font-cinzel text-xs uppercase tracking-[0.3em] font-bold">
+                        {isFinished
+                            ? (result === 'success' ? `${characterName} abre os olhos novamente...` : 'O destino foi selado.')
+                            : `${characterName} está entre dois mundos...`}
+                    </p>
+                </div>
+
+                <div className="bg-black/60 p-7 rounded-2xl border border-white/10 space-y-10 relative z-10 shadow-inner">
+                    {isFinished ? (
+                        <div className="space-y-6 animate-fade-up">
+                            {result === 'success' ? (
+                                <div className="space-y-4">
+                                    <div className="text-5xl">✨</div>
+                                    <p className="text-rpg-parchment font-cinzel text-lg leading-relaxed">
+                                        Uma centelha de vontade arde em seu peito! Você estabilizou e está pronto para voltar à luta.
+                                    </p>
+                                    <button
+                                        onClick={() => onResolve('success')}
+                                        className="w-full py-4 bg-green-600 hover:bg-green-500 text-white font-black uppercase tracking-widest rounded-xl transition-all shadow-[0_0_20px_rgba(34,197,94,0.4)]"
+                                    >
+                                        Levantar (1 PV)
+                                    </button>
+                                </div>
+                            ) : (
+                                <div className="space-y-4">
+                                    <div className="text-5xl">🛡️</div>
+                                    <p className="text-rpg-parchment font-cinzel text-lg leading-relaxed">
+                                        Sua jornada foi árdua e seus ferimentos profundos. Embora você tenha sucumbido hoje, o espírito de um herói nunca apaga!
+                                    </p>
+                                    <p className="text-red-400 text-sm font-cinzel italic bg-red-900/20 py-2 rounded-lg">
+                                        Você caiu em combate, mas ergue-se renovado pela pura força de sua lenda!
+                                    </p>
+                                    <button
+                                        onClick={() => onResolve('failure')}
+                                        className="w-full py-4 bg-red-600 hover:bg-red-500 text-white font-black uppercase tracking-widest rounded-xl transition-all shadow-[0_0_20px_rgba(220,38,38,0.4)]"
+                                    >
+                                        Ascensão Heróica (100% PV)
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+                    ) : (
+                        <div className="space-y-8">
+                            <p className="text-[10px] text-rpg-parchment/40 font-cinzel italic uppercase tracking-widest">
+                                O destino será decidido nos dados
+                            </p>
+
+                            <div className="space-y-8">
+                                {/* Sucessos */}
+                                <div className="space-y-4">
+                                    <h3 className="text-[11px] font-black text-green-500 uppercase tracking-[0.4em] flex items-center justify-center gap-3">
+                                        <span className="h-[1px] w-8 bg-green-500/20"></span>
+                                        Sucessos
+                                        <span className="h-[1px] w-8 bg-green-500/20"></span>
+                                    </h3>
+                                    <div className="flex justify-center gap-6">
+                                        {[1, 2, 3].map(i => (
+                                            <div
+                                                key={`success-${i}`}
+                                                onClick={() => !isFinished && onSaveChange('deathSaves.successes', deathSaves.successes >= i ? i - 1 : i)}
+                                                className={`w-12 h-12 rounded-xl rotate-45 border-2 transition-all duration-300 flex items-center justify-center group
+                                                    ${isFinished ? 'cursor-default opacity-50' : 'cursor-pointer'}
+                                                    ${deathSaves.successes >= i
+                                                        ? 'bg-green-500 border-green-300 shadow-[0_0_25px_rgba(34,197,94,0.6)] scale-110'
+                                                        : 'bg-green-950/20 border-green-500/20 hover:border-green-500/60 hover:bg-green-500/10'}`}
+                                            >
+                                                <div className={`-rotate-45 font-medieval text-xl transition-colors ${deathSaves.successes >= i ? 'text-white' : 'text-green-500/30 group-hover:text-green-500/60'}`}>
+                                                    {i}
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                {/* Falhas */}
+                                <div className="space-y-4">
+                                    <h3 className="text-[11px] font-black text-red-500 uppercase tracking-[0.4em] flex items-center justify-center gap-3">
+                                        <span className="h-[1px] w-8 bg-red-500/20"></span>
+                                        Falhas
+                                        <span className="h-[1px] w-8 bg-red-500/20"></span>
+                                    </h3>
+                                    <div className="flex justify-center gap-6">
+                                        {[1, 2, 3].map(i => (
+                                            <div
+                                                key={`failure-${i}`}
+                                                onClick={() => !isFinished && onSaveChange('deathSaves.failures', deathSaves.failures >= i ? i - 1 : i)}
+                                                className={`w-12 h-12 rounded-xl rotate-45 border-2 transition-all duration-300 flex items-center justify-center group
+                                                    ${isFinished ? 'cursor-default opacity-50' : 'cursor-pointer'}
+                                                    ${deathSaves.failures >= i
+                                                        ? 'bg-red-600 border-red-400 shadow-[0_0_25px_rgba(220,38,38,0.6)] scale-110'
+                                                        : 'bg-red-950/20 border-red-500/20 hover:border-red-500/60 hover:bg-red-500/10'}`}
+                                            >
+                                                <div className={`-rotate-45 font-medieval text-xl transition-colors ${deathSaves.failures >= i ? 'text-white' : 'text-red-500/30 group-hover:text-red-500/60'}`}>
+                                                    {i}
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </div>
+
+                {/* Mensagens Amigáveis Dinâmicas - Só mostra enquanto não terminou */}
+                {!isFinished && (
+                    <div className="h-6 flex items-center justify-center">
+                        {deathSaves.failures === 2 && (
+                            <p className="text-red-400 text-sm font-cinzel font-bold animate-pulse tracking-wide italic">⚠️ Resista... seu fogo ainda queima!</p>
+                        )}
+                        {deathSaves.successes === 2 && (
+                            <p className="text-green-400 text-sm font-cinzel font-bold animate-pulse tracking-wide italic">✨ A luz está vencendo a escuridão!</p>
+                        )}
+                    </div>
+                )}
+
+                <div className="pt-4">
+                    <p className="text-[10px] text-rpg-grey/40 uppercase tracking-[0.5em] font-cinzel transition-opacity duration-1000">
+                        {isFinished ? 'Sua lenda continua' : 'Sua jornada ainda não terminou'}
+                    </p>
+                </div>
+            </div>
+        </div>
+    );
+};
+
 export default function CharacterSheetPage() {
     const params = useParams();
     const router = useRouter();
@@ -128,6 +275,7 @@ export default function CharacterSheetPage() {
         handleNestedChange,
         handleRest,
         handleSpellUsed,
+        resolveDeathSaves,
         classes: availableClasses, // Rename to avoid conflict with local state if any, though hook uses 'classes'
     } = useCharacterSheet(id);
 
@@ -344,6 +492,16 @@ export default function CharacterSheetPage() {
         <div className={`min-h-screen p-4 text-rpg-parchment bg-rpg-dark selection:bg-rpg-gold/30 transition-all duration-1000 relative ${activeVisualClasses}`}>
             {/* Camada Visual de Condições (Partículas) */}
             <ConditionVisuals hasBenefits={hasBenefits} hasDebuffs={hasDebuffs} isDefeated={isDefeated} />
+
+            {/* Overlay de Morte (z-100) - Bloqueia tudo quando HP <= 0 */}
+            {!isReadOnly && character.currentHp <= 0 && (
+                <DeathOverlay
+                    deathSaves={character.deathSaves || { successes: 0, failures: 0 }}
+                    onSaveChange={handleNestedChange}
+                    onResolve={resolveDeathSaves}
+                    characterName={character.name}
+                />
+            )}
 
             {/* Conteúdo da Ficha (Z-index superior às partículas) */}
             <div className="relative z-10">
