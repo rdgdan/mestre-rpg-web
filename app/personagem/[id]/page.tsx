@@ -40,63 +40,70 @@ import { BENEFIT_IDS } from '@/lib/effects-conditions';
 const ConditionVisuals: React.FC<{ hasBenefits: boolean; hasDebuffs: boolean; isDefeated: boolean }> = ({ hasBenefits, hasDebuffs, isDefeated }) => {
     if (isDefeated) return null;
     return (
-        <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden">
-            {hasBenefits && (
-                <>
-                    <div className="particle-benefit particle-benefit-up" style={{ left: '2%', animationDelay: '0s', width: '3px', height: '3px' } as any} />
-                    <div className="particle-benefit particle-benefit-up" style={{ left: '12%', animationDelay: '0.5s' } as any} />
-                    <div className="particle-benefit particle-benefit-up" style={{ left: '25%', animationDelay: '1.2s', width: '5px', height: '5px' } as any} />
-                    <div className="particle-benefit particle-benefit-up" style={{ left: '38%', animationDelay: '0.2s' } as any} />
-                    <div className="particle-benefit particle-benefit-up" style={{ left: '45%', animationDelay: '0.8s', width: '3px', height: '3px' } as any} />
-                    <div className="particle-benefit particle-benefit-up" style={{ left: '55%', animationDelay: '1.5s' } as any} />
-                    <div className="particle-benefit particle-benefit-up" style={{ left: '68%', animationDelay: '0.4s', width: '4px', height: '4px' } as any} />
-                    <div className="particle-benefit particle-benefit-up" style={{ left: '75%', animationDelay: '2.1s' } as any} />
-                    <div className="particle-benefit particle-benefit-up" style={{ left: '88%', animationDelay: '1.1s', width: '5px', height: '5px' } as any} />
-                    <div className="particle-benefit particle-benefit-up" style={{ left: '95%', animationDelay: '0.8s' } as any} />
+        <>
+            {/* Camadas de Glow de Fundo (z-0) */}
+            <div className={`fixed inset-0 pointer-events-none z-0 transition-opacity duration-1000 ${hasBenefits ? 'opacity-100' : 'opacity-0'} bg-glow-benefit`} />
+            <div className={`fixed inset-0 pointer-events-none z-0 transition-opacity duration-1000 ${hasDebuffs ? 'opacity-100' : 'opacity-0'} bg-glow-debuff`} />
 
-                    <div className="particle-benefit particle-benefit-down" style={{ left: '8%', animationDelay: '0.3s' } as any} />
-                    <div className="particle-benefit particle-benefit-down" style={{ left: '20%', animationDelay: '1.8s', width: '3px', height: '3px' } as any} />
-                    <div className="particle-benefit particle-benefit-down" style={{ left: '50%', animationDelay: '0.7s' } as any} />
-                    <div className="particle-benefit particle-benefit-down" style={{ left: '70%', animationDelay: '2.4s', width: '4px', height: '4px' } as any} />
-                    <div className="particle-benefit particle-benefit-down" style={{ left: '85%', animationDelay: '1.5s' } as any} />
+            {/* Camada de Partículas/Faíscas (z-50) */}
+            <div className="fixed inset-0 pointer-events-none z-50 overflow-hidden">
+                {hasBenefits && (
+                    <>
+                        <div className="particle-benefit particle-benefit-up" style={{ left: '2%', animationDelay: '0s', width: '4px', height: '4px' } as any} />
+                        <div className="particle-benefit particle-benefit-up" style={{ left: '12%', animationDelay: '0.5s', width: '3px', height: '3px' } as any} />
+                        <div className="particle-benefit particle-benefit-up" style={{ left: '25%', animationDelay: '1.2s', width: '6px', height: '6px' } as any} />
+                        <div className="particle-benefit particle-benefit-up" style={{ left: '38%', animationDelay: '0.2s', width: '4px', height: '4px' } as any} />
+                        <div className="particle-benefit particle-benefit-up" style={{ left: '45%', animationDelay: '0.8s', width: '3px', height: '3px' } as any} />
+                        <div className="particle-benefit particle-benefit-up" style={{ left: '55%', animationDelay: '1.5s', width: '5px', height: '5px' } as any} />
+                        <div className="particle-benefit particle-benefit-up" style={{ left: '68%', animationDelay: '0.4s', width: '4px', height: '4px' } as any} />
+                        <div className="particle-benefit particle-benefit-up" style={{ left: '75%', animationDelay: '2.1s', width: '6px', height: '6px' } as any} />
+                        <div className="particle-benefit particle-benefit-up" style={{ left: '88%', animationDelay: '1.1s', width: '5px', height: '5px' } as any} />
+                        <div className="particle-benefit particle-benefit-up" style={{ left: '95%', animationDelay: '0.8s', width: '4px', height: '4px' } as any} />
 
-                    <div className="particle-benefit particle-benefit-right" style={{ top: '10%', animationDelay: '0.5s' } as any} />
-                    <div className="particle-benefit particle-benefit-right" style={{ top: '30%', animationDelay: '1.8s', width: '3px', height: '3px' } as any} />
-                    <div className="particle-benefit particle-benefit-right" style={{ top: '60%', animationDelay: '0.9s' } as any} />
-                    <div className="particle-benefit particle-benefit-right" style={{ top: '90%', animationDelay: '2.2s' } as any} />
+                        <div className="particle-benefit particle-benefit-down" style={{ left: '8%', animationDelay: '0.3s' } as any} />
+                        <div className="particle-benefit particle-benefit-down" style={{ left: '20%', animationDelay: '1.8s', width: '3px', height: '3px' } as any} />
+                        <div className="particle-benefit particle-benefit-down" style={{ left: '50%', animationDelay: '0.7s', width: '5px', height: '5px' } as any} />
+                        <div className="particle-benefit particle-benefit-down" style={{ left: '70%', animationDelay: '2.4s', width: '4px', height: '4px' } as any} />
+                        <div className="particle-benefit particle-benefit-down" style={{ left: '85%', animationDelay: '1.5s', width: '6px', height: '6px' } as any} />
 
-                    <div className="particle-benefit particle-benefit-left" style={{ top: '15%', animationDelay: '1.1s' } as any} />
-                    <div className="particle-benefit particle-benefit-left" style={{ top: '45%', animationDelay: '0.3s', width: '4px', height: '4px' } as any} />
-                    <div className="particle-benefit particle-benefit-left" style={{ top: '75%', animationDelay: '1.9s' } as any} />
-                </>
-            )}
-            {hasDebuffs && (
-                <>
-                    <div className="particle-debuff particle-debuff-up" style={{ left: '5%', animationDelay: '0.1s' } as any} />
-                    <div className="particle-debuff particle-debuff-up" style={{ left: '15%', animationDelay: '0.8s', width: '3px', height: '3px' } as any} />
-                    <div className="particle-debuff particle-debuff-up" style={{ left: '28%', animationDelay: '1.4s' } as any} />
-                    <div className="particle-debuff particle-debuff-up" style={{ left: '42%', animationDelay: '0.3s', width: '6px', height: '6px' } as any} />
-                    <div className="particle-debuff particle-debuff-up" style={{ left: '55%', animationDelay: '1.1s' } as any} />
-                    <div className="particle-debuff particle-debuff-up" style={{ left: '72%', animationDelay: '0.6s', width: '4px', height: '4px' } as any} />
-                    <div className="particle-debuff particle-debuff-up" style={{ left: '85%', animationDelay: '1.9s' } as any} />
-                    <div className="particle-debuff particle-debuff-up" style={{ left: '95%', animationDelay: '1.3s' } as any} />
+                        <div className="particle-benefit particle-benefit-right" style={{ top: '10%', animationDelay: '0.5s' } as any} />
+                        <div className="particle-benefit particle-benefit-right" style={{ top: '30%', animationDelay: '1.8s', width: '3px', height: '3px' } as any} />
+                        <div className="particle-benefit particle-benefit-right" style={{ top: '60%', animationDelay: '0.9s', width: '5px', height: '5px' } as any} />
+                        <div className="particle-benefit particle-benefit-right" style={{ top: '90%', animationDelay: '2.2s' } as any} />
 
-                    <div className="particle-debuff particle-debuff-diagonal" style={{ left: '20%', top: '20%', animationDelay: '0.4s' } as any} />
-                    <div className="particle-debuff particle-debuff-diagonal" style={{ left: '80%', top: '20%', animationDelay: '1.2s' } as any} />
-                    <div className="particle-debuff particle-debuff-diagonal" style={{ left: '40%', top: '40%', animationDelay: '0.7s', width: '3px', height: '3px' } as any} />
-                    <div className="particle-debuff particle-debuff-diagonal" style={{ left: '60%', top: '60%', animationDelay: '1.9s', width: '7px', height: '7px' } as any} />
-                    <div className="particle-debuff particle-debuff-diagonal" style={{ left: '30%', top: '80%', animationDelay: '0.2s' } as any} />
-                    <div className="particle-debuff particle-debuff-diagonal" style={{ left: '70%', top: '80%', animationDelay: '0.9s' } as any} />
+                        <div className="particle-benefit particle-benefit-left" style={{ top: '15%', animationDelay: '1.1s' } as any} />
+                        <div className="particle-benefit particle-benefit-left" style={{ top: '45%', animationDelay: '0.3s', width: '4px', height: '4px' } as any} />
+                        <div className="particle-benefit particle-benefit-left" style={{ top: '75%', animationDelay: '1.9s', width: '6px', height: '6px' } as any} />
+                    </>
+                )}
+                {hasDebuffs && (
+                    <>
+                        <div className="particle-debuff particle-debuff-up" style={{ left: '5%', animationDelay: '0.1s' } as any} />
+                        <div className="particle-debuff particle-debuff-up" style={{ left: '15%', animationDelay: '0.8s', width: '4px', height: '4px' } as any} />
+                        <div className="particle-debuff particle-debuff-up" style={{ left: '28%', animationDelay: '1.4s', width: '6px', height: '6px' } as any} />
+                        <div className="particle-debuff particle-debuff-up" style={{ left: '42%', animationDelay: '0.3s', width: '8px', height: '8px' } as any} />
+                        <div className="particle-debuff particle-debuff-up" style={{ left: '55%', animationDelay: '1.1s' } as any} />
+                        <div className="particle-debuff particle-debuff-up" style={{ left: '72%', animationDelay: '0.6s', width: '5px', height: '5px' } as any} />
+                        <div className="particle-debuff particle-debuff-up" style={{ left: '85%', animationDelay: '1.9s', width: '6px', height: '6px' } as any} />
+                        <div className="particle-debuff particle-debuff-up" style={{ left: '95%', animationDelay: '1.3s', width: '4px', height: '4px' } as any} />
 
-                    <div className="particle-debuff particle-debuff-side" style={{ top: '10%', animationDelay: '0.5s' } as any} />
-                    <div className="particle-debuff particle-debuff-side" style={{ top: '25%', animationDelay: '1.2s', width: '3px', height: '3px' } as any} />
-                    <div className="particle-debuff particle-debuff-side" style={{ top: '40%', animationDelay: '0.2s' } as any} />
-                    <div className="particle-debuff particle-debuff-side" style={{ top: '65%', animationDelay: '0.8s', width: '6px', height: '6px' } as any} />
-                    <div className="particle-debuff particle-debuff-side" style={{ top: '80%', animationDelay: '1.5s' } as any} />
-                    <div className="particle-debuff particle-debuff-side" style={{ top: '95%', animationDelay: '0.4s' } as any} />
-                </>
-            )}
-        </div>
+                        <div className="particle-debuff particle-debuff-diagonal" style={{ left: '20%', top: '20%', animationDelay: '0.4s' } as any} />
+                        <div className="particle-debuff particle-debuff-diagonal" style={{ left: '80%', top: '20%', animationDelay: '1.2s', width: '5px', height: '5px' } as any} />
+                        <div className="particle-debuff particle-debuff-diagonal" style={{ left: '40%', top: '40%', animationDelay: '0.7s', width: '4px', height: '4px' } as any} />
+                        <div className="particle-debuff particle-debuff-diagonal" style={{ left: '60%', top: '60%', animationDelay: '1.9s', width: '10px', height: '10px' } as any} />
+                        <div className="particle-debuff particle-debuff-diagonal" style={{ left: '30%', top: '80%', animationDelay: '0.2s', width: '6px', height: '6px' } as any} />
+                        <div className="particle-debuff particle-debuff-diagonal" style={{ left: '70%', top: '80%', animationDelay: '0.9s', width: '5px', height: '5px' } as any} />
+
+                        <div className="particle-debuff particle-debuff-side" style={{ top: '10%', animationDelay: '0.5s' } as any} />
+                        <div className="particle-debuff particle-debuff-side" style={{ top: '25%', animationDelay: '1.2s', width: '4px', height: '4px' } as any} />
+                        <div className="particle-debuff particle-debuff-side" style={{ top: '40%', animationDelay: '0.2s' } as any} />
+                        <div className="particle-debuff particle-debuff-side" style={{ top: '65%', animationDelay: '0.8s', width: '8px', height: '8px' } as any} />
+                        <div className="particle-debuff particle-debuff-side" style={{ top: '80%', animationDelay: '1.5s', width: '5px', height: '5px' } as any} />
+                        <div className="particle-debuff particle-debuff-side" style={{ top: '95%', animationDelay: '0.4s' } as any} />
+                    </>
+                )}
+            </div>
+        </>
     );
 };
 
@@ -165,9 +172,6 @@ export default function CharacterSheetPage() {
         if (defeated) {
             classes.push("defeated-animation");
         } else {
-            if (benefits) classes.push("bg-glow-benefit");
-            if (debuffs) classes.push("bg-glow-debuff");
-
             // Classes especiais para efeitos icônicos
             if (character?.activeEffects?.includes('rage')) classes.push("animate-rage");
             if (character?.activeEffects?.includes('bless')) classes.push("animate-bless");

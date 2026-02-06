@@ -82,7 +82,7 @@ body {
 /* Animações de partículas/faíscas para benefícios (verde/dourado) */
 @keyframes float-benefit-up {
   0% {
-    transform: translateY(100%) translateX(0) rotate(0deg);
+    transform: translateY(0) translateX(0) rotate(0deg);
     opacity: 0;
   }
 
@@ -95,14 +95,14 @@ body {
   }
 
   100% {
-    transform: translateY(-100%) translateX(50px) rotate(180deg);
+    transform: translateY(-110vh) translateX(100px) rotate(360deg);
     opacity: 0;
   }
 }
 
 @keyframes float-benefit-down {
   0% {
-    transform: translateY(-100%) translateX(0) rotate(0deg);
+    transform: translateY(0) translateX(0) rotate(0deg);
     opacity: 0;
   }
 
@@ -115,14 +115,14 @@ body {
   }
 
   100% {
-    transform: translateY(100%) translateX(-50px) rotate(-180deg);
+    transform: translateY(110vh) translateX(-100px) rotate(-360deg);
     opacity: 0;
   }
 }
 
 @keyframes float-benefit-left {
   0% {
-    transform: translateX(100%) translateY(0) rotate(0deg);
+    transform: translateX(0) translateY(0) rotate(0deg);
     opacity: 0;
   }
 
@@ -135,14 +135,14 @@ body {
   }
 
   100% {
-    transform: translateX(-100%) translateY(50px) rotate(180deg);
+    transform: translateX(-110vw) translateY(100px) rotate(360deg);
     opacity: 0;
   }
 }
 
 @keyframes float-benefit-right {
   0% {
-    transform: translateX(-100%) translateY(0) rotate(0deg);
+    transform: translateX(0) translateY(0) rotate(0deg);
     opacity: 0;
   }
 
@@ -155,7 +155,7 @@ body {
   }
 
   100% {
-    transform: translateX(100%) translateY(-50px) rotate(-180deg);
+    transform: translateX(110vw) translateY(-100px) rotate(-360deg);
     opacity: 0;
   }
 }
@@ -163,7 +163,7 @@ body {
 /* Animações de partículas para malefícios (vermelho/laranja) */
 @keyframes ember-debuff-up {
   0% {
-    transform: translateY(100%) scale(0) rotate(0deg);
+    transform: translateY(0) scale(0) rotate(0deg);
     opacity: 0;
   }
 
@@ -176,14 +176,14 @@ body {
   }
 
   100% {
-    transform: translateY(-100%) scale(1.5) rotate(360deg);
+    transform: translateY(-110vh) scale(2) rotate(720deg);
     opacity: 0;
   }
 }
 
 @keyframes ember-debuff-diagonal {
   0% {
-    transform: translate(100%, 100%) scale(0) rotate(0deg);
+    transform: translate(0, 0) scale(0) rotate(0deg);
     opacity: 0;
   }
 
@@ -196,14 +196,14 @@ body {
   }
 
   100% {
-    transform: translate(-100%, -100%) scale(1.5) rotate(360deg);
+    transform: translate(-100vw, -100vh) scale(3) rotate(720deg);
     opacity: 0;
   }
 }
 
 @keyframes ember-debuff-side {
   0% {
-    transform: translateX(100%) translateY(0) scale(0) rotate(0deg);
+    transform: translateX(0) translateY(0) scale(0) rotate(0deg);
     opacity: 0;
   }
 
@@ -216,7 +216,7 @@ body {
   }
 
   100% {
-    transform: translateX(-50%) translateY(-50px) scale(1.5) rotate(360deg);
+    transform: translateX(-110vw) translateY(-20vh) scale(2) rotate(360deg);
     opacity: 0;
   }
 }
@@ -248,14 +248,34 @@ body {
 
 /* Animação de Cintilação (Flicker) para faíscas */
 @keyframes spark-flicker {
-  0%, 100% { opacity: 1; transform: scale(1) rotate(45deg); }
-  50% { opacity: 0.7; transform: scale(1.2) rotate(45deg); }
+
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1) rotate(45deg);
+  }
+
+  50% {
+    opacity: 0.7;
+    transform: scale(1.2) rotate(45deg);
+  }
 }
 
 @keyframes glint {
-  0% { transform: scale(0.3) rotate(0deg); opacity: 0; }
-  50% { transform: scale(1.5) rotate(180deg); opacity: 1; }
-  100% { transform: scale(0.3) rotate(360deg); opacity: 0; }
+  0% {
+    transform: scale(0.3) rotate(0deg);
+    opacity: 0;
+  }
+
+  50% {
+    transform: scale(1.5) rotate(180deg);
+    opacity: 1;
+  }
+
+  100% {
+    transform: scale(0.3) rotate(360deg);
+    opacity: 0;
+  }
 }
 
 /* Classes de partículas (FAÍSCAS) */
@@ -265,7 +285,7 @@ body {
   height: 4px;
   background: white;
   pointer-events: none;
-  box-shadow: 
+  box-shadow:
     0 0 10px #22c55e,
     0 0 20px #22c55e,
     0 0 30px #22c55e;
@@ -300,7 +320,7 @@ body {
   height: 5px;
   background: #ff7848;
   pointer-events: none;
-  box-shadow: 
+  box-shadow:
     0 0 12px #dc2626,
     0 0 25px #f97316,
     0 0 40px #dc2626;
@@ -325,12 +345,12 @@ body {
 
 .bg-glow-benefit {
   animation: bg-pulse-benefit 3s ease-in-out infinite;
-  background-image: radial-gradient(circle at center, rgba(34, 197, 94, 0.05) 0%, transparent 70%);
+  background-image: radial-gradient(circle at center, rgba(34, 197, 94, 0.12) 0%, transparent 80%);
 }
 
 .bg-glow-debuff {
   animation: bg-pulse-debuff 3s ease-in-out infinite;
-  background-image: radial-gradient(circle at center, rgba(220, 38, 38, 0.08) 0%, transparent 70%);
+  background-image: radial-gradient(circle at center, rgba(220, 38, 38, 0.15) 0%, transparent 80%);
 }
 
 .effect-unique {
