@@ -37,8 +37,8 @@ export function getMaxSpellSlotsForCharacter(
   characterClass: string,
   characterLevel: number,
   classesConfig?: { name: string; level: number; subclass?: string }[]
-): Record<number, number> {
-  const result: Record<number, number> = { 0: Infinity };
+): Record<string, number> {
+  const result: Record<string, number> = { "0": Infinity };
 
   // Parsear classes e níveis
   let classes: { name: string; level: number; subclass?: string }[] = [];
@@ -62,12 +62,15 @@ export function getMaxSpellSlotsForCharacter(
   }
 
   // 1. Calcular Slots de Pacto (Bruxo)
-  const warlockEntry = classes.find(c => c.name.includes('bruxo'));
+  const warlockEntry = classes.find(c => c.name.includes('bruxo') || c.name.includes('warlock'));
   if (warlockEntry) {
     const warlockLevel = warlockEntry.level;
     const pactSlots = WARLOCK_SLOTS_TABLE[warlockLevel] || 0;
     if (pactSlots > 0) {
-      result[100] = pactSlots;
+      result['pact'] = pactSlots;
+      // Também mapear para o nível correspondente para facilitar busca
+      const pactLevel = warlockLevel <= 2 ? 1 : (warlockLevel <= 4 ? 2 : (warlockLevel <= 6 ? 3 : (warlockLevel <= 8 ? 4 : 5)));
+      result[`pactLevel`] = pactLevel;
     }
   }
 
@@ -75,18 +78,16 @@ export function getMaxSpellSlotsForCharacter(
   let casterLevel = 0;
 
   classes.forEach(c => {
-    if (['bardo', 'clérigo', 'druida', 'feiticeiro', 'mago'].some(name => c.name.includes(name))) {
+    const name = c.name.toLowerCase();
+    if (['bardo', 'clérigo', 'druida', 'feiticeiro', 'mago'].some(n => name.includes(n))) {
       casterLevel += c.level;
-    } else if (['paladino', 'ranger', 'patrulheiro'].some(name => c.name.includes(name))) {
+    } else if (['paladino', 'ranger', 'patrulheiro'].some(n => name.includes(n))) {
       casterLevel += Math.floor(c.level / 2);
-    } else if (c.name.includes('artífice') || c.name.includes('artificer')) {
-      // Artífice é único: meio-conjurador que arredonda pra CIMA (Tasha's Cauldron)
+    } else if (name.includes('artífice') || name.includes('artificer')) {
       casterLevel += Math.ceil(c.level / 2);
-    } else if (['guerreiro', 'ladino', 'monge', 'barbaro'].some(name => c.name.includes(name))) {
-      // Subclasses específicas 1/3 Caster
+    } else if (['guerreiro', 'ladino', 'monge', 'barbaro'].some(n => name.includes(n))) {
       if (c.subclass && (
-        c.subclass.includes('cavaleiro arcano') || c.subclass.includes('eldritch knight') ||
-        c.subclass.includes('trapaceiro arcano') || c.subclass.includes('arcane trickster')
+        c.subclass.includes('arcano') || c.subclass.includes('eldritch') || c.subclass.includes('trapaceiro')
       )) {
         casterLevel += Math.floor(c.level / 3);
       }
@@ -96,7 +97,7 @@ export function getMaxSpellSlotsForCharacter(
   if (casterLevel > 0) {
     const slots = STANDARD_SLOTS_TABLE[casterLevel] || [];
     slots.forEach((count, idx) => {
-      result[idx + 1] = count;
+      result[(idx + 1).toString()] = count;
     });
   }
 
@@ -105,29 +106,37 @@ export function getMaxSpellSlotsForCharacter(
 
 // Usar uma magia e descontar slots
 export function consumeSpellSlot(
-  spellSlotsCurrent: Record<number, number>,
+  spellSlots: Record<string, { current: number; max: number }>,
   spell: Spell,
-  slotsCost: number = 1
-): Record<number, number> {
-  const updated = { ...spellSlotsCurrent };
-  const spellLevel = spell.level || 0;
+  slotsCost: number = 1,
+  pactLevel: number = 0
+): Record<string, { current: number; max: number }> {
+  const updated = { ...spellSlots };
+  const spellLevel = spell.level !== undefined ? spell.level : 0;
 
   if (spellLevel === 0) {
     // Truques não gastam slots
     return updated;
   }
 
-  // Tentar consumir slot normal
-  const currentSlots = updated[spellLevel] || 0;
+  const lvlKey = spellLevel.toString();
 
-  if (currentSlots >= slotsCost) {
-    updated[spellLevel] = Math.max(0, currentSlots - slotsCost);
-  } else {
-    // Se não tiver slot normal, tenta usar slot de Pacto (100)
-    const pactSlots = updated[100] || 0;
-    if (pactSlots >= slotsCost) {
-      updated[100] = Math.max(0, pactSlots - slotsCost);
-    }
+  // Tentar consumir slot normal do nível exato
+  if (updated[lvlKey] && updated[lvlKey].current >= slotsCost) {
+    updated[lvlKey] = {
+      ...updated[lvlKey],
+      current: Math.max(0, updated[lvlKey].current - slotsCost)
+    };
+    return updated;
+  }
+
+  // Se não encontrar slot normal, tenta usar slot de Pacto (Bruxo)
+  // Nota: Bruxos usam slots de pacto para QUALQUER nível de magia até o nível do pacto
+  if (updated['pact'] && spellLevel <= pactLevel && updated['pact'].current >= slotsCost) {
+    updated['pact'] = {
+      ...updated['pact'],
+      current: Math.max(0, updated['pact'].current - slotsCost)
+    };
   }
 
   return updated;
@@ -138,7 +147,7 @@ export function restLongSpells(
   characterClass: string,
   characterLevel: number,
   classesConfig?: { name: string; level: number; subclass?: string }[]
-): Record<number, number> {
+): Record<string, number> {
   return getMaxSpellSlotsForCharacter(characterClass, characterLevel, classesConfig);
 }
 
@@ -146,45 +155,48 @@ export function restLongSpells(
 export function restShortSpells(
   characterClass: string,
   characterLevel: number,
-  currentSlots: Record<number, number>,
+  currentSlots: Record<string, { current: number; max: number }>,
   classesConfig?: { name: string; level: number; subclass?: string }[]
-): Record<number, number> {
-  // Calcular quais seriam os slots máximos para essa classe/nível
+): Record<string, { current: number; max: number }> {
   const maxSlots = getMaxSpellSlotsForCharacter(characterClass, characterLevel, classesConfig);
   const updated = { ...currentSlots };
 
-  // Se o personagem tem slots de Pacto (key 100), eles recuperam no descanso curto
-  if (maxSlots[100] !== undefined && maxSlots[100] > 0) {
-    updated[100] = maxSlots[100];
+  // Slots de Pacto recuperam no descanso curto
+  if (maxSlots['pact'] !== undefined) {
+    updated['pact'] = {
+      current: maxSlots['pact'],
+      max: maxSlots['pact']
+    };
   }
-
-  // Futuro: Implementar Arcane Recovery para Magos aqui
 
   return updated;
 }
 
 // Calcular quantos slots uma magia precisa
 export function getSpellSlotsCost(spell: Spell): number {
-  // Por padrão, uma magia custa 1 slot do seu nível
-  // Poderia ser estendido para magias que usam múltiplos slots
-  if (spell.level === 0) return 0; // Truques não gastam
-  return 1; // 1 slot por padrão
+  if (spell.level === 0) return 0;
+  return 1;
 }
 
 // Validar se pode usar uma magia
 export function canUseSpell(
-  spellSlotsCurrent: Record<number, number>,
-  spell: Spell
+  spellSlots: Record<string, { current: number; max: number }>,
+  spell: Spell,
+  pactLevel: number = 0
 ): boolean {
-  if (spell.level === 0) return true; // Truques sempre podem
+  const spellLevel = spell.level !== undefined ? spell.level : 0;
+  if (spellLevel === 0) return true;
 
   const cost = getSpellSlotsCost(spell);
-  const available = spellSlotsCurrent[spell.level] || 0;
+  const lvlKey = spellLevel.toString();
 
-  // Verifica se tem slots normais do nível OU slots de pacto (100)
-  const pactAvailable = spellSlotsCurrent[100] || 0;
+  // 1. Verifica slots normais do nível
+  if (spellSlots[lvlKey] && spellSlots[lvlKey].current >= cost) return true;
 
-  return available >= cost || pactAvailable >= cost;
+  // 2. Verifica slots de pacto (se o nível da magia permitir)
+  if (spellSlots['pact'] && spellLevel <= pactLevel && spellSlots['pact'].current >= cost) return true;
+
+  return false;
 }
 
 // Formatar status de slots para exibição

@@ -1,8 +1,10 @@
-
 // lib/character-data.ts
 import { dndWeapons, Inventory, parseDamageString } from './items-data';
 import { Spell } from './spells-data';
 import { RACE_BONUSES } from './race-bonuses';
+import { getSpellSlots, getSpellcastingAbility } from './level-progression';
+import { validateXPForLevel } from './xp-progression';
+import { CLASS_PROGRESSION, RACE_FEATURES } from './class-features';
 
 export const ATTRIBUTE_KEYS = ['strength', 'dexterity', 'constitution', 'intelligence', 'wisdom', 'charisma'] as const;
 export type AttributeKey = typeof ATTRIBUTE_KEYS[number];
@@ -88,7 +90,6 @@ export interface Character {
         slots: Record<string, { current: number; max: number }>;
         pactLevel?: number; // Para Bruxo: Nível atual dos slots de pacto
     };
-    spellSlotsCurrent?: Record<number, number>; // Slots usados no combate: { 1: 2, 2: 1, 3: 0 } = 2 nível 1, 1 nível 2, 0 nível 3
     rageBonus?: number;
     hitDiceCurrent?: number;
     hitDiceMax?: number;
@@ -122,7 +123,7 @@ function getModifier(score: number): number {
 
 // --- FUNÇÕES DE LÓGICA DO PERSONAGEM ---
 
-export function calculateComputedStats(character: Omit<Character, 'proficiencyBonus' | 'armorClass' | 'initiative' | 'attributeModifiers' | 'spellcasting'>): Character {
+export function calculateComputedStats(character: Omit<Character, 'proficiencyBonus' | 'armorClass' | 'initiative' | 'attributeModifiers'>): Character {
     const char = { ...character } as Character;
 
     // 1. Garantir que o array de classes existe e está sincronizado
@@ -243,7 +244,6 @@ export function calculateComputedStats(character: Omit<Character, 'proficiencyBo
     if (totalWeight > carryCapacity) currentSpeed = Math.max(1.5, currentSpeed - 3);
 
     // -- CÁLCULO DE MAGIA (MULTICLASSE) --
-    const { getSpellSlots, getSpellcastingAbility } = require('./level-progression');
 
     // Tenta encontrar a habilidade de conjuração (usa a da primeira classe conjuradora)
     let castingAbility: AttributeKey | '' = '';
@@ -298,8 +298,40 @@ export function calculateComputedStats(character: Omit<Character, 'proficiencyBo
         rageBonus
     };
 
+    // -- POPULAR CARACTERÍSTICAS EM FALTA (HEALING) --
+    const currentFeatures = [...(computed.features || [])];
+    const featureNames = new Set(currentFeatures.map(f => f.name));
+
+    // 1. Características de Raça
+    if (computed.race && RACE_FEATURES[computed.race]) {
+        RACE_FEATURES[computed.race].forEach(f => {
+            if (!featureNames.has(f.name)) {
+                currentFeatures.push({ ...f, type: 'race', source: computed.race });
+                featureNames.add(f.name);
+            }
+        });
+    }
+
+    // 2. Características de Classe (Suporte a Multiclasse)
+    (computed.classes || []).forEach(cls => {
+        const progression = CLASS_PROGRESSION[cls.name];
+        if (progression) {
+            for (let lv = 1; lv <= cls.level; lv++) {
+                if (progression[lv]) {
+                    progression[lv].features.forEach(f => {
+                        if (!f.isChoice && !featureNames.has(f.name)) {
+                            currentFeatures.push({ ...f, level: lv, type: 'class', source: cls.name });
+                            featureNames.add(f.name);
+                        }
+                    });
+                }
+            }
+        }
+    });
+
+    computed.features = currentFeatures;
+
     // Validar nível baseado em XP
-    const { validateXPForLevel } = require('./xp-progression');
     const validation = validateXPForLevel(computed.level, computed.experience);
 
     if (!validation.isValid && validation.suggestedLevel && validation.suggestedLevel > computed.level) {
@@ -345,7 +377,13 @@ export function createBlankCharacter(ownerId: string): Character {
         spells: [],
         deathSaves: { successes: 0, failures: 0 },
         treasures: '',
-        spellSlotsCurrent: {},
+        spellcasting: {
+            ability: '',
+            saveDc: 0,
+            attackBonus: 0,
+            slots: {},
+            pactLevel: 0
+        },
         hitDiceCurrent: 1,
         hitDiceMax: 1,
     };

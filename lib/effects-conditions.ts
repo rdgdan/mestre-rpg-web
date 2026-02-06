@@ -10,6 +10,7 @@ export interface Condition {
     id: string;
     name: string;
     icon: string;
+    description?: string;
     isGlobal: boolean; // true = disponível para todos
     type: 'condition' | 'effect';
 }
@@ -17,30 +18,43 @@ export interface Condition {
 export interface ClassEffect {
     id: string;
     name: string;
+    description?: string;
     duration: number;
     category: 'benefit' | 'debuff';
 }
+
+// ============================================
+// CATEGORIZAÇÃO DE EFEITOS
+// ============================================
+export const BENEFIT_IDS = [
+    'rage', 'reckless', 'inspiration', 'counter-charm', 'bless', 'sanctuary',
+    'shield-faith', 'wild-shape', 'barkskin', 'action-surge', 'second-wind',
+    'indomitable', 'evasion', 'uncanny-dodge', 'flurry', 'patient-defense',
+    'lay-hands', 'divine-smite', 'aura-protection', 'hunters-mark', 'favored-foe',
+    'metamagic', 'tides-chaos', 'invocation', 'arcane-recovery', 'spell-mastery',
+    'sneak-attack', 'armor-agathys', 'multiattack', 'mirror-image', 'invisivel'
+];
 
 // ============================================
 // CONDIÇÕES COMUNS (Globais para todos)
 // ============================================
 export const COMMON_CONDITIONS: Condition[] = [
     // Condições de Status
-    { id: 'caido', name: 'Caído', icon: '🦵', isGlobal: true, type: 'condition' },
-    { id: 'envenenado', name: 'Envenenado', icon: '🧪', isGlobal: true, type: 'condition' },
-    { id: 'atordoado', name: 'Atordoado', icon: '💫', isGlobal: true, type: 'condition' },
-    { id: 'amedrontado', name: 'Amedrontado', icon: '😨', isGlobal: true, type: 'condition' },
-    { id: 'agarrado', name: 'Agarrado', icon: '🤝', isGlobal: true, type: 'condition' },
-    { id: 'incapacitado', name: 'Incapacitado', icon: '🚫', isGlobal: true, type: 'condition' },
-    { id: 'invisivel', name: 'Invisível', icon: '👻', isGlobal: true, type: 'condition' },
-    { id: 'paralisado', name: 'Paralisado', icon: '⛓️', isGlobal: true, type: 'condition' },
-    { id: 'petrificado', name: 'Petrificado', icon: '🗿', isGlobal: true, type: 'condition' },
-    { id: 'preso', name: 'Preso', icon: '🕸️', isGlobal: true, type: 'condition' },
-    { id: 'inconsciente', name: 'Inconsciente', icon: '😴', isGlobal: true, type: 'condition' },
-    
+    { id: 'caido', name: 'Caído', icon: '🦵', isGlobal: true, type: 'condition', description: 'Movimento custa o dobro. Ataques corpo a corpo contra têm vantagem. Ataques à distância têm desvantagem.' },
+    { id: 'envenenado', name: 'Envenenado', icon: '🧪', isGlobal: true, type: 'condition', description: 'Desvantagem em jogadas de ataque e testes de atributo.' },
+    { id: 'atordoado', name: 'Atordoado', icon: '💫', isGlobal: true, type: 'condition', description: 'Incapacitado, falha em salvaguardas de Força e Destreza, ataques contra têm vantagem.' },
+    { id: 'amedrontado', name: 'Amedrontado', icon: '😨', isGlobal: true, type: 'condition', description: 'Desvantagem em testes e ataques enquanto a fonte do medo estiver visível.' },
+    { id: 'agarrado', name: 'Agarrado', icon: '🤝', isGlobal: true, type: 'condition', description: 'Deslocamento se torna 0.' },
+    { id: 'incapacitado', name: 'Incapacitado', icon: '🚫', isGlobal: true, type: 'condition', description: 'Não pode realizar ações ou reações.' },
+    { id: 'invisivel', name: 'Invisível', icon: '👻', isGlobal: true, type: 'condition', description: 'Impossível de ser visto sem ajuda magia. Ataques contra têm desvantagem. Seus ataques têm vantagem.' },
+    { id: 'paralisado', name: 'Paralisado', icon: '⛓️', isGlobal: true, type: 'condition', description: 'Incapacitado, falha em salvaguardas de Força e Destreza. Ataques contra têm vantagem e são críticos se a 1,5m.' },
+    { id: 'petrificado', name: 'Petrificado', icon: '🗿', isGlobal: true, type: 'condition', description: 'Transformado em substância inanimada sólida. Peso aumenta 10x. Não envelhece.' },
+    { id: 'preso', name: 'Preso', icon: '🕸️', isGlobal: true, type: 'condition', description: 'Deslocamento 0. Ataques contra têm vantagem. Seus ataques e salvaguardas de Destreza têm desvantagem.' },
+    { id: 'inconsciente', name: 'Inconsciente', icon: '😴', isGlobal: true, type: 'condition', description: 'Incapacitado, larga o que estiver segurando, falha em salvaguardas de Força e Destreza. Ataques contra têm vantagem e são críticos se a 1,5m.' },
+
     // Malefícios Adicionais
-    { id: 'cego', name: 'Cego', icon: '🙈', isGlobal: true, type: 'condition' },
-    { id: 'surdo', name: 'Surdo', icon: '🔇', isGlobal: true, type: 'condition' },
+    { id: 'cego', name: 'Cego', icon: '🙈', isGlobal: true, type: 'condition', description: 'Falha em testes de visão. Ataques contra têm vantagem. Seus ataques têm desvantagem.' },
+    { id: 'surdo', name: 'Surdo', icon: '🔇', isGlobal: true, type: 'condition', description: 'Falha em testes de audição.' },
     { id: 'aterrorizado', name: 'Aterrorizado', icon: '😱', isGlobal: true, type: 'condition' },
     { id: 'exaurido', name: 'Exaurido', icon: '😵', isGlobal: true, type: 'condition' },
     { id: 'cansado', name: 'Cansado', icon: '😓', isGlobal: true, type: 'condition' },
@@ -57,19 +71,19 @@ export const COMMON_CONDITIONS: Condition[] = [
 // ============================================
 export const CLASS_EFFECTS: Record<string, ClassEffect[]> = {
     'Bárbaro': [
-        { id: 'rage', name: 'Fúria', duration: 10, category: 'benefit' },
+        { id: 'rage', name: 'Fúria', duration: 10, category: 'benefit', description: 'Vantagem em testes de Força, bônus de dano, resistência a danos físicos.' },
         { id: 'reckless', name: 'Ataque Temerário', duration: 1, category: 'benefit' },
     ],
     'Bardo': [
-        { id: 'inspiration', name: 'Inspiração Bárdica', duration: 10, category: 'benefit' },
+        { id: 'inspiration', name: 'Inspiração Bárdica', duration: 10, category: 'benefit', description: 'Adiciona um dado de bônus em um teste, ataque ou salvaguarda.' },
         { id: 'counter-charm', name: 'Contra-encanto', duration: 1, category: 'benefit' },
         { id: 'enfeiticado', name: 'Enfeitiçado', duration: 10, category: 'benefit' },
     ],
     'Clérigo': [
-        { id: 'bless', name: 'Bênção', duration: 10, category: 'benefit' },
+        { id: 'bless', name: 'Bênção', duration: 10, category: 'benefit', description: 'Adiciona 1d4 em ataques e salvaguardas.' },
         { id: 'sanctuary', name: 'Santuário', duration: 1, category: 'benefit' },
-        { id: 'shield-faith', name: 'Escudo da Fé', duration: 10, category: 'benefit' },
-        { id: 'curse', name: 'Maldição Divina', duration: 5, category: 'debuff' },
+        { id: 'shield-faith', name: 'Escudo da Fé', duration: 10, category: 'benefit', description: 'CA +2.' },
+        { id: 'curse', name: 'Maldição Divina', duration: 5, category: 'debuff', description: 'Subtrai 1d4 de ataques e salvaguardas.' },
     ],
     'Druida': [
         { id: 'wild-shape', name: 'Forma Selvagem', duration: 10, category: 'benefit' },
@@ -100,7 +114,7 @@ export const CLASS_EFFECTS: Record<string, ClassEffect[]> = {
         { id: 'wrathful-smite', name: 'Golpe de Ira Divina', duration: 1, category: 'debuff' },
     ],
     'Patrulheiro': [
-        { id: 'hunters-mark', name: 'Marca do Caçador', duration: 10, category: 'benefit' },
+        { id: 'hunters-mark', name: 'Marca do Caçador', duration: 10, category: 'benefit', description: 'Dano extra de 1d6 ao acertar o alvo marcado.' },
         { id: 'favored-foe', name: 'Inimigo Favorito', duration: 10, category: 'benefit' },
         { id: 'multiattack', name: 'Múltiplos Ataques', duration: 1, category: 'benefit' },
     ],
@@ -280,14 +294,14 @@ export function getGlobalConditions(): Condition[] {
  */
 export function getCategorizedGlobalConditions() {
     const allConditions = getGlobalConditions();
-    
+
     // Condições que são consideradas benefícios
     const benefitIds = ['invisivel'];
-    
+
     // Todas as outras são malefícios
     const benefits = allConditions.filter(c => benefitIds.includes(c.id));
     const debuffs = allConditions.filter(c => !benefitIds.includes(c.id));
-    
+
     return { benefits, debuffs, all: allConditions };
 }
 
@@ -304,7 +318,7 @@ export async function syncEffectToCharacter(
     try {
         const charRef = doc(db, 'personagens', characterId);
         const activeEffects = await updateDoc(charRef, {
-            activeEffects: isApplying 
+            activeEffects: isApplying
                 ? (await doc(db, 'personagens', characterId))
                 : undefined
         });

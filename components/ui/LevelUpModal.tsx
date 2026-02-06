@@ -39,10 +39,10 @@ const LevelUpModal: React.FC<LevelUpModalProps> = ({ isOpen, onClose, onApply, l
             // Caso contrário, usamos o dado de vida da classe atual (vinda da progression prop).
             const effectiveHitDice = selectedNewClass
                 ? CLASS_PROGRESSION[selectedNewClass]?.[1]?.hitDice
-                : progression?.hitDice;
+                : (progression?.hitDice || CLASS_PROGRESSION[charClassName]?.[1]?.hitDice);
 
             if (effectiveHitDice) {
-                const dieValue = parseInt(effectiveHitDice.replace('d', '')) || 8;
+                const dieValue = parseInt(effectiveHitDice.split('d')[1]) || 8;
                 const conMod = Math.floor(((currentAttributes.constitution || 10) - 10) / 2);
                 const averageGain = Math.floor(dieValue / 2) + 1 + conMod;
                 setHpIncrease(Math.max(1, averageGain));
@@ -124,6 +124,10 @@ const LevelUpModal: React.FC<LevelUpModalProps> = ({ isOpen, onClose, onApply, l
     const canChooseSubclass = level === subclassLevel;
     const availableSubclasses = canChooseSubclass ? SUBCLASSES[charClassName] : {};
     const hasSubclassesAvailable = Object.keys(availableSubclasses || {}).length > 0;
+
+    const activeProgression = selectedNewClass
+        ? CLASS_PROGRESSION[selectedNewClass]?.[1]
+        : progression;
 
     return (
         <div className="fixed inset-0 bg-black/90 backdrop-blur-md flex justify-center items-center z-[100] p-2 sm:p-4 animate-in fade-in duration-500">
@@ -345,13 +349,20 @@ const LevelUpModal: React.FC<LevelUpModalProps> = ({ isOpen, onClose, onApply, l
                     </div>
 
                     <div className="space-y-6">
-                        {progression ? (
+                        {activeProgression ? (
                             <>
+                                {/* Exibe Título da Nova Classe se Multiclasse */}
+                                {selectedNewClass && (
+                                    <div className="text-center mb-4">
+                                        <h3 className="text-lg font-bold text-amber-400 font-medieval">{selectedNewClass} - Nível 1</h3>
+                                    </div>
+                                )}
+
                                 {/* Habilidades Recebidas Automaticamente */}
-                                {progression.features.some(f => !f.isChoice && !f.name.includes("Melhoria no Valor de Atributo")) && (
+                                {activeProgression.features.some(f => !f.isChoice && !f.name.includes("Melhoria no Valor de Atributo")) && (
                                     <div className="space-y-4">
                                         <h3 className="text-[10px] font-black text-emerald-400 uppercase tracking-widest border-l-4 border-emerald-500 pl-3">Novas Habilidades Recebidas</h3>
-                                        {progression.features.filter(f => !f.isChoice && !f.name.includes("Melhoria no Valor de Atributo")).map((feature, idx) => (
+                                        {activeProgression.features.filter(f => !f.isChoice && !f.name.includes("Melhoria no Valor de Atributo")).map((feature, idx) => (
                                             <div key={idx} className="bg-emerald-950/20 border border-emerald-500/20 p-4 rounded-md group/item relative overflow-hidden">
                                                 <div className="flex justify-between items-start mb-1">
                                                     <h4 className="font-bold text-emerald-200 font-medieval text-lg">{feature.name}</h4>
@@ -364,10 +375,10 @@ const LevelUpModal: React.FC<LevelUpModalProps> = ({ isOpen, onClose, onApply, l
                                 )}
 
                                 {/* Escolhas de Classe Necessárias */}
-                                {progression.features.some(f => f.isChoice && !f.name.includes("Melhoria no Valor de Atributo")) && (
+                                {activeProgression.features.some(f => f.isChoice && !f.name.includes("Melhoria no Valor de Atributo")) && (
                                     <div className="space-y-4">
                                         <h3 className="text-[10px] font-black text-blue-400 uppercase tracking-widest border-l-4 border-blue-500 pl-3">Escolhas de Classe Necessárias</h3>
-                                        {progression.features.filter(f => f.isChoice && !f.name.includes("Melhoria no Valor de Atributo")).map((feature, idx) => (
+                                        {activeProgression.features.filter(f => f.isChoice && !f.name.includes("Melhoria no Valor de Atributo")).map((feature, idx) => (
                                             <div key={idx} className="bg-blue-950/20 border border-blue-500/30 p-4 rounded-md group/item relative overflow-hidden border-dashed">
                                                 <div className="flex justify-between items-start mb-1">
                                                     <h4 className="font-bold text-blue-200 font-medieval text-lg">{feature.name}</h4>

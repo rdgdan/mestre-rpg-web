@@ -246,73 +246,91 @@ body {
   }
 }
 
-/* Classes de partículas */
+/* Animação de Cintilação (Flicker) para faíscas */
+@keyframes spark-flicker {
+  0%, 100% { opacity: 1; transform: scale(1) rotate(45deg); }
+  50% { opacity: 0.7; transform: scale(1.2) rotate(45deg); }
+}
+
+@keyframes glint {
+  0% { transform: scale(0.3) rotate(0deg); opacity: 0; }
+  50% { transform: scale(1.5) rotate(180deg); opacity: 1; }
+  100% { transform: scale(0.3) rotate(360deg); opacity: 0; }
+}
+
+/* Classes de partículas (FAÍSCAS) */
 .particle-benefit {
   position: absolute;
-  width: 6px;
-  height: 6px;
-  background: radial-gradient(circle, rgba(34, 197, 94, 1), rgba(34, 197, 94, 0.4));
-  border-radius: 50%;
+  width: 4px;
+  height: 4px;
+  background: white;
   pointer-events: none;
-  box-shadow:
-    0 0 15px rgba(34, 197, 94, 1),
-    0 0 30px rgba(34, 197, 94, 0.8),
-    0 0 45px rgba(34, 197, 94, 0.6);
+  box-shadow: 
+    0 0 10px #22c55e,
+    0 0 20px #22c55e,
+    0 0 30px #22c55e;
+  border-radius: 1px;
+  transform: rotate(45deg);
+  z-index: 0;
 }
 
 .particle-benefit-up {
-  animation: float-benefit-up 3s infinite;
-  bottom: 0;
+  animation: float-benefit-up 3s infinite linear, spark-flicker 0.2s infinite;
+  bottom: -20px;
 }
 
 .particle-benefit-down {
-  animation: float-benefit-down 3s infinite;
-  top: 0;
+  animation: float-benefit-down 3s infinite linear, spark-flicker 0.2s infinite;
+  top: -20px;
 }
 
 .particle-benefit-left {
-  animation: float-benefit-left 3.5s infinite;
-  right: 0;
+  animation: float-benefit-left 3.5s infinite linear, spark-flicker 0.2s infinite;
+  right: -20px;
 }
 
 .particle-benefit-right {
-  animation: float-benefit-right 3.5s infinite;
-  left: 0;
+  animation: float-benefit-right 3.5s infinite linear, spark-flicker 0.2s infinite;
+  left: -20px;
 }
 
 .particle-debuff {
   position: absolute;
-  width: 8px;
-  height: 8px;
-  background: radial-gradient(circle, rgba(220, 38, 38, 1), rgba(249, 115, 22, 0.6));
-  border-radius: 50%;
+  width: 5px;
+  height: 5px;
+  background: #ff7848;
   pointer-events: none;
-  box-shadow:
-    0 0 20px rgba(220, 38, 38, 1),
-    0 0 35px rgba(249, 115, 22, 0.9),
-    0 0 50px rgba(220, 38, 38, 0.7);
+  box-shadow: 
+    0 0 12px #dc2626,
+    0 0 25px #f97316,
+    0 0 40px #dc2626;
+  border-radius: 1px;
+  transform: rotate(45deg);
+  z-index: 0;
 }
 
 .particle-debuff-up {
-  animation: ember-debuff-up 2.5s infinite;
-  bottom: 0;
+  animation: ember-debuff-up 2.5s infinite linear, spark-flicker 0.15s infinite;
+  bottom: -20px;
 }
 
 .particle-debuff-diagonal {
-  animation: ember-debuff-diagonal 3s infinite;
+  animation: ember-debuff-diagonal 3s infinite linear, spark-flicker 0.15s infinite;
 }
 
 .particle-debuff-side {
-  animation: ember-debuff-side 2.8s infinite;
-  left: 0;
+  animation: ember-debuff-side 2.8s infinite linear, spark-flicker 0.15s infinite;
+  left: -20px;
 }
 
 .bg-glow-benefit {
   animation: bg-pulse-benefit 3s ease-in-out infinite;
+  background-image: radial-gradient(circle at center, rgba(34, 197, 94, 0.05) 0%, transparent 70%);
 }
 
 .bg-glow-debuff {
   animation: bg-pulse-debuff 3s ease-in-out infinite;
+  background-image: radial-gradient(circle at center, rgba(220, 38, 38, 0.08) 0%, transparent 70%);
 }
 
 .effect-unique {

@@ -55,10 +55,11 @@ service cloud.firestore {
     }
 
     // 4. Personagens (Fichas)
-    // IMPORTANTE: Permitimos leitura por qualquer usuário logado para que o Mestre (Host) 
-    // consiga visualizar a ficha do jogador durante uma batalha.
-    match /personagens/{charId=**} {
-      allow read, write: if request.auth != null;
+    // Permitimos LEITURA por qualquer usuário logado para que o Mestre/Host consiga visualizar.
+    // MAS permitimos ESCRITA apenas pelo dono (ownerId) para evitar edições não autorizadas.
+    match /personagens/{charId} {
+      allow read: if request.auth != null;
+      allow write: if isOwner(resource.data.ownerId);
     }
 
     // Regra Padrão: Bloqueia tudo o que não foi definido acima

@@ -8,7 +8,7 @@ export interface CombatNotification {
   timestamp: number;
   characterName: string;
   characterId: string;
-  type: 'spell-use' | 'rest-short' | 'rest-long' | 'ability-use' | 'effect-applied' | 'effect-removed';
+  type: 'spell-use' | 'rest-short' | 'rest-long' | 'ability-use' | 'effect-applied' | 'effect-removed' | 'hp-change';
   message: string;
   icon: string;
   severity: 'info' | 'warning' | 'success' | 'alert';

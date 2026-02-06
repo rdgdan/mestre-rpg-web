@@ -1,9 +1,6 @@
-
-"use client";
-
 import React, { useState, useMemo } from 'react';
 
-interface SelectionModalProps {
+export interface SelectionModalProps {
   isOpen: boolean;
   onClose: () => void;
   title: string;
@@ -13,7 +10,7 @@ interface SelectionModalProps {
   isLoading?: boolean;
 }
 
-export default function SelectionModal({
+const SelectionModal: React.FC<SelectionModalProps> = ({
   isOpen,
   onClose,
   title,
@@ -21,15 +18,16 @@ export default function SelectionModal({
   onSelectItem,
   onAddItem,
   isLoading = false,
-}: SelectionModalProps) {
+}) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [newItem, setNewItem] = useState('');
   const [isAdding, setIsAdding] = useState(false);
 
   const filteredItems = useMemo(() =>
-    items.filter(item =>
-      item.toLowerCase().includes(searchTerm.toLowerCase())
-    ), [items, searchTerm]);
+    items.filter(item => {
+      const itemStr = String(item || '');
+      return itemStr.toLowerCase().includes(searchTerm.toLowerCase());
+    }), [items, searchTerm]);
 
   const handleAddItem = async () => {
     if (!newItem.trim() || !onAddItem) return;
@@ -106,4 +104,6 @@ export default function SelectionModal({
       </div>
     </div>
   );
-}
+};
+
+export default SelectionModal;
