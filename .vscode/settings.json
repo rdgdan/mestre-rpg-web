@@ -1,4 +1,4 @@
 {
-  "IDX.agenticWorkspace": true,
-  "git.ignoreLimitWarning": true
+  "css.customData": [],
+  "css.lint.unknownAtRules": "ignore"
 }
