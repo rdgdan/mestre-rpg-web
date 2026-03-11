@@ -74,6 +74,13 @@ export const CLASS_PROFICIENCIES: Record<string, ClassProficiencyData> = {
             from: ["animalHandling", "athletics", "stealth", "insight", "investigation", "nature", "perception", "survival"]
         }
     },
+    "Guardião": {
+        savingThrows: ["strength", "dexterity"],
+        skills: {
+            choose: 3,
+            from: ["animalHandling", "athletics", "stealth", "insight", "investigation", "nature", "perception", "survival"]
+        }
+    },
     "Ladino": {
         savingThrows: ["dexterity", "intelligence"],
         skills: {

@@ -138,7 +138,7 @@ export function getCasterType(className: string): CasterType {
     if (lower.includes('mago') || lower.includes('bardo') || lower.includes('clérigo') || lower.includes('druida') || lower.includes('feiticeiro')) {
         return 'full';
     }
-    if (lower.includes('paladino') || lower.includes('ranger') || lower.includes('patrulheiro')) {
+    if (lower.includes('paladino') || lower.includes('ranger') || lower.includes('patrulheiro') || lower.includes('guardião') || lower.includes('guardiao')) {
         return 'half';
     }
     if (lower.includes('artífice') || lower.includes('artifice')) {
@@ -235,7 +235,7 @@ export function getSpellcastingAbility(className: string): any {
     const lower = className.toLowerCase();
     if (lower.includes('mago') || lower.includes('artífice') || lower.includes('artifice')) return 'intelligence';
     if (lower.includes('bruxo') || lower.includes('bardo') || lower.includes('feiticeiro') || lower.includes('paladino')) return 'charisma';
-    if (lower.includes('clérigo') || lower.includes('druida') || lower.includes('ranger') || lower.includes('patrulheiro')) return 'wisdom';
+    if (lower.includes('clérigo') || lower.includes('druida') || lower.includes('ranger') || lower.includes('patrulheiro') || lower.includes('guardião') || lower.includes('guardiao')) return 'wisdom';
     return '';
 }
 
@@ -269,7 +269,7 @@ export function getSpellsKnownCount(className: string, level: number): number {
         const table = [0, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 12, 13, 13, 14, 14, 15, 15, 15, 15];
         return table[lvl];
     }
-    if (lower.includes('ranger') || lower.includes('patrulheiro')) {
+    if (lower.includes('ranger') || lower.includes('patrulheiro') || lower.includes('guardião') || lower.includes('guardiao')) {
         const table = [0, 0, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8, 8, 9, 9, 10, 10, 11, 11];
         return table[lvl];
     }
@@ -296,7 +296,7 @@ export function getCantripsKnownCount(className: string, level: number): number 
         if (lvl >= 4) return 4;
         return 3;
     }
-    if (lower.includes('artífice')) {
+    if (lower.includes('artífice') || lower.includes('artifice') || lower.includes('guardião') || lower.includes('guardiao')) {
         if (lvl >= 14) return 4;
         if (lvl >= 10) return 3;
         return 2;

@@ -59,15 +59,21 @@ export function useCharacterSheet(id: string) {
 
     const characterLoaded = useRef(false);
     const dataFetchInitiated = useRef(false);
+    const lastLocalUpdate = useRef<number>(0);
+    const isSaving = useRef(false);
 
     // --- Persistence ---
     const debouncedSave = useMemo(() => debounce(async (charToSave: Character) => {
         if (!user || !charToSave.id || charToSave.id === 'novo') return;
         try {
+            isSaving.current = true;
             const docRef = doc(db, 'personagens', charToSave.id);
             await setDoc(docRef, JSON.parse(JSON.stringify(charToSave)), { merge: true });
+            lastLocalUpdate.current = Date.now();
         } catch (err) {
             console.error("Erro ao salvar personagem:", err);
+        } finally {
+            isSaving.current = false;
         }
     }, 1500), [user]);
 
@@ -373,6 +379,12 @@ export function useCharacterSheet(id: string) {
             }
 
             const charData = docSnap.data();
+
+            // LÓGICA DE BLINDAGEM (Fase 1): 
+            // 1. Ignorar se tiver escritas locais pendentes (evita flicker)
+            // 2. Ignorar se o snapshot for muito próximo de um save local concluído
+            if (docSnap.metadata.hasPendingWrites) return;
+            if (Date.now() - lastLocalUpdate.current < 2000) return;
 
             if (characterLoaded.current) {
                 setCharacter(prev => {

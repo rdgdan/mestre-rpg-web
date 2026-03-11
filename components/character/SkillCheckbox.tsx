@@ -23,20 +23,23 @@ export const SkillCheckbox: React.FC<SkillCheckboxProps> = ({
 }) => {
     const total = attributeMod + (isProficient ? proficiencyBonus : 0);
     return (
-        <label className={`flex items-center justify-between p-3.5 sm:p-3 rounded-md transition-all ${disabled ? 'opacity-70' : 'hover:bg-white/5 cursor-pointer active:scale-[0.98]'}`}>
-            <div className="flex items-center gap-4 sm:gap-4">
+        <label className={`flex items-center justify-between p-4 rounded-xl transition-all duration-300 ${disabled ? 'opacity-50' : 'hover:bg-white/5 cursor-pointer active:scale-[0.98] group'}`}>
+            <div className="flex items-center gap-4">
                 <input
                     type="checkbox"
                     disabled={disabled}
                     checked={isProficient}
                     onChange={(e) => onChange(skillKey, e.target.checked)}
-                    className="w-6 h-6 sm:w-6 sm:h-6 rounded border-rpg-gold/30 bg-rpg-dark text-rpg-gold focus:ring-rpg-gold/50 cursor-pointer"
+                    className="w-5 h-5 rounded border-white/10 bg-black/40 text-rpg-gold focus:ring-rpg-gold/20 cursor-pointer"
                 />
-                <span className={`text-lg sm:text-lg font-medieval ${isProficient ? 'text-rpg-gold font-bold underline decoration-rpg-gold/20' : 'text-rpg-parchment'}`}>
-                    {displayName} <span className="text-xs text-rpg-grey uppercase ml-1.5 opacity-60 italic">({attribute.slice(0, 3)})</span>
-                </span>
+                <div className="flex flex-col">
+                    <span className={`text-lg font-serif transition-colors ${isProficient ? 'text-rpg-gold-light font-black' : 'text-white/70 group-hover:text-white'}`}>
+                        {displayName}
+                    </span>
+                    <span className="text-[10px] text-rpg-grey/40 uppercase tracking-widest font-black italic">{attribute}</span>
+                </div>
             </div>
-            <div className={`px-3 py-1.5 rounded text-base sm:text-base font-bold font-medieval border shadow-inner ${isProficient ? 'bg-rpg-gold/10 border-rpg-gold/30 text-rpg-gold' : 'bg-black/20 border-white/5 text-rpg-grey'}`}>
+            <div className={`w-12 h-12 flex items-center justify-center rounded-lg text-lg font-black font-serif border transition-all duration-300 ${isProficient ? 'bg-rpg-gold/10 border-rpg-gold/30 text-rpg-gold shadow-glow-gold/10' : 'bg-black/20 border-white/5 text-rpg-grey/50'}`}>
                 {total >= 0 ? `+${total}` : total}
             </div>
         </label>

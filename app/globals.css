@@ -11,6 +11,10 @@ html {
 
 body {
   background: transparent;
+  color: rgb(var(--text-rgb));
+  font-family: 'Inter', 'Lato', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 /* FORÇA CORES DOS BOTÕES - MÁXIMA PRIORIDADE */
@@ -537,6 +541,59 @@ h6 {
   .card-theme-c:hover {
     border-color: rgba(255, 120, 72, 0.3);
     box-shadow: 0 0 16px rgba(255, 120, 72, 0.15);
+  }
+
+  /* Utility: Glassmorphism Card */
+  .card-glass {
+    background: rgba(30, 30, 46, 0.45);
+    backdrop-filter: blur(12px) saturate(180%);
+    -webkit-backdrop-filter: blur(12px) saturate(180%);
+    border: 1px solid rgba(218, 165, 32, 0.1);
+    border-radius: 1rem;
+    box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+  }
+
+  .card-glass-hover:hover {
+    background: rgba(40, 40, 60, 0.55);
+    border: 1px solid rgba(218, 165, 32, 0.3);
+    box-shadow: 0 8px 32px 0 rgba(218, 165, 32, 0.1);
+    transform: translateY(-2px);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  /* Utility: Premium Button */
+  .btn-premium {
+    background: linear-gradient(135deg, rgba(218, 165, 32, 0.2) 0%, rgba(184, 134, 11, 0.1) 100%);
+    border: 1px solid rgba(218, 165, 32, 0.3);
+    color: #DAA520;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    padding: 0.75rem 1.5rem;
+    border-radius: 0.5rem;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+  }
+
+  .btn-premium:hover {
+    background: linear-gradient(135deg, rgba(218, 165, 32, 0.3) 0%, rgba(184, 134, 11, 0.2) 100%);
+    border-color: rgba(218, 165, 32, 0.6);
+    box-shadow: 0 0 20px rgba(218, 165, 32, 0.25);
+    transform: translateY(-1px);
+  }
+
+  .btn-premium-gold {
+     background: linear-gradient(135deg, #DAA520 0%, #B8860B 100%);
+     color: #121212;
+     border: none;
+  }
+
+  .btn-premium-gold:hover {
+    background: linear-gradient(135deg, #FFD700 0%, #DAA520 100%);
+    box-shadow: 0 0 25px rgba(218, 165, 32, 0.5);
   }
 }
 

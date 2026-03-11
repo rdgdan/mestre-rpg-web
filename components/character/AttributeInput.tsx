@@ -23,7 +23,7 @@ export const AttributeInput: React.FC<AttributeInputProps> = ({
     const isOpen = activeTooltip === label;
 
     return (
-        <div className="flex flex-col items-center p-4 sm:p-5 bg-rpg-panel border-b-2 border-rpg-gold/20 rounded-t-lg min-w-[100px] sm:min-w-[110px] transition-all hover:bg-rpg-gold/5 group relative shadow-md">
+        <div className="flex flex-col items-center p-5 card-glass border-none min-w-[110px] transition-all duration-300 hover:bg-white/5 group relative shadow-2xl">
             <div className="absolute top-0 left-0 w-full h-[1px] bg-white/5"></div>
             <span className="text-[11px] sm:text-xs font-black text-rpg-gold uppercase mb-2 tracking-widest font-cinzel">{label}</span>
             <input
@@ -32,7 +32,7 @@ export const AttributeInput: React.FC<AttributeInputProps> = ({
                 disabled={disabled}
                 value={value}
                 onChange={(e) => onChange(parseInt(e.target.value) || 0)}
-                className={`w-14 sm:w-16 text-3xl sm:text-3xl font-bold text-center bg-transparent focus:outline-none font-medieval ${disabled ? 'text-rpg-grey opacity-50' : 'text-rpg-parchment'}`}
+                className={`w-16 text-3xl font-black text-center bg-transparent focus:outline-none font-serif ${disabled ? 'text-rpg-grey/50' : 'text-white'}`}
             />
             {disabled && (
                 <div className="absolute -top-1 -right-1 group-hover:block hidden bg-rpg-dark border border-rpg-gold/50 text-rpg-gold text-[8px] px-1 rounded shadow-lg z-10">
@@ -77,7 +77,7 @@ export const AttributeInput: React.FC<AttributeInputProps> = ({
                     )}
                 </div>
             )}
-            <div className="text-sm sm:text-sm text-rpg-gold mt-2 sm:mt-3 font-bold font-medieval border border-rpg-gold/30 px-4 sm:px-4 py-1.5 rounded shadow-sm bg-black/40 group-hover:bg-rpg-gold/10 transition-colors">
+            <div className="text-sm text-rpg-gold-light mt-4 font-black font-serif px-6 py-1.5 rounded-full border border-rpg-gold/20 bg-rpg-gold/10 group-hover:bg-rpg-gold/20 transition-all shadow-glow-gold/10">
                 {modifier >= 0 ? `+${modifier}` : modifier}
             </div>
         </div>

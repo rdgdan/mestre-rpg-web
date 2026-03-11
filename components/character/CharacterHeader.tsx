@@ -83,20 +83,25 @@ export const CharacterHeader: React.FC<CharacterHeaderProps> = ({
                 </div>
             </div>
 
-            <header className="flex flex-col md:flex-row justify-between md:items-end mb-8 gap-6 p-4 md:p-6 bg-rpg-panel/50 rounded-xl border border-rpg-gold/10 shadow-2xl backdrop-blur-md overflow-hidden">
-                <div className="flex-grow w-full">
+            <header className="flex flex-col md:flex-row justify-between md:items-end mb-8 gap-6 p-6 md:p-8 card-glass border-none shadow-2xl relative overflow-hidden group transition-all duration-500 hover:shadow-glow-gold/10">
+                {/* Glow decorativo de fundo */}
+                <div className="absolute -top-24 -right-24 w-64 h-64 bg-rpg-gold/5 rounded-full blur-3xl group-hover:bg-rpg-gold/10 transition-all duration-700" />
+                
+                <div className="flex-grow w-full relative z-10">
                     <input
                         type="text"
                         disabled={isReadOnly}
                         value={character.name}
                         onChange={e => onFieldChange('name', e.target.value)}
-                        className="w-full text-2xl sm:text-3xl md:text-5xl font-extrabold bg-transparent border-b-2 border-rpg-gold/30 font-cinzel text-rpg-gold focus:outline-none focus:border-rpg-gold transition-all placeholder-rpg-grey/30 truncate"
+                        className="w-full text-3xl sm:text-4xl md:text-6xl font-black bg-transparent border-none font-serif text-rpg-gold focus:outline-none transition-all placeholder-rpg-grey/20 truncate drop-shadow-sm"
                         placeholder="Nome do Personagem"
                     />
-                    <div className="flex items-center gap-3 mt-2 flex-wrap">
-                        <p className="text-rpg-grey uppercase font-bold tracking-[0.2em] text-[10px] break-all">
-                            {character.race} • {character.displayClass || character.class}{character.subclass ? ` (${character.subclass})` : ''}
-                        </p>
+                    <div className="flex items-center gap-4 mt-3 flex-wrap">
+                        <div className="px-3 py-1 bg-rpg-gold/10 rounded-full border border-rpg-gold/20">
+                            <p className="text-rpg-gold/90 uppercase font-black tracking-[0.25em] text-[11px]">
+                                {character.race} • {character.displayClass || character.class}{character.subclass ? ` (${character.subclass})` : ''}
+                            </p>
+                        </div>
                         {!character.subclass && character.level >= (SUBCLASS_CHOICE_LEVELS[character.class] || 3) && !isReadOnly && (
                             <button
                                 onClick={onOpenSubclassModal}

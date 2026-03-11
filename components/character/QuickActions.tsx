@@ -30,23 +30,23 @@ export const QuickActions: React.FC<QuickActionsProps> = ({ character }) => {
     ].filter(Boolean);
 
     return (
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4 mb-8">
-            <div className="bg-rpg-panel border border-rpg-gold/20 p-3 sm:p-4 rounded-lg flex flex-col items-center">
-                <span className="text-xs sm:text-sm text-rpg-gold font-bold uppercase mb-2 tracking-wider">Ações Principais</span>
-                <div className="flex flex-wrap justify-center gap-2">
-                    {actions.map(a => <span key={a as string} className="text-xs sm:text-sm bg-black/40 px-2.5 py-1.5 rounded text-rpg-grey border border-white/5 font-medium">{a}</span>)}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
+            <div className="card-glass border-none p-6 shadow-xl flex flex-col items-center group/action">
+                <span className="text-[10px] text-rpg-gold font-black uppercase mb-5 tracking-[0.3em] group-hover/action:text-rpg-gold-light transition-colors">Ações Principais</span>
+                <div className="flex flex-wrap justify-center gap-2.5">
+                    {actions.map(a => <span key={a as string} className="text-xs bg-black/40 px-4 py-2 rounded-lg text-white font-black uppercase tracking-widest border border-white/5 shadow-lg group-hover/action:bg-white/5 transition-all">{a}</span>)}
                 </div>
             </div>
-            <div className="bg-rpg-panel border border-rpg-gold/20 p-3 sm:p-4 rounded-lg flex flex-col items-center text-blue-400">
-                <span className="text-xs sm:text-sm font-bold uppercase mb-2 tracking-wider">Ações Bônus</span>
-                <div className="flex flex-wrap justify-center gap-2">
-                    {bonusActions.map(a => <span key={a as string} className="text-xs sm:text-sm bg-blue-900/30 px-2.5 py-1.5 rounded border border-blue-500/30 font-bold">{a}</span>)}
+            <div className="card-glass border-none p-6 shadow-xl flex flex-col items-center group/bonus">
+                <span className="text-[10px] text-blue-400 font-black uppercase mb-5 tracking-[0.3em] group-hover/bonus:text-blue-300 transition-colors">Ações Bônus</span>
+                <div className="flex flex-wrap justify-center gap-2.5">
+                    {bonusActions.map(a => <span key={a as string} className="text-xs bg-blue-500/10 px-4 py-2 rounded-lg text-blue-200 font-black uppercase tracking-widest border border-blue-500/20 shadow-lg group-hover/bonus:bg-blue-500/20 transition-all">{a}</span>)}
                 </div>
             </div>
-            <div className="bg-rpg-panel border border-rpg-gold/20 p-3 sm:p-4 rounded-lg flex flex-col items-center text-red-400 col-span-2 md:col-span-1">
-                <span className="text-xs sm:text-sm font-bold uppercase mb-2 tracking-wider">Reações</span>
-                <div className="flex flex-wrap justify-center gap-2">
-                    {reactions.map(a => <span key={a as string} className="text-xs sm:text-sm bg-red-900/30 px-2.5 py-1.5 rounded border border-red-500/30 font-bold">{a}</span>)}
+            <div className="card-glass border-none p-6 shadow-xl flex flex-col items-center group/reaction">
+                <span className="text-[10px] text-red-400 font-black uppercase mb-5 tracking-[0.3em] group-hover/reaction:text-red-300 transition-colors">Reações</span>
+                <div className="flex flex-wrap justify-center gap-2.5">
+                    {reactions.map(a => <span key={a as string} className="text-xs bg-red-500/10 px-4 py-2 rounded-lg text-red-200 font-black uppercase tracking-widest border border-red-500/20 shadow-lg group-hover/reaction:bg-red-500/20 transition-all">{a}</span>)}
                 </div>
             </div>
         </div>

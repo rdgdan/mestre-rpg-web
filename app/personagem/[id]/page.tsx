@@ -450,6 +450,7 @@ export default function CharacterSheetPage() {
                         skillSearchQuery={skillSearchQuery}
                         setSkillSearchQuery={setSkillSearchQuery}
                         handleNestedChange={handleNestedChange}
+                        updateCharacter={updateCharacter}
                     />
                 );
             case 'Magias':

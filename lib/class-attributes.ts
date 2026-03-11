@@ -38,6 +38,9 @@ export const CLASS_ATTRIBUTE_PRIORITIES: Record<string, AttributeKey[]> = {
     // Dex > Wis > Con
     "Patrulheiro": ["dexterity", "wisdom", "constitution", "strength", "intelligence", "charisma"],
 
+    // Dex > Wis > Con
+    "Guardião": ["dexterity", "wisdom", "constitution", "strength", "intelligence", "charisma"],
+
     // Carisma > Con > Dex
     "Bruxo": ["charisma", "constitution", "dexterity", "wisdom", "intelligence", "strength"],
 };
@@ -102,6 +105,11 @@ export const CLASS_PRIMARY_ATTRIBUTES: Record<string, ClassAttributes> = {
         primary: ["dexterity", "wisdom"],
         secondary: ["constitution"],
         description: "Destreza para ataques e Sabedoria para magias e rastreamento"
+    },
+    "Guardião": {
+        primary: ["dexterity", "wisdom"],
+        secondary: ["constitution"],
+        description: "Destreza para ataques e Sabedoria para magias e rastreamento (revisado)"
     },
     "Feiticeiro": {
         primary: ["charisma"],

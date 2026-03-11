@@ -74,11 +74,13 @@ export interface Character {
     treasures?: string;
     inventory: Inventory;
     features: {
+        id?: string;
         name: string;
         description: string;
         level?: number;
         type?: 'class' | 'race' | 'feat' | 'other';
         source?: string;
+        isCustom?: boolean;
     }[];
     conditions?: string[]; // Ex: 'Envenenado', 'Caído'
     activeEffects?: string[]; // IDs de efeitos ativos como 'rage', 'bless'
@@ -109,7 +111,9 @@ const SPELLCASTING_ABILITY_MAP: Record<string, AttributeKey> = {
     feiticeiro: 'charisma',
     paladino: 'charisma',
     ranger: 'wisdom',
-    artífice: 'intelligence'
+    artífice: 'intelligence',
+    guardião: 'wisdom',
+    guardiao: 'wisdom'
 };
 
 function getProficiencyBonusFromLevel(level: number): number {
@@ -299,7 +303,25 @@ export function calculateComputedStats(character: Omit<Character, 'proficiencyBo
     };
 
     // -- POPULAR CARACTERÍSTICAS EM FALTA (HEALING) --
-    const currentFeatures = [...(computed.features || [])];
+    let currentFeatures = [...(computed.features || [])];
+
+    // Identificar fontes atuais válidas (Raça e Classes)
+    const validSources = new Set<string>();
+    if (computed.race) validSources.add(computed.race);
+    (computed.classes || []).forEach(cls => validSources.add(cls.name));
+
+    // Filtrar características: 
+    // Mantemos se: 
+    // 1. For customizada (isCustom) 
+    // 2. Ou se a fonte ainda for válida 
+    // 3. Ou se não tiver fonte (feats/outros)
+    currentFeatures = currentFeatures.filter(f => {
+        if (f.type === 'feat' || !f.type || f.type === 'other') return true;
+        if (!f.source) return true;
+        // Se a fonte não está mais no personagem e não é manual, removemos
+        return validSources.has(f.source);
+    });
+
     const featureNames = new Set(currentFeatures.map(f => f.name));
 
     // 1. Características de Raça

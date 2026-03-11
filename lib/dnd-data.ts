@@ -13,6 +13,7 @@ export const dndClasses = [
   "Monge",
   "Paladino",
   "Patrulheiro",
+  "Guardião",
 ];
 
 export const dndRaces = [
@@ -44,7 +45,7 @@ export const dndRaces = [
   "Genasi (Terra)",
 ];
 
-export const DEFAULT_CLASSES = ['Mago', 'Feiticeiro', 'Clérigo', 'Paladino', 'Druida', 'Bardo', 'Bruxo', 'Patrulheiro', 'Guerreiro', 'Ladino', 'Monge', 'Bárbaro', 'Artífice'];
+export const DEFAULT_CLASSES = ['Mago', 'Feiticeiro', 'Clérigo', 'Paladino', 'Druida', 'Bardo', 'Bruxo', 'Patrulheiro', 'Guardião', 'Guerreiro', 'Ladino', 'Monge', 'Bárbaro', 'Artífice'];
 export const DEFAULT_SCHOOLS = ['Abjuração', 'Adivinhação', 'Conjuração', 'Encantamento', 'Evocação', 'Ilusão', 'Necromancia', 'Transmutação'];
 export const DEFAULT_MONSTER_TYPES = ['Aberração', 'Besta', 'Celestial', 'Construto', 'Dragão', 'Elemental', 'Fada', 'Feérico', 'Gigante', 'Humanoide', 'Monstruosidade', 'Morto-vivo', 'Planta', 'Limo'];
 export const DEFAULT_ITEM_CATEGORIES = ['Arma', 'Armadura', 'Escudo', 'Poção', 'Pergaminho', 'Anel', 'Cajado', 'Varinha', 'Item Mágico', 'Ferramenta', 'Equipamento de Aventuras'];

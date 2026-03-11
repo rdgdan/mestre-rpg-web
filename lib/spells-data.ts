@@ -579,7 +579,6 @@ export async function fetchGlobalSpells(): Promise<Spell[]> {
         console.log(`✅ [Firestore] ${dbSpells.length} magias carregadas do banco de dados`);
 
         // ⚠️ REMOVIDO: Não mesclar com spellsDatabase hardcoded
-        // Retornar APENAS as magias do Firestore
         firestoreCache.set('magias', dbSpells);
         return dbSpells;
     } catch (error) {
@@ -588,6 +587,53 @@ export async function fetchGlobalSpells(): Promise<Spell[]> {
         console.warn('⚠️ Retornando array vazio devido ao erro');
         return [];
     }
+}
+
+// Função para calcular o número de truques conhecidos por classe e nível
+export function getKnownTricksCount(className: string, lvl: number): number {
+    const lower = className.toLowerCase();
+
+    if (lower.includes('bardo')) {
+        if (lvl >= 10) return 4;
+        if (lvl >= 4) return 3;
+        return 2;
+    }
+    if (lower.includes('clérigo') || lower.includes('clerigo')) {
+        if (lvl >= 10) return 5;
+        if (lvl >= 4) return 4;
+        return 3;
+    }
+    if (lower.includes('druida')) {
+        if (lvl >= 10) return 4;
+        if (lvl >= 4) return 3;
+        return 2;
+    }
+    if (lower.includes('feiticeiro')) {
+        if (lvl >= 10) return 6;
+        if (lvl >= 4) return 4;
+        return 3;
+    }
+    if (lower.includes('mago')) {
+        if (lvl >= 10) return 5;
+        if (lvl >= 4) return 4;
+        return 3;
+    }
+    if (lower.includes('bruxo')) {
+        if (lvl >= 10) return 4;
+        if (lvl >= 4) return 3;
+        return 2;
+    }
+    if (lower.includes('artífice') || lower.includes('artifice')) {
+        if (lvl >= 14) return 4;
+        if (lvl >= 10) return 3;
+        return 2;
+    }
+    if (lower.includes('guardião') || lower.includes('guardiao')) {
+        if (lvl >= 14) return 4;
+        if (lvl >= 10) return 3;
+        return 2;
+    }
+    return 0; // Para classes que não conhecem truques
 }
 
 // Função auxiliar para buscar magias
@@ -610,7 +656,13 @@ export function searchSpells(queryText: string, filters?: {
 
     // Filtros adicionais
     if (filters?.level !== undefined) {
-        results = results.filter(spell => spell.level <= filters.level);
+        // Se minLevel não estiver definido, assume que queremos o nível EXATO
+        // Caso contrário, mantemos a lógica de "até o nível X" para criação de personagem
+        if (filters.minLevel === undefined) {
+            results = results.filter(spell => spell.level === filters.level);
+        } else {
+            results = results.filter(spell => spell.level <= filters.level);
+        }
     }
 
     if (filters?.minLevel !== undefined) {
@@ -622,21 +674,51 @@ export function searchSpells(queryText: string, filters?: {
     }
 
     if (filters?.class) {
-        const filterClassLower = filters.class.toLowerCase().trim();
+        const filterClass = filters.class.toLowerCase().trim();
+        
+        // Mapeamento de classes equivalentes (ex: Guardião usa magias de Patrulheiro)
+        const equivalentClasses = [filterClass];
+        if (filterClass === 'guardião' || filterClass === 'guardiao') {
+            equivalentClasses.push('patrulheiro');
+            equivalentClasses.push('ranger');
+            
+            // Se estiver filtrando por Truques (Nível 0), Guardião também pode ver truques de Druida
+            if (filters.level === 0) {
+                equivalentClasses.push('druida');
+                equivalentClasses.push('druid');
+            }
+        }
+
         results = results.filter(spell => {
-            // Se não tem campo classes OU está vazio, mostrar para TODAS as classes
-            if (!spell.classes || !Array.isArray(spell.classes) || spell.classes.length === 0) {
-                console.log(`ℹ️ Magia "${spell.name}" sem restrição de classe - disponível para todos`);
-                return true; // ✅ Magia universal
+            // Normalizar o campo classes para um array de strings
+            let spellClasses: string[] = [];
+
+            if (Array.isArray(spell.classes)) {
+                spellClasses = spell.classes.map(c => 
+                    typeof c === 'string' ? c.toLowerCase().trim() : 
+                    (c && typeof (c as any).name === 'string' ? (c as any).name.toLowerCase().trim() : '')
+                );
+            } else if (typeof (spell as any).classes === 'string') {
+                spellClasses = (spell as any).classes.split(',').map((s: string) => s.toLowerCase().trim());
+            } else if (typeof (spell as any).classe === 'string') {
+                // Suporte para campo singular 'classe'
+                spellClasses = (spell as any).classe.split(',').map((s: string) => s.toLowerCase().trim());
+            } else if (Array.isArray((spell as any).classe)) {
+                 spellClasses = (spell as any).classe.map((c: any) => typeof c === 'string' ? c.toLowerCase().trim() : '');
             }
 
-            return spell.classes.some(c => {
-                if (typeof c !== 'string') {
-                    console.warn(`⚠️ Magia "${spell.name}" tem classe não-string:`, c);
-                    return false;
-                }
-                return c.toLowerCase().trim() === filterClassLower;
-            });
+            // Se não tem classes definidas, tratamos como universal/visível para todos
+            if (spellClasses.length === 0 || (spellClasses.length === 1 && spellClasses[0] === '')) {
+                return true; 
+            }
+
+            // Regra Especial: Guardião vê Truques de Druida
+            if ((filterClass === 'guardião' || filterClass === 'guardiao') && spell.level === 0) {
+                 if (spellClasses.some(c => c === 'druida' || c === 'druid')) return true;
+            }
+
+            // Verifica se alguma das classes da magia bate com a classe selecionada ou equivalentes
+            return spellClasses.some(c => equivalentClasses.includes(c));
         });
     }
 

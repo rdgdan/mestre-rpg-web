@@ -31,6 +31,10 @@ serviceAccountKey-android.json
 serviceAccountKey-web.json
 .env.local1
 firestore.rules
+chave_privada.json
+add_guardiao.js
+add_guardian.js
+add_guardian_final.js
 
 # vercel
 .vercel

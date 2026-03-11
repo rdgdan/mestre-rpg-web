@@ -79,7 +79,13 @@ const EquipmentModal: React.FC<EquipmentModalProps> = ({
             name: item.name || '',
             quantity: item.quantity || 1,
             type: item.type || 'other',
-            description: item.description || ''
+            description: item.description || '',
+            armorClass: item.armorClass || 0,
+            isEquipped: item.isEquipped || false,
+            isMagical: item.isMagical || false,
+            magicalBonus: item.magicalBonus || 0,
+            magicalEffect: item.magicalEffect || '',
+            weight: item.weight || 0
         } as OtherEquipmentItem);
         onClose();
     };
@@ -178,12 +184,39 @@ const EquipmentModal: React.FC<EquipmentModalProps> = ({
                                         <option value="other">Outro</option>
                                         <option value="armor">Armadura</option>
                                         <option value="shield">Escudo</option>
-                                        {DEFAULT_ITEM_CATEGORIES.filter(c => c !== 'Arma').map(cat => (
+                                        {DEFAULT_ITEM_CATEGORIES.filter(c => !['Arma', 'Armadura', 'Escudo'].includes(c)).map(cat => (
                                             <option key={cat} value={cat.toLowerCase()}>{cat}</option>
                                         ))}
                                     </select>
                                 </div>
                             </div>
+
+                            {(item.type === 'armor' || item.type === 'shield') && (
+                                <div className="grid grid-cols-2 gap-4 animate-in fade-in slide-in-from-top-2">
+                                    <div>
+                                        <label className="block text-xs font-bold text-rpg-gold uppercase mb-1">
+                                            {item.type === 'armor' ? 'CA da Armadura' : 'Bônus de CA'}
+                                        </label>
+                                        <input
+                                            type="number"
+                                            value={item.armorClass || 0}
+                                            onChange={e => setItem({ ...item, armorClass: parseInt(e.target.value) || 0 })}
+                                            className="w-full bg-rpg-slate border border-rpg-gold/20 rounded px-3 py-2 text-rpg-parchment font-medieval"
+                                        />
+                                    </div>
+                                    <div className="flex items-end pb-2">
+                                        <label className="flex items-center gap-2 cursor-pointer group">
+                                            <input
+                                                type="checkbox"
+                                                checked={item.isEquipped || false}
+                                                onChange={e => setItem({ ...item, isEquipped: e.target.checked })}
+                                                className="w-5 h-5 rounded accent-rpg-gold bg-rpg-dark border-rpg-gold/30"
+                                            />
+                                            <span className="text-xs font-bold text-rpg-grey group-hover:text-rpg-parchment uppercase transition-colors">Equipado</span>
+                                        </label>
+                                    </div>
+                                </div>
+                            )}
 
                             <div className="bg-purple-900/10 border border-purple-500/30 rounded-lg p-4 space-y-4">
                                 <div className="flex items-center gap-3">

@@ -241,6 +241,26 @@ export const CLASS_STARTING_EQUIPMENT: Record<string, ClassStartingEquipment> = 
             { name: "Flechas", quantity: 20, type: 'other' }
         ]
     },
+    "Guardião": {
+        options: [
+            [
+                { label: "Cota de Escamas", choices: [{ name: "Cota de Escamas", quantity: 1, type: 'armor' }] },
+                { label: "Armadura de Couro", choices: [{ name: "Armadura de Couro", quantity: 1, type: 'armor' }] }
+            ],
+            [
+                { label: "Duas Espadas Curtas", choices: [{ name: "Espada Curta", quantity: 2, type: 'weapon' }] },
+                { label: "Duas Armas Simples Corpo-a-Corpo", choices: [{ name: "Adaga", quantity: 2, type: 'weapon', defaultName: "Armas Simples" }] }
+            ],
+            [
+                { label: "Pacote de Aventureiro", choices: [{ name: "Pacote de Aventureiro", quantity: 1, type: 'other' }] },
+                { label: "Pacote de Explorador", choices: [{ name: "Pacote de Explorador", quantity: 1, type: 'other' }] }
+            ]
+        ],
+        defaultItems: [
+            { name: "Arco Longo", quantity: 1, type: 'weapon' },
+            { name: "Flechas", quantity: 20, type: 'other' }
+        ]
+    },
     "Feiticeiro": {
         options: [
             [

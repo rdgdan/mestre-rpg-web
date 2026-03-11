@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { spellsDatabase, Spell, fetchGlobalSpells, searchSpells } from '@/lib/spells-data';
+import { dndClasses } from '@/lib/dnd-data';
 
 interface SpellSelectModalProps {
   isOpen: boolean;
@@ -24,6 +25,7 @@ const SpellSelectModal: React.FC<SpellSelectModalProps> = ({
   const [globalSpells, setGlobalSpells] = useState<Spell[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [selectedLevel, setSelectedLevel] = useState<number | null>(initialFilterLevel !== undefined ? initialFilterLevel : null);
+  const [selectedClass, setSelectedClass] = useState<string | null>(filterClass || null);
 
   useEffect(() => {
     if (isOpen) {
@@ -34,14 +36,15 @@ const SpellSelectModal: React.FC<SpellSelectModalProps> = ({
       });
       // Resetar seleção se o modal abrir de novo
       if (initialFilterLevel !== undefined) setSelectedLevel(initialFilterLevel);
+      if (filterClass !== undefined) setSelectedClass(filterClass);
     }
-  }, [isOpen, initialFilterLevel]);
+  }, [isOpen, initialFilterLevel, filterClass]);
 
   const filtered = searchSpells(search, {
-    class: filterClass,
+    class: selectedClass || undefined,
     level: selectedLevel !== null ? selectedLevel : undefined,
     minLevel: minLevel
-  }, [...globalSpells]).filter(s => selectedLevel !== null ? s.level === selectedLevel : true);
+  }, [...globalSpells]);
 
   const renderSpellProperty = (prop: any) => {
     if (!prop) return '-';
@@ -79,29 +82,38 @@ const SpellSelectModal: React.FC<SpellSelectModalProps> = ({
             </svg>
           </div>
 
-          {/* Filtros de Nível */}
-          <div className="flex flex-wrap gap-1.5 pb-2 border-b border-rpg-gold/5">
-            <button
-              onClick={() => setSelectedLevel(null)}
-              className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider transition-all border ${selectedLevel === null ? 'bg-rpg-gold text-rpg-dark border-rpg-gold shadow-glow-gold/20' : 'bg-rpg-slate/40 text-rpg-grey border-rpg-gold/10 hover:border-rpg-gold/30'}`}
-            >
-              Todos
-            </button>
-            <button
-              onClick={() => setSelectedLevel(0)}
-              className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider transition-all border ${selectedLevel === 0 ? 'bg-purple-600 text-white border-purple-400 shadow-glow-purple/20' : 'bg-rpg-slate/40 text-rpg-grey border-rpg-gold/10 hover:border-purple-500/30'}`}
-            >
-              Truques
-            </button>
-            {[1, 2, 3, 4, 5, 6, 7, 8, 9].map(lv => (
-              <button
-                key={lv}
-                onClick={() => setSelectedLevel(lv)}
-                className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider transition-all border ${selectedLevel === lv ? 'bg-amber-600 text-white border-amber-400 shadow-glow-amber/20' : 'bg-rpg-slate/40 text-rpg-grey border-rpg-gold/10 hover:border-rpg-gold/30'}`}
+          {/* Filtros Combinados */}
+          <div className="grid grid-cols-2 gap-3 pb-3 border-b border-rpg-gold/10">
+            <div className="flex flex-col gap-1.5">
+              <label className="text-[10px] text-rpg-gold/60 uppercase tracking-widest font-bold ml-1">Filtro por Classe</label>
+              <select
+                value={selectedClass || ''}
+                onChange={(e) => setSelectedClass(e.target.value || null)}
+                className="w-full p-2.5 rounded bg-rpg-dark/60 border border-rpg-gold/20 text-rpg-parchment text-xs focus:border-rpg-gold/50 outline-none transition-all cursor-pointer appearance-none bg-no-repeat bg-[right_0.75rem_center] bg-[length:1rem_1rem]"
+                style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%23d4af37'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E")` }}
               >
-                Nv {lv}
-              </button>
-            ))}
+                <option value="">Todas as Classes</option>
+                {dndClasses.filter(c => !['Bárbaro', 'Guerreiro', 'Ladino', 'Monge'].includes(c)).map(cls => (
+                  <option key={cls} value={cls}>{cls}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="flex flex-col gap-1.5">
+              <label className="text-[10px] text-rpg-gold/60 uppercase tracking-widest font-bold ml-1">Filtro por Nível</label>
+              <select
+                value={selectedLevel === null ? '' : selectedLevel}
+                onChange={(e) => setSelectedLevel(e.target.value === '' ? null : Number(e.target.value))}
+                className="w-full p-2.5 rounded bg-rpg-dark/60 border border-rpg-gold/20 text-rpg-parchment text-xs focus:border-rpg-gold/50 outline-none transition-all cursor-pointer appearance-none bg-no-repeat bg-[right_0.75rem_center] bg-[length:1rem_1rem]"
+                style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%23d4af37'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E")` }}
+              >
+                <option value="">Todos os Níveis</option>
+                <option value="0">Truques (Nível 0)</option>
+                {[1, 2, 3, 4, 5, 6, 7, 8, 9].map(lv => (
+                  <option key={lv} value={lv}>Nível {lv}</option>
+                ))}
+              </select>
+            </div>
           </div>
 
           <div className="flex-grow overflow-y-auto custom-scrollbar pr-2 space-y-2">
@@ -123,10 +135,16 @@ const SpellSelectModal: React.FC<SpellSelectModalProps> = ({
                       {spell.level === 0 ? 'TRUQUE' : `Nível ${spell.level}`}
                     </span>
                   </div>
-                  <div className="flex gap-3 text-[10px] text-rpg-grey/60 uppercase tracking-tighter">
+                  <div className="flex flex-wrap gap-x-3 gap-y-1 text-[10px] text-rpg-grey/60 uppercase tracking-tighter">
                     <span className="text-purple-400/80">{spell.school}</span>
                     <span>{renderSpellProperty(spell.castingTime)}</span>
                     <span>{renderSpellProperty(spell.range)}</span>
+                    <span className="text-rpg-gold/50 italic capitalize">
+                      {Array.isArray(spell.classes) 
+                        ? spell.classes.map(c => typeof c === 'string' ? c : (c as any).name).join(', ')
+                        : (typeof (spell as any).classes === 'string' ? (spell as any).classes : 
+                           (typeof (spell as any).classe === 'string' ? (spell as any).classe : ''))}
+                    </span>
                   </div>
                   <p className="text-xs text-rpg-grey/80 line-clamp-2 mt-1 leading-relaxed">{spell.description}</p>
                 </div>

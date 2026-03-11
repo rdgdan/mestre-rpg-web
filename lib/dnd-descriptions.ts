@@ -12,7 +12,8 @@ export const CLASS_SUMMARIES: Record<string, string> = {
     "Mago": "Um estudioso astuto capaz de manipular as leis da realidade através de diagramas e fórmulas.",
     "Monge": "Um mestre das artes marciais que canaliza a energia vital (Ki) em seu próprio corpo.",
     "Paladino": "Um guerreiro sagrado vinculado por um juramento inquebrável para combater o mal.",
-    "Patrulheiro": "Um caçador e rastreador perito que protege as fronteiras da civilização contra ameaças selvagens."
+    "Patrulheiro": "Um caçador e rastreador perito que protege as fronteiras da civilização contra ameaças selvagens.",
+    "Guardião": "Guerreiro da natureza revisado, focado em versatilidade e adaptação."
 };
 
 export const RACE_SUMMARIES: Record<string, string> = {

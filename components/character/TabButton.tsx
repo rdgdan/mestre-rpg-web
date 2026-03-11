@@ -1,5 +1,3 @@
-"use client";
-
 import React from 'react';
 
 interface TabButtonProps {
@@ -13,14 +11,19 @@ export const TabButton: React.FC<TabButtonProps> = ({ activeTab, tabName, onClic
     return (
         <button
             onClick={() => onClick(tabName)}
-            className={`px-6 sm:px-8 py-4 sm:py-5 text-sm sm:text-base font-cinzel font-bold uppercase tracking-[0.1em] sm:tracking-[0.2em] transition-all relative outline-none whitespace-nowrap snap-start ${isActive
-                ? 'text-rpg-gold bg-gradient-to-t from-rpg-gold/20 to-transparent'
-                : 'text-rpg-grey hover:text-rpg-parchment'
+            className={`px-8 py-5 text-[11px] font-black uppercase tracking-[0.25em] transition-all relative outline-none whitespace-nowrap snap-start group/tab ${isActive
+                ? 'text-rpg-gold'
+                : 'text-rpg-grey/60 hover:text-white'
                 }`}
         >
-            {tabName}
+            <span className="relative z-10 transition-transform group-hover/tab:scale-105 inline-block font-cinzel">
+                {tabName}
+            </span>
             {isActive && (
-                <div className="absolute bottom-0 left-1 right-1 h-[2px] bg-rpg-gold shadow-[0_0_12px_rgba(212,175,55,0.8)] z-10" />
+                <>
+                    <div className="absolute inset-0 bg-gradient-to-t from-rpg-gold/10 to-transparent rounded-lg animate-fade-in" />
+                    <div className="absolute bottom-1 left-2 right-2 h-[3px] bg-rpg-gold shadow-[0_0_15px_rgba(212,175,55,0.6)] z-10 rounded-full animate-grow-x" />
+                </>
             )}
         </button>
     );

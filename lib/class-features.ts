@@ -222,6 +222,28 @@ export const CLASS_PROGRESSION: Record<string, Record<number, LevelProgression>>
         19: { features: [ASI] },
         20: { features: [{ name: "Matador de Inimigos", description: "Adicione modificador de Sabedoria ao dano contra seus Inimigos Favoritos!" }] }
     },
+    "Guardião": {
+        1: { features: [{ name: "Inimigo Favorito (Revisado)", description: "+2 no dano contra os inimigos escolhidos, vantagem em Sobrevivência e Conhecimento.", isChoice: true }, { name: "Explorador Natural (Revisado)", description: "Ignore terreno difícil, vantagem em iniciativa e no 1º turno contra quem não agiu.", isChoice: true }], hitDice: "1d10" },
+        2: { features: [{ name: "Estilo de Luta", description: "Escolha sua especialidade marcial.", isChoice: true }, { name: "Conjuração", description: "Conecte-se com as magias da natureza." }] },
+        3: { features: [{ name: "Prontidão Primal (Revisada)", description: "Comunique-se com animais e detecte inimigos favoritos.", isChoice: true }, { name: "Conclave de Guardiões", description: "Escolha seu caminho.", isChoice: true }] },
+        4: { features: [ASI] },
+        5: { features: [{ name: "Ataque Extra", description: "Dois ataques por ação." }] },
+        6: { features: [{ name: "Inimigo Favorito Maior", description: "Bônus de dano aumenta para +4 e ganha vantagem em salvaguardas contra eles.", isChoice: true }] },
+        7: { features: [{ name: "Recurso de Conclave", description: "Habilidade de subclasse." }] },
+        8: { features: [ASI], hpIncrease: "Caminhar na Terra (Ignore terreno difícil não mágico)." },
+        9: { features: [{ name: "Magias de 3º Nível", description: "Poderes da natureza avançados." }] },
+        10: { features: [{ name: "Esconder-se em Plena Vista", description: "Pode se camuflar perfeitamente ficando imóvel." }, { name: "Desaparecer", description: "Esconder-se como ação bônus." }] },
+        11: { features: [{ name: "Recurso de Conclave", description: "Poder superior da subclasse." }] },
+        12: { features: [ASI] },
+        13: { features: [{ name: "Magias de 4º Nível", description: "Exímio caçador arcano." }] },
+        14: { features: [{ name: "Sentido Desvanecente", description: "Rastros nunca esfriam para você." }] },
+        15: { features: [{ name: "Recurso de Conclave", description: "Mestria final da subclasse." }] },
+        16: { features: [ASI] },
+        17: { features: [{ name: "Magias de 5º Nível", description: "Domínio total dos ermos." }] },
+        18: { features: [{ name: "Sentidos Selvagens", description: "Visão não é necessária para sua precisão." }] },
+        19: { features: [ASI] },
+        20: { features: [{ name: "Mestre Caçador", description: "Sua determinação garante sucesso contra presas focadas." }] }
+    },
     "Feiticeiro": {
         1: { features: [{ name: "Origem Feiticeira", description: "A fonte do seu poder inato.", isChoice: true }, { name: "Conjuração", description: "Lance magias através da força de vontade." }], hitDice: "1d6" },
         2: { features: [{ name: "Fonte de Magia", description: "Pontos de Feitiçaria para criar espaços de magia." }] },
@@ -444,7 +466,7 @@ export const DND_FEATS: ClassFeature[] = [
 
 export const SUBCLASS_CHOICE_LEVELS: Record<string, number> = {
     "Bárbaro": 3, "Bardo": 3, "Clérigo": 1, "Druida": 2, "Guerreiro": 3,
-    "Monge": 3, "Paladino": 3, "Patrulheiro": 3, "Ladino": 3,
+    "Monge": 3, "Paladino": 3, "Patrulheiro": 3, "Guardião": 3, "Ladino": 3,
     "Feiticeiro": 1, "Bruxo": 1, "Mago": 2
 };
 
@@ -516,6 +538,20 @@ export const SUBCLASSES: Record<string, Record<string, Record<number, LevelProgr
             7: { features: [{ name: "Táticas Defensivas", description: "Escolha entre Escapar da Horda, Defesa Multiataque ou Vontade de Ferro.", isChoice: true }] },
             11: { features: [{ name: "Ataque de Multiataque", description: "Escolha entre Saraivada ou Ataque Giratório.", isChoice: true }] },
             15: { features: [{ name: "Defesa Superior do Caçador", description: "Escolha entre Evasão, Esquiva Sobrenatural ou Contra-atacar.", isChoice: true }] }
+        }
+    },
+    "Guardião": {
+        "Conclave do Caçador": {
+            3: { features: [{ name: "Presa do Caçador", description: "Escolha habilidades ofensivas contra presas específicas.", isChoice: true }] },
+            7: { features: [{ name: "Táticas Defensivas", description: "Escolha como se proteger de ataques.", isChoice: true }] },
+            11: { features: [{ name: "Ataque Giratório", description: "Ataque todos os inimigos à sua volta." }] },
+            15: { features: [{ name: "Defesa Superior", description: "Evasão ou Esquiva Sobrenatural.", isChoice: true }] }
+        },
+        "Conclave das Feras": {
+            3: { features: [{ name: "Companheiro Animal", description: "Você ganha um companheiro animal leal que luta ao seu lado." }] },
+            7: { features: [{ name: "Treinamento Excepcional", description: "Seu companheiro pode usar ação bônus para Ajudar ou Disparar." }] },
+            11: { features: [{ name: "Fúria das Bestas", description: "Seu companheiro animal ganha ataque extra." }] },
+            15: { features: [{ name: "Compartilhar Magias", description: "Suas magias de alvo único também afetam seu companheiro." }] }
         }
     },
     "Ladino": {

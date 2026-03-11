@@ -13,57 +13,57 @@ export const PersonalityTab: React.FC<PersonalityTabProps> = ({
     handleFieldChange
 }) => {
     return (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 animate-fade-in">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 animate-fade-in group/personality">
             <div className="space-y-6">
-                <div className="group">
-                    <label className="block text-rpg-gold font-bold mb-2 font-cinzel uppercase text-sm tracking-widest group-hover:text-rpg-gold-light transition-colors">Traços de Personalidade</label>
+                <div className="card-glass border-none p-6 shadow-xl space-y-4 group/item">
+                    <label className="block text-rpg-gold font-black font-cinzel uppercase text-[10px] tracking-[0.3em] group-hover/item:text-rpg-gold-light transition-colors">Traços de Personalidade</label>
                     <textarea
                         disabled={isReadOnly}
                         value={character.personalityTraits}
                         onChange={e => handleFieldChange('personalityTraits', e.target.value)}
-                        className={`w-full h-28 bg-rpg-panel/40 border border-rpg-gold/10 rounded-md p-4 text-rpg-parchment focus:outline-none focus:ring-2 focus:ring-rpg-gold/30 focus:border-rpg-gold/50 transition-all font-sans leading-relaxed resize-none shadow-inner ${isReadOnly ? 'opacity-70 cursor-not-allowed' : ''}`}
+                        className={`w-full h-32 bg-black/20 border border-white/5 rounded-xl p-4 text-white font-serif leading-relaxed resize-none transition-all focus:border-rpg-gold/30 outline-none placeholder:text-rpg-grey/20 ${isReadOnly ? 'opacity-50 cursor-not-allowed' : 'hover:bg-black/30'}`}
                         placeholder="Peculiaridades e maneirismos..."
                     />
                 </div>
-                <div className="group">
-                    <label className="block text-rpg-gold font-bold mb-2 font-cinzel uppercase text-sm tracking-widest group-hover:text-rpg-gold-light transition-colors">Ideais</label>
+                <div className="card-glass border-none p-6 shadow-xl space-y-4 group/item">
+                    <label className="block text-rpg-gold font-black font-cinzel uppercase text-[10px] tracking-[0.3em] group-hover/item:text-rpg-gold-light transition-colors">Ideais</label>
                     <textarea
                         disabled={isReadOnly}
                         value={character.ideals}
                         onChange={e => handleFieldChange('ideals', e.target.value)}
-                        className={`w-full h-28 bg-rpg-panel/40 border border-rpg-gold/10 rounded-md p-4 text-rpg-parchment focus:outline-none focus:ring-2 focus:ring-rpg-gold/30 focus:border-rpg-gold/50 transition-all font-sans leading-relaxed resize-none shadow-inner ${isReadOnly ? 'opacity-70 cursor-not-allowed' : ''}`}
+                        className={`w-full h-32 bg-black/20 border border-white/5 rounded-xl p-4 text-white font-serif leading-relaxed resize-none transition-all focus:border-rpg-gold/30 outline-none placeholder:text-rpg-grey/20 ${isReadOnly ? 'opacity-50 cursor-not-allowed' : 'hover:bg-black/30'}`}
                         placeholder="No que você acredita?"
                     />
                 </div>
-                <div className="group">
-                    <label className="block text-rpg-gold font-bold mb-2 font-cinzel uppercase text-sm tracking-widest group-hover:text-rpg-gold-light transition-colors">Vínculos</label>
+                <div className="card-glass border-none p-6 shadow-xl space-y-4 group/item">
+                    <label className="block text-rpg-gold font-black font-cinzel uppercase text-[10px] tracking-[0.3em] group-hover/item:text-rpg-gold-light transition-colors">Vínculos</label>
                     <textarea
                         disabled={isReadOnly}
                         value={character.bonds}
                         onChange={e => handleFieldChange('bonds', e.target.value)}
-                        className={`w-full h-28 bg-rpg-panel/40 border border-rpg-gold/10 rounded-md p-4 text-rpg-parchment focus:outline-none focus:ring-2 focus:ring-rpg-gold/30 focus:border-rpg-gold/50 transition-all font-sans leading-relaxed resize-none shadow-inner ${isReadOnly ? 'opacity-70 cursor-not-allowed' : ''}`}
+                        className={`w-full h-32 bg-black/20 border border-white/5 rounded-xl p-4 text-white font-serif leading-relaxed resize-none transition-all focus:border-rpg-gold/30 outline-none placeholder:text-rpg-grey/20 ${isReadOnly ? 'opacity-50 cursor-not-allowed' : 'hover:bg-black/30'}`}
                         placeholder="O que te move?"
                     />
                 </div>
             </div>
-            <div className="space-y-6">
-                <div className="group">
-                    <label className="block text-rpg-gold font-bold mb-2 font-cinzel uppercase text-sm tracking-widest group-hover:text-rpg-gold-light transition-colors">Defeitos</label>
+            <div className="space-y-6 flex flex-col">
+                <div className="card-glass border-none p-6 shadow-xl space-y-4 group/item">
+                    <label className="block text-rpg-gold font-black font-cinzel uppercase text-[10px] tracking-[0.3em] group-hover/item:text-rpg-gold-light transition-colors">Defeitos</label>
                     <textarea
                         disabled={isReadOnly}
                         value={character.flaws}
                         onChange={e => handleFieldChange('flaws', e.target.value)}
-                        className={`w-full h-28 bg-rpg-panel/40 border border-rpg-gold/10 rounded-md p-4 text-rpg-parchment focus:outline-none focus:ring-2 focus:ring-rpg-gold/30 focus:border-rpg-gold/50 transition-all font-sans leading-relaxed resize-none shadow-inner ${isReadOnly ? 'opacity-70 cursor-not-allowed' : ''}`}
+                        className={`w-full h-32 bg-black/20 border border-white/5 rounded-xl p-4 text-white font-serif leading-relaxed resize-none transition-all focus:border-rpg-gold/30 outline-none placeholder:text-rpg-grey/20 ${isReadOnly ? 'opacity-50 cursor-not-allowed' : 'hover:bg-black/30'}`}
                         placeholder="Suas fraquezas..."
                     />
                 </div>
-                <div className="group flex-grow">
-                    <label className="block text-rpg-gold font-bold mb-2 font-cinzel uppercase text-sm tracking-widest group-hover:text-rpg-gold-light transition-colors">Anotações & História</label>
+                <div className="card-glass border-none p-6 shadow-xl space-y-4 group/item flex-grow flex flex-col">
+                    <label className="block text-rpg-gold font-black font-cinzel uppercase text-[10px] tracking-[0.3em] group-hover/item:text-rpg-gold-light transition-colors">Anotações & História</label>
                     <textarea
                         disabled={isReadOnly}
                         value={character.notes}
                         onChange={e => handleFieldChange('notes', e.target.value)}
-                        className={`w-full h-[400px] bg-rpg-panel/40 border border-rpg-gold/10 rounded-lg p-5 text-rpg-parchment focus:outline-none focus:ring-2 focus:ring-rpg-gold/30 focus:border-rpg-gold/50 transition-all font-sans leading-relaxed resize-none shadow-inner custom-scrollbar ${isReadOnly ? 'opacity-70 cursor-not-allowed' : ''}`}
+                        className={`w-full flex-grow bg-black/20 border border-white/5 rounded-xl p-6 text-white font-serif leading-relaxed resize-none transition-all focus:border-rpg-gold/30 outline-none placeholder:text-rpg-grey/20 custom-scrollbar ${isReadOnly ? 'opacity-50 cursor-not-allowed' : 'hover:bg-black/30'}`}
                         placeholder="Escreva a lenda do seu herói aqui..."
                     />
                 </div>
