@@ -35,6 +35,7 @@ chave_privada.json
 add_guardiao.js
 add_guardian.js
 add_guardian_final.js
+clone_firestore.js
 
 # vercel
 .vercel

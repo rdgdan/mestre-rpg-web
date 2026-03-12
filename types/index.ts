@@ -111,14 +111,17 @@ export interface Spell {
   school: string;
   castingTime: string;
   range: string;
-  components: string[];
+  components: string;
   duration: string;
   description: string;
+  classes?: string[];
   ritual?: boolean;
   concentration?: boolean;
   source?: string;
   damage?: string;
   prepared?: boolean;
+  subclass?: string;
+  sourceClass?: string;
 }
 
 // ============ FEATURE/TALENTO ============
@@ -147,9 +150,10 @@ export interface SpellBase {
   school: string;
   castingTime: string;
   range: string;
-  components: string[];
+  components: string;
   duration: string;
   description: string;
+  classes?: string[];
   ritual?: boolean;
   concentration?: boolean;
 }

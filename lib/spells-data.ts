@@ -1,25 +1,6 @@
-// Base de dados de Magias D&D 5e (Português)
-// Fonte: SRD 5.1 traduzido
 import { db } from './firebase';
 import { collection, getDocs, query, orderBy } from 'firebase/firestore';
-
-export interface Spell {
-    id: string;
-    name: string;
-    level: number;
-    school: string; // Changed to string to allow custom schools
-    castingTime: string;
-    range: string;
-    components: string;
-    duration: string;
-    description: string;
-    classes: string[]; // Classes que podem usar esta magia
-    ritual?: boolean;
-    concentration?: boolean;
-    subclass?: string; // New field for user categorization
-    prepared?: boolean; // Se a magia está preparada (para classes que preparam)
-    sourceClass?: string;
-}
+import { Spell } from '@/types';
 
 export const spellsDatabase: Spell[] = [
     {
