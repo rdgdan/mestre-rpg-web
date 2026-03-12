@@ -9,6 +9,7 @@ import { useEffect, useState } from 'react';
 import { firestoreCache } from '@/lib/cache-service';
 import { DEFAULT_CLASSES, dndRaces } from '@/lib/dnd-data';
 import { isMaster } from '@/lib/master-utils';
+import { syncLocalMonstersToFirestore } from '@/lib/monsters-sync';
 
 type CollectionType = 'magias' | 'armas' | 'itens' | 'armaduras' | 'escudos' | 'monsters' | 'npcs' | 'classes' | 'races';
 
@@ -262,6 +263,25 @@ export default function DatabaseManagementPage() {
     const updateField = (field: string, value: any) => { setFormData(prev => ({ ...prev, [field]: value })); };
     const updateNestedField = (parent: string, field: string, value: any) => { setFormData(prev => ({ ...prev, [parent]: { ...prev[parent], [field]: value } })); };
 
+    const handleSyncMonsters = async () => {
+        if (!confirm('Deseja sincronizar o Bestiário Local com o Banco de Dados? Isso irá complementar os monstros existentes com atributos e ações que faltam.')) return;
+        setIsMigrating(true);
+        setMigrationLog(['Iniciando comunicação com os pergaminhos...']);
+        try {
+            const result = await syncLocalMonstersToFirestore((msg) => {
+                setMigrationLog(prev => [...prev, msg]);
+            });
+            alert(`✅ Sincronização concluída!\nAtualizados: ${result.updated}\nCriados: ${result.created}`);
+            setForceReload(true);
+        } catch (error) {
+            alert('Erro ao sincronizar monstros.');
+            console.error(error);
+        } finally {
+            setIsMigrating(false);
+            setMigrationLog([]);
+        }
+    };
+
     return (
         <div className="min-h-screen bg-rpg-dark text-rpg-parchment flex flex-col">
             <header className="bg-rpg-panel p-4 border-b-2 border-rpg-gold/30 backdrop-blur-sm sticky top-0 z-20">
@@ -279,6 +299,11 @@ export default function DatabaseManagementPage() {
                     {activeTab === 'magias' && (
                         <button onClick={handleMigrateSpells} disabled={isMigrating} className="bg-purple-600 hover:bg-purple-700 disabled:bg-gray-600 text-white px-4 py-2 rounded-lg font-cinzel font-bold shadow-lg transition-all flex items-center gap-2">
                             {isMigrating ? <span className="animate-spin">⚙️</span> : '🔄'} Migrar Classes
+                        </button>
+                    )}
+                    {activeTab === 'monsters' && (
+                        <button onClick={handleSyncMonsters} disabled={isMigrating} className="bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-600 text-white px-4 py-2 rounded-lg font-cinzel font-bold shadow-lg transition-all flex items-center gap-2">
+                            {isMigrating ? <span className="animate-spin">🐉</span> : '📖'} Sincronizar Bestiário
                         </button>
                     )}
                     {(activeTab === 'classes' || activeTab === 'races') && items.length === 0 && (

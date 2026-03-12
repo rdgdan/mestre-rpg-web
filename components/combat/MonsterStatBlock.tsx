@@ -84,6 +84,10 @@ const MonsterStatBlock: React.FC<MonsterStatBlockProps> = ({ monster }) => {
                     <span className="font-bold text-[#922610]">Nível de Desafio:</span> {getCR()} 
                     {getXP() ? ` (${getXP()} XP)` : ''}
                 </p>
+                {monster.vulnerabilities && <p><span className="font-bold text-[#922610]">Vulnerabilidades a Dano:</span> {monster.vulnerabilities}</p>}
+                {monster.resistances && <p><span className="font-bold text-[#922610]">Resistências a Dano:</span> {monster.resistances}</p>}
+                {monster.immunities && <p><span className="font-bold text-[#922610]">Imunidades a Dano:</span> {monster.immunities}</p>}
+                {monster.condition_immunities && <p><span className="font-bold text-[#922610]">Imunidades a Condição:</span> {monster.condition_immunities}</p>}
             </div>
 
             {/* Special Abilities / Traits */}

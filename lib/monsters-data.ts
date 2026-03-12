@@ -22,6 +22,10 @@ export interface MonsterData {
     senses?: string;
     languages?: string;
     actions?: MonsterAction[];
+    resistances?: string;
+    vulnerabilities?: string;
+    immunities?: string;
+    condition_immunities?: string;
 }
 
 // Lista curada e sem duplicatas
