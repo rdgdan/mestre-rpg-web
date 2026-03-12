@@ -12,6 +12,7 @@ import ClassEffectsModal from '@/components/combat/ClassEffectsModal';
 import ConfirmModal from '@/components/combat/ConfirmModal';
 import CombatNotifications from '@/components/CombatNotifications';
 import Modal from '@/components/Modal';
+import MonsterStatBlock from '@/components/combat/MonsterStatBlock';
 
 export default function ConfrontoDetalhesPage() {
     const { user } = useAuth();
@@ -79,6 +80,7 @@ export default function ConfrontoDetalhesPage() {
                 setCombatants={combat.setCombatants}
                 isMaster={true}
                 user={user}
+                setMonsterSheet={combat.setMonsterSheet}
             />
 
             {/* Empty State */}
@@ -189,6 +191,18 @@ export default function ConfrontoDetalhesPage() {
                 }}
                 confirmText="Resetar"
             />
+
+            {/* Monster Sheet Modal */}
+            <Modal
+                isOpen={combat.monsterSheet.open}
+                onClose={() => combat.setMonsterSheet({ open: false, monster: null })}
+                title="FICHA DO MONSTRO"
+                maxWidth="max-w-2xl"
+            >
+                {combat.monsterSheet.monster && (
+                    <MonsterStatBlock monster={combat.monsterSheet.monster} />
+                )}
+            </Modal>
         </div>
     );
 }

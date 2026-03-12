@@ -22,6 +22,7 @@ interface CombatantCardProps {
     setCombatants: React.Dispatch<React.SetStateAction<Combatant[]>>;
     isMaster?: boolean;
     isOwnHero?: boolean;
+    setMonsterSheet?: React.Dispatch<React.SetStateAction<{ open: boolean; monster: any | null }>>;
 }
 
 const CombatantCard: React.FC<CombatantCardProps> = ({
@@ -44,6 +45,7 @@ const CombatantCard: React.FC<CombatantCardProps> = ({
     setCombatants,
     isMaster = true,
     isOwnHero = false,
+    setMonsterSheet,
 }) => {
     const hasEffects = c.statusEffects && c.statusEffects.length > 0;
     const isDefeated = c.hp === 0;
@@ -182,6 +184,27 @@ const CombatantCard: React.FC<CombatantCardProps> = ({
                                 >
                                     👁️ FICHA
                                 </Link>
+                            )}
+                            {isMaster && c.type === 'monster' && !!setMonsterSheet && (
+                                <button
+                                    onClick={(e) => {
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        // Busca os dados completos do monstro no banco de dados local
+                                        try {
+                                            const { dndMonsters } = require('@/lib/monsters-data');
+                                            const fullMonster = dndMonsters.find((m: any) => m.name === c.name);
+                                            setMonsterSheet({ open: true, monster: fullMonster || c });
+                                        } catch (err) {
+                                            console.error("Erro ao carregar ficha do monstro:", err);
+                                            setMonsterSheet({ open: true, monster: c });
+                                        }
+                                    }}
+                                    className="px-1.5 py-0.5 rounded border border-red-500/50 text-red-400 bg-red-950/10 hover:bg-red-950/20 transition-all flex items-center gap-1 text-[10px] font-bold"
+                                    title="Ver Ficha Completa (Apenas Mestre)"
+                                >
+                                    👁️ FICHA
+                                </button>
                             )}
                             {c.ac && <span className="bg-rpg-dark/50 px-1.5 py-0.5 rounded border border-white/5 text-rpg-grey">CA {c.ac}</span>}
                             {c.cr && <span className="bg-rpg-dark/50 px-1.5 py-0.5 rounded border border-white/5 text-rpg-grey">CR {c.cr}</span>}

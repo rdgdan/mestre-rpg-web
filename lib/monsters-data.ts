@@ -1,4 +1,10 @@
 
+export interface MonsterAction {
+    name: string;
+    description: string;
+    type?: 'action' | 'legendary' | 'reaction' | 'bonus' | 'trait';
+}
+
 export interface MonsterData {
     name: string;
     hp: number;
@@ -7,6 +13,15 @@ export interface MonsterData {
     type: string;
     xp: number;
     dexterity: number;
+    strength?: number;
+    constitution?: number;
+    intelligence?: number;
+    wisdom?: number;
+    charisma?: number;
+    speed?: string;
+    senses?: string;
+    languages?: string;
+    actions?: MonsterAction[];
 }
 
 // Lista curada e sem duplicatas
@@ -37,10 +52,41 @@ export const dndMonsters: MonsterData[] = [
     { name: "Drow", hp: 13, ac: 15, challenge: "1/4", type: "Humanoide", xp: 50, dexterity: 14 },
     { name: "Esqueleto", hp: 13, ac: 13, challenge: "1/4", type: "Morto-vivo", xp: 50, dexterity: 14 },
     { name: "Fungo Violeta", hp: 18, ac: 5, challenge: "1/4", type: "Planta", xp: 50, dexterity: 1 },
-    { name: "Goblin", hp: 7, ac: 15, challenge: "1/4", type: "Humanoide", xp: 50, dexterity: 14 },
+    { 
+        name: "Goblin", 
+        hp: 7, 
+        ac: 15, 
+        challenge: "1/4", 
+        type: "Humanoide", 
+        xp: 50, 
+        strength: 8, dexterity: 14, constitution: 10, intelligence: 10, wisdom: 8, charisma: 8,
+        speed: "9m",
+        senses: "Visão no Escuro (18m), Percepção Passiva 9",
+        languages: "Comum, Goblinoide",
+        actions: [
+            { name: "Fuga Ágil", description: "O goblin pode realizar as ações de Desengajar ou Esconder-se como uma ação bônus em cada um dos seus turnos.", type: "trait" },
+            { name: "Cimitarra", description: "Ataque Corpo-a-Corpo com Arma: +4 para atingir, alcance 1,5m, um alvo. Dano: 5 (1d6 + 2) de dano cortante." },
+            { name: "Arco Curto", description: "Ataque de Arma à Distância: +4 para atingir, alcance 24m/96m, um alvo. Dano: 5 (1d6 + 2) de dano perfurante." }
+        ]
+    },
     { name: "Kenku", hp: 13, ac: 13, challenge: "1/4", type: "Humanoide", xp: 50, dexterity: 16 },
     { name: "Kobold Alado", hp: 7, ac: 13, challenge: "1/4", type: "Humanoide", xp: 50, dexterity: 16 },
-    { name: "Lobo", hp: 11, ac: 13, challenge: "1/4", type: "Fera", xp: 50, dexterity: 15 },
+    { 
+        name: "Lobo", 
+        hp: 11, 
+        ac: 13, 
+        challenge: "1/4", 
+        type: "Fera", 
+        xp: 50, 
+        strength: 12, dexterity: 15, constitution: 12, intelligence: 3, wisdom: 12, charisma: 6,
+        speed: "12m",
+        senses: "Percepção Passiva 13",
+        actions: [
+            { name: "Sentidos Apurados", description: "O lobo possui vantagem em testes de Sabedoria (Percepção) que dependam da audição ou do olfato.", type: "trait" },
+            { name: "Táticas de Matilha", description: "O lobo possui vantagem nas jogadas de ataque contra uma criatura se, pelo menos, um dos aliados do lobo estiver a 1,5 metro da criatura e o aliado não estiver incapacitado.", type: "trait" },
+            { name: "Mordida", description: "Ataque Corpo-a-Corpo com Arma: +4 para atingir, alcance 1,5m, um alvo. Dano: 7 (2d4 + 2) de dano perfurante. Se o alvo for uma criatura, ele deve ser bem sucedido num teste de resistência de Força CD 11 ou será derrubado." }
+        ]
+    },
     { name: "Mephit de Vapor", hp: 21, ac: 10, challenge: "1/4", type: "Elemental", xp: 50, dexterity: 11 },
     { name: "Pseudodragão", hp: 7, ac: 13, challenge: "1/4", type: "Dragão", xp: 50, dexterity: 15 },
     { name: "Sprite", hp: 2, ac: 15, challenge: "1/4", type: "Fada", xp: 50, dexterity: 18 },
@@ -115,7 +161,22 @@ export const dndMonsters: MonsterData[] = [
     { name: "Banshee", hp: 58, ac: 12, challenge: "4", type: "Morto-vivo", xp: 1100, dexterity: 14 },
     { name: "Black Pudding", hp: 85, ac: 7, challenge: "4", type: "Limo", xp: 1100, dexterity: 5 },
     { name: "Chuul", hp: 93, ac: 16, challenge: "4", type: "Aberração", xp: 1100, dexterity: 10 },
-    { name: "Dragão Vermelho Jovem (Wyrmling)", hp: 75, ac: 19, challenge: "4", type: "Dragão", xp: 1100, dexterity: 10 },
+    { 
+        name: "Dragão Vermelho Jovem (Wyrmling)", 
+        hp: 75, 
+        ac: 17, 
+        challenge: "4", 
+        type: "Dragão", 
+        xp: 1100, 
+        strength: 19, dexterity: 10, constitution: 17, intelligence: 12, wisdom: 11, charisma: 15,
+        speed: "9m, voo 18m",
+        senses: "Percepção Cega 3m, Visão no Escuro 18m, Percepção Passiva 14",
+        languages: "Dracônico",
+        actions: [
+            { name: "Mordida", description: "Ataque Corpo-a-Corpo com Arma: +6 para atingir, alcance 1,5m, um alvo. Dano: 9 (1d10 + 4) de dano perfurante mais 3 (1d6) de dano de fogo." },
+            { name: "Sopro de Fogo (Recarga 5-6)", description: "O dragão exala fogo em um cone de 4,5 metros. Cada criatura na área deve realizar um teste de resistência de Destreza CD 13, sofrendo 24 (7d6) de dano de fogo se falhar, ou metade desse dano caso obtenha sucesso." }
+        ]
+    },
     { name: "Ettin", hp: 85, ac: 12, challenge: "4", type: "Gigante", xp: 1100, dexterity: 8 },
     { name: "Fantasma", hp: 45, ac: 11, challenge: "4", type: "Morto-vivo", xp: 1100, dexterity: 13 },
     { name: "Helmed Horror", hp: 60, ac: 20, challenge: "4", type: "Constructo", xp: 1100, dexterity: 13 },

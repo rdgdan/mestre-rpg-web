@@ -20,6 +20,7 @@ interface CombatantListProps {
     setCombatants: React.Dispatch<React.SetStateAction<Combatant[]>>;
     isMaster?: boolean;
     user: any;
+    setMonsterSheet?: React.Dispatch<React.SetStateAction<{ open: boolean; monster: any | null }>>;
 }
 
 const CombatantList: React.FC<CombatantListProps> = (props) => {
@@ -35,6 +36,7 @@ const CombatantList: React.FC<CombatantListProps> = (props) => {
                             index={index}
                             isMaster={props.isMaster}
                             isOwnHero={isOwnHero}
+                            setMonsterSheet={props.isMaster ? props.setMonsterSheet : undefined}
                             {...props}
                         />
                     );

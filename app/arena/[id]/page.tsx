@@ -9,6 +9,7 @@ import CombatantList from '@/components/combat/CombatantList';
 import Modal from '@/components/Modal';
 import ClassEffectsModal from '@/components/combat/ClassEffectsModal';
 import ConfirmModal from '../../../components/combat/ConfirmModal';
+import MonsterStatBlock from '@/components/combat/MonsterStatBlock';
 import Link from 'next/link';
 import JSZip from 'jszip';
 import { mapImportedDataToCharacter } from '@/lib/character-mapper';
@@ -44,7 +45,9 @@ export default function SharedArenaPage() {
         removeCombatant,
         applyClassEffectToCombatant,
         removeClassEffectFromCombatant,
-        handleJoinBattle
+        handleJoinBattle,
+        monsterSheet, 
+        setMonsterSheet
     } = useCombat(arenaId, user, 'player');
 
     const [isJoinModalOpen, setIsJoinModalOpen] = useState(false);
@@ -213,6 +216,7 @@ export default function SharedArenaPage() {
                     setCombatants={() => { }} // Placeholder or real depending on need
                     isMaster={isHost}
                     user={user}
+                    setMonsterSheet={setMonsterSheet}
                 />
             )}
 
@@ -366,6 +370,18 @@ export default function SharedArenaPage() {
                 }}
                 confirmText="CURAR ❤️"
             />
+
+            {/* Monster Sheet Modal (Apenas visível se acionado pelo botão que só o mestre tem) */}
+            <Modal
+                isOpen={monsterSheet.open}
+                onClose={() => setMonsterSheet({ open: false, monster: null })}
+                title="FICHA DO MONSTRO"
+                maxWidth="max-w-2xl"
+            >
+                {monsterSheet.monster && (
+                    <MonsterStatBlock monster={monsterSheet.monster} />
+                )}
+            </Modal>
         </div>
     );
 }

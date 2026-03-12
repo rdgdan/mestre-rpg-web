@@ -96,6 +96,7 @@ export function useCombat(encounterId: string, user: any, mode: 'master' | 'play
     const [confirmCureModal, setConfirmCureModal] = useState<{ open: boolean; combatant: Combatant | null }>({ open: false, combatant: null });
     const [confirmRemoveModal, setConfirmRemoveModal] = useState<{ open: boolean; combatantId: string | null; combatantName: string | null }>({ open: false, combatantId: null, combatantName: null });
     const [confirmResetModal, setConfirmResetModal] = useState(false);
+    const [monsterSheet, setMonsterSheet] = useState<{ open: boolean; monster: any | null }>({ open: false, monster: null });
 
     // --- Helpers ---
     const dedupeCombatants = useCallback((arr: Combatant[]) => {
@@ -585,6 +586,7 @@ export function useCombat(encounterId: string, user: any, mode: 'master' | 'play
         confirmCureModal, setConfirmCureModal,
         confirmRemoveModal, setConfirmRemoveModal,
         confirmResetModal, setConfirmResetModal,
+        monsterSheet, setMonsterSheet,
 
         // Actions
         updateHP,
