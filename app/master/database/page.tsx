@@ -372,10 +372,10 @@ export default function DatabaseManagementPage() {
                                     {['armas', 'armaduras', 'escudos', 'itens'].includes(activeTab) && (
                                         <div className="mt-3 flex flex-row flex-wrap gap-4 text-xs font-bold text-rpg-grey pt-3 border-t border-white/5">
                                             {activeTab === 'armas' && (
-                                                <span className={!item.damage ? 'text-red-500/70' : 'text-rpg-gold-light'}>⚔️ {item.damage || '-'}</span>
+                                                <span className={!item.damage ? 'text-red-500/70' : 'text-rpg-gold-light'}>⚔️ {sanitizeField(item.damage) || '-'}</span>
                                             )}
                                             {(activeTab === 'armaduras' || activeTab === 'escudos') && (
-                                                <span className={!item.ac ? 'text-red-500/70' : 'text-blue-400'}>🛡️ {item.ac || '-'} CA</span>
+                                                <span className={!item.ac ? 'text-red-500/70' : 'text-blue-400'}>🛡️ {sanitizeField(item.ac) || '-'} CA</span>
                                             )}
                                             <span className={(!item.price && item.price !== 0 && !item.noPrice) ? 'text-red-500/70' : 'text-yellow-600'}>
                                                 💰 {item.noPrice ? 'Grátis' : (item.price !== undefined ? `${item.price} po` : '-')}
@@ -585,7 +585,23 @@ function MultiSelectField({ label, options, selected, onChange, placeholder }: a
 function sanitizeField(val: any): string {
     if (val === null || val === undefined) return '';
     if (typeof val === 'string' || typeof val === 'number') return String(val);
-    if (Array.isArray(val)) return val.join(', ');
+    if (Array.isArray(val)) return val.map(v => sanitizeField(v)).join(', ');
+    
+    // Tratamento para objetos complexos (comum no SRD)
+    if (typeof val === 'object') {
+        if (val.name) return val.name;
+        if (val.title) return val.title;
+        if (val.rating) return String(val.rating);
+        if (val.value) return String(val.value);
+        if (val.choose) return `Escolha ${val.choose}`;
+        if (val.entries) return Array.isArray(val.entries) ? val.entries.join(' ') : String(val.entries);
+        
+        // Se for um objeto de dano comum: { dice: '1d6', type: 'fire' }
+        if (val.dice) return `${val.dice}${val.type ? ' ' + val.type : ''}`;
+        
+        return '[Objeto]';
+    }
+    
     return String(val);
 }
 
