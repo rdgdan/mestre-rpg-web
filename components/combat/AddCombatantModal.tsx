@@ -35,7 +35,8 @@ const AddCombatantModal: React.FC<AddCombatantModalProps> = ({
         quantity: 1,
         externalId: '',
         ownerId: '',
-        ownerName: ''
+        ownerName: '',
+        initiativeBonus: 0
     });
 
     const [monsterSearch, setMonsterSearch] = useState('');
@@ -64,7 +65,8 @@ const AddCombatantModal: React.FC<AddCombatantModalProps> = ({
             hp: m.hp || (m.hit_points) || 10,
             ac: m.ac || (m.armor_class) || 10,
             cr: m.challenge_rating || m.cr || '0',
-            xp: m.xp || ''
+            xp: m.xp || '',
+            initiativeBonus: Math.floor(((m.dexterity || 10) - 10) / 2)
         }));
         setShowMonsterResults(false);
     };
@@ -82,6 +84,7 @@ const AddCombatantModal: React.FC<AddCombatantModalProps> = ({
                 hp: Number(newCombatant.hp) || 1,
                 maxHp: Number(newCombatant.hp) || 1,
                 initiative: Number(newCombatant.initiative) || 0,
+                initiativeBonus: newCombatant.initiativeBonus,
                 ac: Number(newCombatant.ac) || 10,
                 externalId: newCombatant.externalId ? `${newCombatant.externalId}${qty > 1 ? `-${i + 1}` : ''}` : ''
             });
@@ -91,7 +94,8 @@ const AddCombatantModal: React.FC<AddCombatantModalProps> = ({
         setNewCombatant({
             name: '', hp: '', initiative: '', type: 'monster',
             ac: '', cr: '0', xp: '', quantity: 1,
-            externalId: '', ownerId: '', ownerName: ''
+            externalId: '', ownerId: '', ownerName: '',
+            initiativeBonus: 0
         });
         setMonsterSearch('');
     };
@@ -175,7 +179,8 @@ const AddCombatantModal: React.FC<AddCombatantModalProps> = ({
                                             cr: char.level || '1',
                                             externalId: char.id,
                                             ownerId: char.ownerId,
-                                            ownerName: char.name
+                                            ownerName: char.name,
+                                            initiativeBonus: Math.floor(((char.attributes?.dexterity || 10) - 10) / 2)
                                         })}
                                         className={`p-2.5 rounded-lg border text-left transition-all ${newCombatant.externalId === char.id ? 'bg-rpg-gold text-rpg-dark border-rpg-gold' : 'bg-rpg-dark border-white/5 hover:border-rpg-gold/30'}`}
                                     >

@@ -43,7 +43,7 @@ const SpellSlotsDisplay: React.FC<SpellSlotsDisplayProps> = ({
   if (compact) {
     return (
       <div className="space-y-1">
-        <p className="text-xs font-bold text-purple-300 uppercase tracking-widest">Slots Disponíveis:</p>
+        <p className="text-xs font-bold text-rpg-gold uppercase tracking-widest">Slots Disponíveis:</p>
         <div className="flex flex-wrap gap-1">
           {availableLevels.map((lvlKey) => {
             const level = lvlKey === 'pact' ? (pactLevel || 0) : Number(lvlKey);
@@ -53,11 +53,13 @@ const SpellSlotsDisplay: React.FC<SpellSlotsDisplayProps> = ({
             return (
               <span
                 key={lvlKey}
-                className={`text-[10px] px-2 py-1 rounded font-bold ${lvlKey === '0'
-                  ? 'bg-green-900/60 text-green-200'
-                  : info.current > 0
-                    ? 'bg-purple-900/60 text-purple-200'
-                    : 'bg-gray-800 text-gray-500'
+                className={`text-[10px] px-2 py-1 rounded font-bold border ${lvlKey === '0'
+                  ? 'bg-rpg-gold/10 text-rpg-gold border-rpg-gold/20'
+                  : lvlKey === 'pact'
+                    ? 'bg-rpg-ember/10 text-rpg-ember border-rpg-ember/20'
+                    : info.current > 0
+                        ? 'bg-white/5 text-rpg-parchment border-white/10'
+                        : 'bg-gray-800 text-gray-500 border-transparent'
                   }`}
               >
                 {lvlKey === '0' ? '🔮 Truques: ∞' : lvlKey === 'pact' ? `Pacto (Nv ${level}): ${info.current}/${info.max}` : `Nv ${level}: ${info.current}/${info.max}`}
@@ -71,27 +73,32 @@ const SpellSlotsDisplay: React.FC<SpellSlotsDisplayProps> = ({
 
   return (
     <>
-      <div className="bg-purple-900/20 border border-purple-500/30 rounded-lg p-4">
-        <div className="flex justify-between items-center mb-4 gap-2 flex-wrap">
-          <h3 className="text-sm font-bold text-purple-300 uppercase tracking-widest">Slots de Magia</h3>
-          <div className="flex gap-3">
+      <div className="bg-rpg-panel border border-white/5 rounded-xl p-5 shadow-2xl relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-bl from-rpg-gold/5 via-transparent to-transparent pointer-events-none" />
+        
+        <div className="flex justify-between items-center mb-5 gap-4 flex-wrap relative z-10">
+          <div>
+            <h3 className="text-sm font-bold text-rpg-gold uppercase tracking-[0.2em] mb-1">Slots de Magia</h3>
+            <p className="text-[10px] text-rpg-grey/40 font-medieval italic">Energia Arcana Disponível</p>
+          </div>
+          <div className="flex gap-2">
             <button
               onClick={() => {
                 setSpellType('cantrip');
                 setShowModal(true);
               }}
-              className="text-base bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded font-bold transition-colors shadow-lg hover:shadow-xl"
+              className="px-4 py-2 rounded font-bold text-xs uppercase tracking-wider transition-all flex items-center gap-2 bg-white/5 hover:bg-white/10 text-rpg-parchment border border-white/10 hover:border-rpg-gold/40 shadow-lg active:scale-95"
             >
-              ✨ Truque
+              <span className="text-rpg-gold">✦</span> Truque
             </button>
             <button
               onClick={() => {
                 setSpellType('spell');
                 setShowModal(true);
               }}
-              className="text-base bg-purple-600 hover:bg-purple-700 text-white px-6 py-3 rounded font-bold transition-colors shadow-lg hover:shadow-xl"
+              className="px-4 py-2 rounded font-bold text-xs uppercase tracking-wider transition-all flex items-center gap-2 bg-rpg-gold/10 hover:bg-rpg-gold/20 text-rpg-gold border border-rpg-gold/30 hover:border-rpg-gold/50 shadow-lg active:scale-95"
             >
-              🔮 Magia
+              <span>🔥</span> Magia
             </button>
           </div>
         </div>
@@ -108,30 +115,30 @@ const SpellSlotsDisplay: React.FC<SpellSlotsDisplayProps> = ({
             return (
               <div
                 key={lvlKey}
-                className={`p-3 rounded border text-center transition-all ${lvlKey === '0'
-                  ? 'bg-green-900/30 border-green-500/40'
+                className={`p-3 rounded-lg border text-center transition-all relative overflow-hidden ${lvlKey === '0'
+                  ? 'bg-black/40 border-rpg-gold/20 shadow-inner'
                   : isPact
-                    ? 'bg-purple-900/50 border-purple-400/60 shadow-lg shadow-purple-900/20'
+                    ? 'bg-rpg-ember/5 border-rpg-ember/30 shadow-lg shadow-rpg-ember/5'
                     : isEmpty
-                      ? 'bg-gray-900/30 border-gray-500/40'
-                      : 'bg-purple-900/30 border-purple-500/40'
+                      ? 'bg-gray-950/20 border-white/5 opacity-40'
+                      : 'bg-black/30 border-white/10 hover:border-rpg-gold/30 shadow-md'
                   }`}
               >
-                <p className={`text-xs mb-1 uppercase tracking-wider font-bold ${isPact ? 'text-purple-200' : 'text-rpg-grey/70'}`}>
+                <p className={`text-[10px] mb-1 uppercase tracking-[0.15em] font-black ${isPact ? 'text-rpg-ember/60' : 'text-rpg-grey/40'}`}>
                   {lvlKey === '0' ? 'Truques' : isPact ? `Pacto (Nv ${level})` : `Nível ${level}`}
                 </p>
-                <p className={`text-lg font-bold ${lvlKey === '0'
-                  ? 'text-green-300'
+                <p className={`text-xl font-serif font-bold ${lvlKey === '0'
+                  ? 'text-rpg-gold'
                   : isPact
-                    ? 'text-purple-100 text-xl'
+                    ? 'text-rpg-ember text-2xl'
                     : isEmpty
-                      ? 'text-gray-400'
-                      : 'text-purple-300'
+                      ? 'text-gray-600'
+                      : 'text-rpg-parchment'
                   }`}>
                   {lvlKey === '0' ? '∞' : `${info.current}/${info.max}`}
                 </p>
                 {isPact && (
-                  <span className="text-[9px] text-purple-300/60 block -mt-1 capitalize">Recupera no descanso curto</span>
+                  <span className="text-[9px] text-rpg-ember/40 block mt-0.5 uppercase font-bold tracking-tighter">Descanso Curto</span>
                 )}
               </div>
             );

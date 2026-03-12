@@ -131,19 +131,16 @@ export function calculateComputedStats(character: Omit<Character, 'proficiencyBo
     const char = { ...character } as Character;
 
     // 1. Garantir que o array de classes existe e está sincronizado
-    // Se o personagem é nível 1 e char.class foi definido, garantimos que char.classes[0] reflita isso.
     if (!char.classes || char.classes.length === 0) {
         char.classes = [{ name: char.class || 'Guerreiro', level: char.level || 1, subclass: char.subclass || '' }];
-    } else if (char.classes.length === 1 && char.class && char.class !== char.classes[0].name) {
-        // Se o usuário mudou a classe na UI (char.class), atualizamos char.classes[0]
-        char.classes[0].name = char.class;
+    } else {
+        // Se temos um array de classes, sincronizamos o campo legado para refletir a primeira classe
+        char.class = char.classes[0].name;
+        char.level = char.classes.reduce((sum, c) => sum + c.level, 0);
+        char.subclass = char.classes[0].subclass || '';
     }
 
-    // Atualiza nível total e classe principal para compatibilidade de UI
-    const totalLevel = char.classes.reduce((sum, c) => sum + c.level, 0);
-    char.level = totalLevel;
-    char.class = char.classes[0].name;
-    char.subclass = char.classes[0].subclass || '';
+    const totalLevel = char.level;
 
     // Formata a classe de exibição para multiclasse
     if (char.classes.length > 1) {
@@ -428,8 +425,10 @@ export function hydrateCharacter(partialData: Partial<Character> & { equipment?:
     hydrated.skills = { ...blank.skills, ...partialData.skills };
 
     // --- Migração Multiclasse ---
-    // Se o personagem não tem o array 'classes' mas tem o campo 'class' legado, migra para o novo formato.
-    if ((!hydrated.classes || hydrated.classes.length === 0) && hydrated.class) {
+    // Se o personagem tem o campo 'class' legado E (não tem o array classes OU o array só contém o padrão inicial)
+    const isInitialDefault = hydrated.classes?.length === 1 && hydrated.classes[0].name === 'Guerreiro' && !partialData.classes;
+    
+    if (hydrated.class && (!hydrated.classes || hydrated.classes.length === 0 || isInitialDefault)) {
         hydrated.classes = [{
             name: hydrated.class,
             level: hydrated.level || 1,

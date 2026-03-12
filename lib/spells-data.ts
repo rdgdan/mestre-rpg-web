@@ -642,6 +642,7 @@ export function searchSpells(queryText: string, filters?: {
     minLevel?: number;
     school?: string;
     class?: string;
+    source?: 'all' | 'global' | 'custom';
 }, baseSpells?: Spell[]): Spell[] {
     let results = baseSpells || spellsDatabase;
 
@@ -665,12 +666,20 @@ export function searchSpells(queryText: string, filters?: {
         }
     }
 
-    if (filters?.minLevel !== undefined) {
-        results = results.filter(spell => spell.level >= filters.minLevel);
-    }
-
-    if (filters?.school) {
-        results = results.filter(spell => spell.school === filters.school);
+    if (filters?.source) {
+        if (filters.source === 'global') {
+            // Se NÃO estiver escrito "CUSTOM" na escola, é Predefinida
+            results = results.filter(spell => {
+                const school = spell.school ? String(spell.school).toUpperCase() : '';
+                return school !== 'CUSTOM' && school !== 'CUSTOMIZADA';
+            });
+        } else if (filters.source === 'custom') {
+            // Apenas magias que tem a escola definida como "CUSTOM"
+            results = results.filter(spell => {
+                const school = spell.school ? String(spell.school).toUpperCase() : '';
+                return school === 'CUSTOM' || school === 'CUSTOMIZADA';
+            });
+        }
     }
 
     if (filters?.class) {
@@ -694,22 +703,50 @@ export function searchSpells(queryText: string, filters?: {
             let spellClasses: string[] = [];
 
             if (Array.isArray(spell.classes)) {
-                spellClasses = spell.classes.map(c => 
-                    typeof c === 'string' ? c.toLowerCase().trim() : 
-                    (c && typeof (c as any).name === 'string' ? (c as any).name.toLowerCase().trim() : '')
-                );
+                spellClasses = spell.classes.map(c => {
+                    if (typeof c === 'string') return c.toLowerCase().trim();
+                    if (c && typeof c === 'object') {
+                        const val = (c as any).name || (c as any).value || (c as any).label || (c as any).classe || '';
+                        return String(val).toLowerCase().trim();
+                    }
+                    return '';
+                });
             } else if (typeof (spell as any).classes === 'string') {
-                spellClasses = (spell as any).classes.split(',').map((s: string) => s.toLowerCase().trim());
+                try {
+                    // Tenta fazer parse de strings que possam ser JSON (ex: "[{\"value\":\"Mago\"}]")
+                    const parsed = JSON.parse((spell as any).classes);
+                    if (Array.isArray(parsed)) {
+                        spellClasses = parsed.map(c => {
+                            if (typeof c === 'string') return c.toLowerCase().trim();
+                            if (c && typeof c === 'object') {
+                                const val = c.name || c.value || c.label || c.classe || '';
+                                return String(val).toLowerCase().trim();
+                            }
+                            return '';
+                        });
+                    } else {
+                        spellClasses = (spell as any).classes.split(',').map((s: string) => s.toLowerCase().trim());
+                    }
+                } catch (e) {
+                    spellClasses = (spell as any).classes.split(',').map((s: string) => s.toLowerCase().trim());
+                }
             } else if (typeof (spell as any).classe === 'string') {
-                // Suporte para campo singular 'classe'
                 spellClasses = (spell as any).classe.split(',').map((s: string) => s.toLowerCase().trim());
             } else if (Array.isArray((spell as any).classe)) {
-                 spellClasses = (spell as any).classe.map((c: any) => typeof c === 'string' ? c.toLowerCase().trim() : '');
+                 spellClasses = (spell as any).classe.map((c: any) => {
+                    if (typeof c === 'string') return c.toLowerCase().trim();
+                    if (c && typeof c === 'object') {
+                        const val = c.name || c.value || c.label || c.classe || '';
+                        return String(val).toLowerCase().trim();
+                    }
+                    return '';
+                 });
             }
 
-            // Se não tem classes definidas, tratamos como universal/visível para todos
+            // Se não tem classes definidas no banco de dados, a magia não pertence 
+            // a essa classe selecionada (antes retornava "true" para não sumir).
             if (spellClasses.length === 0 || (spellClasses.length === 1 && spellClasses[0] === '')) {
-                return true; 
+                return false; 
             }
 
             // Regra Especial: Guardião vê Truques de Druida

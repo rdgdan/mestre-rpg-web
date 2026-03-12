@@ -6,7 +6,7 @@ import { auth, db } from '@/lib/firebase';
 import { fetchNpcTraitsFromFirestore, syncNpcTraitsToFirestore } from '@/lib/npc-traits-sync';
 import { Campaign } from '@/types/campaign';
 import { signOut, updateProfile } from 'firebase/auth';
-import { addDoc, collection, deleteDoc, doc, onSnapshot, query, updateDoc, where } from 'firebase/firestore';
+import { addDoc, collection, deleteDoc, doc, onSnapshot, query, updateDoc, where, serverTimestamp } from 'firebase/firestore';
 import { isMaster } from '@/lib/master-utils';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -186,7 +186,7 @@ export default function HomePage() {
         await updateDoc(campaignRef, {
           name: campaignName,
           description: campaignDescription,
-          updatedAt: new Date()
+          updatedAt: serverTimestamp()
         });
       } else {
         // Criar nova
@@ -194,7 +194,7 @@ export default function HomePage() {
           name: campaignName,
           description: campaignDescription,
           ownerId: user.uid,
-          createdAt: new Date(),
+          createdAt: serverTimestamp(),
         });
       }
 
@@ -230,20 +230,24 @@ export default function HomePage() {
     e.preventDefault();
     const npcs: NPC[] = [];
     for (let i = 0; i < npcAmount; i++) {
-      const profession = selectedProfession === 'Aleatória'
-        ? getRandomItem(npcTraits.professions)
-        : selectedProfession;
-      const race = getRandomItem(npcTraits.races || []);
-      const appearance = getRandomItem(npcTraits.appearances);
-      const personality = getRandomItem(npcTraits.personalities);
-
-      npcs.push({
-        profession: profession,
-        appearance: appearance,
-        personality: personality,
-        race: race || 'Humano'
-      });
-    }
+        const profession = selectedProfession === 'Aleatória'
+          ? getRandomItem(npcTraits.professions)
+          : selectedProfession;
+        
+        // Se a profissão já contém uma das raças conhecidas, não adicionamos uma raça extra aleatória
+        const containsRace = npcTraits.races.some(r => profession.toLowerCase().includes(r.toLowerCase()));
+        const race = containsRace ? '' : getRandomItem(npcTraits.races || []);
+        
+        const appearance = getRandomItem(npcTraits.appearances);
+        const personality = getRandomItem(npcTraits.personalities);
+  
+        npcs.push({
+          profession: profession,
+          appearance: appearance,
+          personality: personality,
+          race: race || 'Humano'
+        });
+      }
     setGeneratedNpcs(npcs);
   }
 
@@ -430,28 +434,28 @@ export default function HomePage() {
               ) : campaigns.length > 0 ? (
                 <div className="space-y-4">
                   {campaigns.map(campaign => (
-                    <Link href={`/campanha/${campaign.id}`} key={campaign.id} className="block">
-                      <div className="bg-rpg-panel/90 rounded-xl border border-rpg-gold/12 p-5 hover:border-rpg-gold/40 transition-all cursor-pointer group shadow-md hover:shadow-glow-ember relative overflow-hidden flex justify-between items-start hover:-translate-y-1">
-                        <div className="absolute inset-0 opacity-0 group-hover:opacity-10 transition-opacity bg-gradient-to-br from-amber-400 to-transparent" />
-                        <div className="absolute top-0 right-0 w-28 h-28 bg-gradient-to-bl from-rpg-gold/10 to-transparent rounded-bl-full pointer-events-none"></div>
+                    <Link href={`/campanha/${campaign.id}`} key={campaign.id} className="block transition-transform active:scale-[0.98]">
+                      <div className="bg-rpg-panel/80 backdrop-blur-md rounded-xl border border-white/5 p-5 hover:border-rpg-gold/40 transition-all cursor-pointer group shadow-xl hover:shadow-glow-ember relative overflow-hidden flex justify-between items-start hover:-translate-y-1">
+                        <div className="absolute inset-0 opacity-0 group-hover:opacity-10 transition-opacity bg-gradient-to-br from-rpg-gold via-rpg-ember to-transparent" />
+                        <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-bl from-rpg-gold/5 via-transparent to-transparent rounded-bl-full pointer-events-none"></div>
 
-                        <div className="flex-grow pr-4">
-                          <h3 className="text-xl font-bold font-cinzel text-rpg-parchment group-hover:text-rpg-gold mb-1">{campaign.name}</h3>
-                          <p className="text-rpg-parchment/70 font-medieval text-sm line-clamp-2">{campaign.description || "Sem descrição."}</p>
+                        <div className="flex-grow pr-4 relative z-10">
+                          <h3 className="text-xl font-bold font-cinzel text-rpg-parchment group-hover:text-rpg-gold transition-colors mb-1">{campaign.name}</h3>
+                          <p className="text-rpg-parchment/60 font-medieval text-sm line-clamp-2 leading-relaxed italic">{campaign.description || "O destino aguarda os bravos aventureiros..."}</p>
                         </div>
 
-                        <div className="flex flex-col gap-2 z-10 opacity-100 transition-opacity">
+                        <div className="flex flex-col gap-3 z-10 opacity-60 group-hover:opacity-100 transition-opacity">
                           <button
                             onClick={(e) => handleOpenEditCampaign(campaign, e)}
-                            className="text-rpg-grey hover:text-rpg-gold p-1 hover:bg-rpg-slate/60 rounded transition-colors"
-                            title="Editar"
+                            className="text-rpg-grey hover:text-rpg-gold p-1.5 hover:bg-white/5 rounded-full transition-all border border-transparent hover:border-rpg-gold/20"
+                            title="Editar Crônicas"
                           >
                             ✏️
                           </button>
                           <button
                             onClick={(e) => handleDeleteCampaign(campaign.id, campaign.name, e)}
-                            className="text-rpg-grey hover:text-red-400 p-1 hover:bg-rpg-slate/60 rounded transition-colors"
-                            title="Excluir"
+                            className="text-rpg-grey hover:text-red-400 p-1.5 hover:bg-white/5 rounded-full transition-all border border-transparent hover:border-red-400/20"
+                            title="Excluir do Reino"
                           >
                             🗑️
                           </button>
@@ -488,15 +492,21 @@ export default function HomePage() {
               ) : characters.length > 0 ? (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   {characters.map(char => (
-                    <Link key={char.id} href={`/personagem/${char.id}`}>
-                      <div className="bg-rpg-panel/90 rounded-xl border border-rpg-gold/12 p-4 hover:border-rpg-gold/40 transition-all cursor-pointer h-full flex flex-col shadow-md hover:shadow-glow-ember hover:-translate-y-1 relative overflow-hidden group">
-                        <div className="absolute inset-0 opacity-0 group-hover:opacity-10 transition-opacity bg-gradient-to-br from-amber-300 to-transparent" />
-                        {char.imageUrl && (
-                          <div className="absolute inset-0 bg-cover bg-center opacity-20" style={{ backgroundImage: `url(${char.imageUrl})` }}></div>
+                    <Link key={char.id} href={`/personagem/${char.id}`} className="transition-transform active:scale-[0.98]">
+                      <div className="bg-rpg-panel/80 backdrop-blur-md rounded-xl border border-white/5 p-4 hover:border-rpg-gold/40 transition-all cursor-pointer h-full flex flex-col shadow-xl hover:shadow-glow-ember hover:-translate-y-1 relative overflow-hidden group">
+                        <div className="absolute inset-0 opacity-0 group-hover:opacity-20 transition-opacity bg-gradient-to-br from-rpg-gold via-rpg-ember to-transparent" />
+                        {char.imageUrl ? (
+                          <div className="absolute inset-0 bg-cover bg-center opacity-30 group-hover:scale-110 transition-transform duration-700" style={{ backgroundImage: `url(${char.imageUrl})` }}></div>
+                        ) : (
+                           <div className="absolute -right-4 -bottom-4 text-7xl opacity-[0.03] group-hover:opacity-[0.08] transition-opacity">🛡️</div>
                         )}
                         <div className="relative z-10">
-                          <h3 className="text-lg font-bold font-cinzel text-rpg-parchment truncate group-hover:text-rpg-gold">{char.name}</h3>
-                          <p className="text-rpg-gold/80 text-xs font-cinzel uppercase tracking-wider mt-1">{char.class} &bull; Lvl {char.level}</p>
+                          <h3 className="text-lg font-bold font-cinzel text-rpg-parchment truncate group-hover:text-rpg-gold transition-colors">{char.name}</h3>
+                          <div className="flex items-center gap-2 mt-1">
+                            <span className="text-rpg-gold/90 text-[10px] font-cinzel uppercase tracking-[0.2em]">{char.class}</span>
+                            <span className="text-rpg-grey/60 text-xs">|</span>
+                            <span className="text-rpg-parchment/70 text-xs font-medieval">Nv. {char.level}</span>
+                          </div>
                         </div>
                       </div>
                     </Link>
@@ -588,7 +598,7 @@ export default function HomePage() {
             </div>
           </div>
           <div className="text-center pt-2">
-            <button type="submit" className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white p-3 px-8 rounded font-bold font-cinzel text-base sm:text-lg transition-all transform hover:scale-[1.02] active:scale-95 shadow-lg border border-white/10">
+            <button type="submit" className="w-full sm:w-auto bg-rpg-ember hover:bg-rpg-ember/80 text-white p-3 px-8 rounded font-bold font-cinzel text-base sm:text-lg transition-all transform hover:scale-[1.02] active:scale-95 shadow-lg shadow-glow-ember/20 border border-white/10">
               Gerar NPCs
             </button>
           </div>
@@ -596,11 +606,29 @@ export default function HomePage() {
 
         {generatedNpcs.length > 0 && (
           <div className="mt-6 border-t border-rpg-gold/20 pt-4 space-y-4 max-h-[400px] overflow-y-auto pr-2">
-            {generatedNpcs.map((npc, index) => (
-              <div key={index} className="bg-rpg-slate/50 rounded-lg p-4 border border-rpg-gold/10 shadow-md animate-fade-in hover:border-rpg-gold/30 transition-colors">
-                <h3 className="font-medieval text-xl text-rpg-gold font-bold mb-1">{npc.profession} <span className="text-sm text-rpg-grey font-sans">({npc.race})</span></h3>
-                <p className="font-sans text-sm text-rpg-parchment/80 mt-1"><strong>Aparência:</strong> <span className="text-rpg-grey">{npc.appearance}</span></p>
-                <p className="font-sans text-sm text-rpg-parchment/80"><strong>Personalidade:</strong> <span className="text-rpg-grey">{npc.personality}</span></p>
+             {generatedNpcs.map((npc, index) => (
+              <div key={index} className="bg-rpg-panel/60 backdrop-blur-sm rounded-xl border border-white/5 p-4 hover:border-rpg-gold/40 transition-all shadow-xl hover:shadow-glow-ember relative overflow-hidden group">
+                <div className="absolute inset-0 opacity-0 group-hover:opacity-10 transition-opacity bg-gradient-to-br from-rpg-gold via-rpg-ember to-transparent" />
+                
+                <div className="relative z-10">
+                  <h3 className="font-cinzel text-lg text-rpg-gold font-bold mb-1 leading-tight">{npc.profession}</h3>
+                  <div className="flex items-center gap-2 mb-3">
+                    <span className="bg-rpg-ember/20 text-rpg-ember text-[10px] px-2 py-0.5 rounded font-bold uppercase tracking-widest ring-1 ring-rpg-ember/30">{npc.race}</span>
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <p className="font-medieval text-sm text-rpg-parchment/90 leading-snug">
+                      <span className="text-rpg-grey/60 text-[10px] uppercase font-bold block mb-0.5 tracking-wider">Aparência</span>
+                      {npc.appearance}
+                    </p>
+                    <p className="font-medieval text-sm text-rpg-parchment/90 leading-snug">
+                      <span className="text-rpg-grey/60 text-[10px] uppercase font-bold block mb-0.5 tracking-wider">Temperamento</span>
+                      {npc.personality}
+                    </p>
+                  </div>
+                </div>
+                
+                <div className="absolute -right-2 -bottom-2 text-4xl opacity-[0.05] group-hover:opacity-10 transition-opacity transform group-hover:rotate-12 duration-500">📜</div>
               </div>
             ))}
           </div>
@@ -650,7 +678,7 @@ export default function HomePage() {
             <button
               onClick={executeSyncTraits}
               disabled={isSyncing}
-              className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded transition-all disabled:opacity-50"
+              className="bg-rpg-gold hover:bg-rpg-gold/80 text-rpg-dark font-bold py-2 px-6 rounded transition-all disabled:opacity-50 shadow-lg shadow-glow-gold/20"
             >
               {isSyncing ? 'Sincronizando...' : 'Sincronizar Agora'}
             </button>

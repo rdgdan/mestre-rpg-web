@@ -71,14 +71,16 @@ export async function syncNpcTraitsToFirestore(): Promise<NpcTraits> {
         // para manter a lista de profissões genérica
         const combatantProfessions = npcTemplates
             .map(t => t.name)
-            .filter(name => !npcRaces.some(race => name.includes(race)));
+            .filter(name => !npcRaces.some(race => name.toLowerCase().includes(race.toLowerCase())));
 
         const mergedData: NpcTraits = {
             professions: Array.from(new Set([
                 ...(currentData.professions || []),
                 ...npcProfessions,
                 ...combatantProfessions
-            ])).sort(),
+            ]))
+            .filter(name => !npcRaces.some(race => name.toLowerCase().includes(race.toLowerCase())))
+            .sort(),
             appearances: Array.from(new Set([...(currentData.appearances || []), ...npcAppearances])).sort(),
             personalities: Array.from(new Set([...(currentData.personalities || []), ...npcPersonalities])).sort(),
             races: Array.from(new Set([...(currentData.races || []), ...npcRaces])).sort()

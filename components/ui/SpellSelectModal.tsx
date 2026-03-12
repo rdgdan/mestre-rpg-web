@@ -26,6 +26,7 @@ const SpellSelectModal: React.FC<SpellSelectModalProps> = ({
   const [isLoading, setIsLoading] = useState(false);
   const [selectedLevel, setSelectedLevel] = useState<number | null>(initialFilterLevel !== undefined ? initialFilterLevel : null);
   const [selectedClass, setSelectedClass] = useState<string | null>(filterClass || null);
+  const [selectedSource, setSelectedSource] = useState<'all' | 'global' | 'custom'>('all');
 
   useEffect(() => {
     if (isOpen) {
@@ -43,7 +44,8 @@ const SpellSelectModal: React.FC<SpellSelectModalProps> = ({
   const filtered = searchSpells(search, {
     class: selectedClass || undefined,
     level: selectedLevel !== null ? selectedLevel : undefined,
-    minLevel: minLevel
+    minLevel: minLevel,
+    source: selectedSource !== 'all' ? selectedSource : undefined,
   }, [...globalSpells]);
 
   const renderSpellProperty = (prop: any) => {
@@ -83,7 +85,7 @@ const SpellSelectModal: React.FC<SpellSelectModalProps> = ({
           </div>
 
           {/* Filtros Combinados */}
-          <div className="grid grid-cols-2 gap-3 pb-3 border-b border-rpg-gold/10">
+          <div className="grid grid-cols-3 gap-3 pb-3 border-b border-rpg-gold/10">
             <div className="flex flex-col gap-1.5">
               <label className="text-[10px] text-rpg-gold/60 uppercase tracking-widest font-bold ml-1">Filtro por Classe</label>
               <select
@@ -112,6 +114,20 @@ const SpellSelectModal: React.FC<SpellSelectModalProps> = ({
                 {[1, 2, 3, 4, 5, 6, 7, 8, 9].map(lv => (
                   <option key={lv} value={lv}>Nível {lv}</option>
                 ))}
+              </select>
+            </div>
+            
+            <div className="flex flex-col gap-1.5">
+              <label className="text-[10px] text-rpg-gold/60 uppercase tracking-widest font-bold ml-1">Filtro por Origem</label>
+              <select
+                value={selectedSource}
+                onChange={(e) => setSelectedSource(e.target.value as any)}
+                className="w-full p-2.5 rounded bg-rpg-dark/60 border border-rpg-gold/20 text-rpg-parchment text-xs focus:border-rpg-gold/50 outline-none transition-all cursor-pointer appearance-none bg-no-repeat bg-[right_0.75rem_center] bg-[length:1rem_1rem]"
+                style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%23d4af37'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E")` }}
+              >
+                <option value="all">Todas as Origens</option>
+                <option value="global">Predefinidas D&D 5e</option>
+                <option value="custom">Homebrew (Customizadas)</option>
               </select>
             </div>
           </div>

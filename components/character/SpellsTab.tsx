@@ -58,7 +58,7 @@ export const SpellsTab: React.FC<SpellsTabProps> = ({
             )}
 
             <div className="flex justify-between items-center mb-4">
-                <h2 className="text-xl font-serif text-rpg-gold-light tracking-wide">Grimório Arcano</h2>
+                <h2 className="text-xl font-serif text-rpg-gold tracking-wide">Grimório Arcano</h2>
                 {!isReadOnly && (
                     <button 
                         onClick={() => setSpellSelectOpen(true)} 
@@ -75,17 +75,17 @@ export const SpellsTab: React.FC<SpellsTabProps> = ({
                 if (cantrips.length > 0) {
                     return (
                         <div className="mb-8 overflow-hidden">
-                            <div className="card-glass border-none p-5 mb-4 relative group">
-                                <div className="absolute top-0 left-0 w-1 h-full bg-purple-500/50 shadow-glow-purple" />
-                                <div className="flex items-center justify-between">
+                            <div className="card-glass border-none p-5 mb-4 relative group overflow-hidden">
+                                <div className="absolute top-0 left-0 w-1 h-full bg-rpg-gold/50 shadow-glow-gold" />
+                                <div className="flex items-center justify-between relative z-10">
                                     <div className="flex items-center gap-4">
-                                        <div className="w-10 h-10 flex items-center justify-center bg-purple-500/10 rounded-lg text-xl">✨</div>
+                                        <div className="w-10 h-10 flex items-center justify-center bg-rpg-gold/10 rounded-lg text-xl border border-rpg-gold/20">✨</div>
                                         <div>
-                                            <h3 className="text-lg font-serif text-purple-300 tracking-wider">Truques & Cantrips</h3>
+                                            <h3 className="text-lg font-serif text-rpg-gold tracking-wider uppercase">Truques & Cantrips</h3>
                                             <p className="text-[11px] text-rpg-grey/60 uppercase tracking-widest mt-0.5">Nível 0 • Sempre Disponível</p>
                                         </div>
                                     </div>
-                                    <span className="text-[10px] bg-purple-500/20 text-purple-200 uppercase tracking-widest font-black px-4 py-1.5 rounded-full border border-purple-400/20 shadow-inner">Ilimitado</span>
+                                    <span className="text-[10px] bg-rpg-gold/10 text-rpg-gold uppercase tracking-widest font-black px-4 py-1.5 rounded-full border border-rpg-gold/20 shadow-inner">Ilimitado</span>
                                 </div>
                             </div>
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -99,11 +99,11 @@ export const SpellsTab: React.FC<SpellsTabProps> = ({
                                                 <span className="px-2 py-0.5 bg-gray-500/20 text-gray-300 rounded text-[9px] font-black border border-gray-400/20 uppercase">{(spell.sourceClass || character.class).slice(0, 3)}</span>
                                             </div>
                                         </div>
-                                        <div className="flex flex-wrap gap-x-3 gap-y-1 mb-2 text-[10px] text-rpg-grey/70 uppercase font-sans tracking-tight border-b border-purple-500/10 pb-2">
+                                        <div className="flex flex-wrap gap-x-3 gap-y-1 mb-2 text-[10px] text-rpg-grey/70 uppercase font-sans tracking-tight border-b border-rpg-gold/10 pb-2">
                                             <span>{formatSpellValue(spell.castingTime)}</span>
                                             <span>{formatSpellValue(spell.range)}</span>
                                             <span>{formatSpellValue(spell.duration)}</span>
-                                            <span className="text-purple-400/70 italic">{spell.school}</span>
+                                            <span className="text-rpg-gold/60 italic">{spell.school}</span>
                                         </div>
                                         <p className="text-xs text-rpg-grey/80 leading-relaxed">{spell.description}</p>
                                         {!isReadOnly && (
@@ -174,14 +174,14 @@ export const SpellsTab: React.FC<SpellsTabProps> = ({
                             return (
                                 <div className="flex gap-3 ml-4">
                                     {slotInfo && (
-                                        <div className="flex items-center gap-2 px-3 py-1.5 bg-purple-500/10 border border-purple-500/30 rounded-full shadow-inner">
-                                            <span className="text-[9px] font-black text-purple-300 uppercase tracking-widest">Slots</span>
+                                        <div className="flex items-center gap-2 px-3 py-1.5 bg-rpg-gold/10 border border-rpg-gold/30 rounded-full shadow-inner">
+                                            <span className="text-[9px] font-black text-rpg-gold uppercase tracking-widest">Slots</span>
                                             <span className="text-xs font-serif text-white">{slotInfo.current}/{slotInfo.max}</span>
                                         </div>
                                     )}
                                     {pactInfo && (
-                                        <div className="flex items-center gap-2 px-3 py-1.5 bg-blue-500/10 border border-blue-500/30 rounded-full shadow-inner" title="Slots de Pacto">
-                                            <span className="text-[9px] font-black text-blue-300 uppercase tracking-widest">Pacto</span>
+                                        <div className="flex items-center gap-2 px-3 py-1.5 bg-rpg-ember/20 border border-rpg-ember/30 rounded-full shadow-inner" title="Slots de Pacto">
+                                            <span className="text-[9px] font-black text-rpg-ember uppercase tracking-widest">Pacto</span>
                                             <span className="text-xs font-serif text-white">{pactInfo.current}/{pactInfo.max}</span>
                                         </div>
                                     )}
@@ -196,7 +196,7 @@ export const SpellsTab: React.FC<SpellsTabProps> = ({
                                     onClick={() => setExpandedSpellLevels(prev => ({ ...prev, [level]: !prev[level] }))}
                                 >
                                     <div className="flex items-center flex-wrap gap-4">
-                                        <div className="w-10 h-10 flex items-center justify-center bg-purple-500/20 text-purple-100 rounded-lg text-lg font-black border border-purple-400/30 shadow-glow-purple/20">{level}</div>
+                                        <div className="w-10 h-10 flex items-center justify-center bg-rpg-gold/20 text-rpg-gold rounded-lg text-lg font-black border border-rpg-gold/30 shadow-glow-gold/20">{level}</div>
                                         <h3 className="text-lg font-serif text-white tracking-widest uppercase">{levelLabel}</h3>
                                         <SlotCounter />
                                     </div>
@@ -230,7 +230,7 @@ export const SpellsTab: React.FC<SpellsTabProps> = ({
                                                         <div className="flex gap-1.5 ml-2 flex-shrink-0">
                                                             {spell.concentration && <span className="w-5 h-5 flex items-center justify-center bg-blue-500/20 text-blue-300 rounded text-[9px] font-black border border-blue-400/30" title="Concentração">C</span>}
                                                             {spell.ritual && <span className="w-5 h-5 flex items-center justify-center bg-amber-500/20 text-amber-300 rounded text-[9px] font-black border border-amber-400/30" title="Ritual">R</span>}
-                                                            <span className="px-2 py-0.5 bg-purple-500/20 text-purple-200 rounded text-[9px] font-black border border-purple-400/30 uppercase">{(spell.sourceClass || character.class).slice(0, 3)}</span>
+                                                            <span className="px-2 py-0.5 bg-rpg-gold/20 text-rpg-gold rounded text-[9px] font-black border border-rpg-gold/30 uppercase">{(spell.sourceClass || character.class).slice(0, 3)}</span>
                                                         </div>
                                                     </div>
                                                     <div className="flex flex-wrap gap-x-3 gap-y-1.5 mb-3 text-[9px] text-rpg-grey/50 uppercase font-black tracking-widest border-b border-white/5 pb-3">

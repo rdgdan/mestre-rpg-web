@@ -58,6 +58,7 @@ export interface Combatant {
     level?: number;
     spellSlotsCurrent?: Record<number, number>;
     spells?: any[];
+    initiativeBonus?: number;
 }
 
 export function useCombat(encounterId: string, user: any, mode: 'master' | 'player' = 'master') {
@@ -364,23 +365,31 @@ export function useCombat(encounterId: string, user: any, mode: 'master' | 'play
 
     // --- Actions ---
     const updateHP = useCallback(async (cid: string, amount: number) => {
-        const combatant = combatants.find(c => c.id === cid);
-        if (!combatant) return;
+        setCombatants(prev => {
+            const combatant = prev.find(c => c.id === cid);
+            if (!combatant) return prev;
 
-        const newHP = Math.max(0, Math.min(combatant.maxHp, combatant.hp + amount));
-        const updated = combatants.map(c =>
-            c.id === cid ? { ...c, hp: newHP, status: (newHP === 0 && c.type !== 'player') ? 'dead' : 'active' } as Combatant : c
-        );
+            const newHP = Math.max(0, Math.min(combatant.maxHp, combatant.hp + amount));
+            const updated = prev.map(c =>
+                c.id === cid ? { 
+                    ...c, 
+                    hp: newHP, 
+                    status: newHP === 0 ? (c.type === 'player' ? 'unconscious' : 'dead') : 'active' 
+                } as Combatant : c
+            );
 
-        setCombatants(updated);
-        syncState({ combatants: updated });
+            // Trigger sync with the newly calculated array
+            syncState({ combatants: updated });
 
-        if (combatant.type === 'player' && combatant.externalId) {
-            try {
-                await updateDoc(doc(db, 'personagens', combatant.externalId), { currentHp: newHP });
-            } catch (e) { console.error(`HP sync failed`, e); }
-        }
-    }, [combatants, syncState]);
+            // Player sheet sync
+            if (combatant.type === 'player' && combatant.externalId) {
+                updateDoc(doc(db, 'personagens', combatant.externalId), { currentHp: newHP })
+                    .catch(e => console.error(`HP sync failed`, e));
+            }
+
+            return updated;
+        });
+    }, [syncState]);
 
     const nextTurn = useCallback(() => {
         let nIdx = turnIndex + 1;
@@ -396,9 +405,10 @@ export function useCombat(encounterId: string, user: any, mode: 'master' | 'play
 
     const startCombat = useCallback(() => {
         const updated = combatants.map(c => {
-            if (c.type !== 'player') {
+            if (c.type !== 'player' && (c.initiative === 0 || c.initiative === -1)) {
                 const roll = Math.floor(Math.random() * 20) + 1;
-                return { ...c, initiative: roll - 1 }; // -1 default mod
+                const bonus = (c as any).initiativeBonus || 0;
+                return { ...c, initiative: roll + bonus };
             }
             return c;
         }).sort((a, b) => b.initiative - a.initiative);
@@ -419,71 +429,83 @@ export function useCombat(encounterId: string, user: any, mode: 'master' | 'play
     }, [user, encounterId, isOnline, syncState]);
 
     const removeCombatant = useCallback(async (cid: string) => {
-        const updated = combatants.filter(c => c.id !== cid);
-        setCombatants(updated);
-        syncState({ combatants: updated });
-    }, [combatants, syncState]);
+        setCombatants(prev => {
+            const updated = prev.filter(c => c.id !== cid);
+            syncState({ combatants: updated });
+            return updated;
+        });
+    }, [syncState]);
 
     const addCombatant = useCallback(async (entry: Omit<Combatant, 'id' | 'status' | 'statusEffects'>) => {
-        const newEntry: Combatant = {
-            ...entry,
-            id: Math.random().toString(36).substr(2, 9),
-            status: 'active',
-            statusEffects: []
-        };
-        const updated = [...combatants, newEntry];
-        setCombatants(updated);
-        syncState({ combatants: updated });
-    }, [combatants, syncState]);
+        setCombatants(prev => {
+            const newEntry: Combatant = {
+                ...entry,
+                id: Math.random().toString(36).substr(2, 9),
+                status: 'active',
+                statusEffects: []
+            };
+            const updated = [...prev, newEntry];
+            syncState({ combatants: updated });
+            return updated;
+        });
+    }, [syncState]);
 
     const applyClassEffectToCombatant = useCallback(async (combatantId: string, effect: any) => {
-        const updated = combatants.map(c => {
-            if (c.id !== combatantId) return c;
-            const has = (c.statusEffects || []).some(se => se.id === effect.id);
-            if (has) return c;
-            return {
-                ...c,
-                statusEffects: [...(c.statusEffects || []), { id: effect.id, name: effect.name || effect.id, duration: effect.duration || 1 }]
-            } as Combatant;
-        });
-        setCombatants(updated);
-        syncState({ combatants: updated });
+        setCombatants(prev => {
+            const updated = prev.map(c => {
+                if (c.id !== combatantId) return c;
+                const has = (c.statusEffects || []).some(se => se.id === effect.id);
+                if (has) return c;
+                return {
+                    ...c,
+                    statusEffects: [...(c.statusEffects || []), { id: effect.id, name: effect.name || effect.id, duration: effect.duration || 1 }]
+                } as Combatant;
+            });
+            syncState({ combatants: updated });
 
-        const combatant = updated.find(c => c.id === combatantId);
-        if (combatant?.externalId) {
-            try {
-                const charRef = doc(db, 'personagens', combatant.externalId);
-                const charSnap = await getDoc(charRef);
-                if (charSnap.exists()) {
-                    const activeEffects = charSnap.data().activeEffects || [];
-                    if (!activeEffects.includes(effect.id)) {
-                        await updateDoc(charRef, { activeEffects: [...activeEffects, effect.id] });
-                    }
-                }
-            } catch (e) { console.error("Effect sync to char failed", e); }
-        }
-    }, [combatants, syncState]);
+            const combatant = updated.find(c => c.id === combatantId);
+            if (combatant?.externalId) {
+                (async () => {
+                    try {
+                        const charRef = doc(db, 'personagens', combatant.externalId);
+                        const charSnap = await getDoc(charRef);
+                        if (charSnap.exists()) {
+                            const activeEffects = charSnap.data().activeEffects || [];
+                            if (!activeEffects.includes(effect.id)) {
+                                await updateDoc(charRef, { activeEffects: [...activeEffects, effect.id] });
+                            }
+                        }
+                    } catch (e) { console.error("Effect sync to char failed", e); }
+                })();
+            }
+            return updated;
+        });
+    }, [syncState]);
 
     const removeClassEffectFromCombatant = useCallback(async (combatantId: string, effectId: string) => {
-        const updated = combatants.map(c => {
-            if (c.id !== combatantId) return c;
-            return { ...c, statusEffects: (c.statusEffects || []).filter(se => se.id !== effectId) } as Combatant;
-        });
-        setCombatants(updated);
-        syncState({ combatants: updated });
+        setCombatants(prev => {
+            const updated = prev.map(c => {
+                if (c.id !== combatantId) return c;
+                return { ...c, statusEffects: (c.statusEffects || []).filter(se => se.id !== effectId) } as Combatant;
+            });
+            syncState({ combatants: updated });
 
-        const combatant = combatants.find(c => c.id === combatantId);
-        if (combatant?.externalId) {
-            try {
-                const charRef = doc(db, 'personagens', combatant.externalId);
-                const charSnap = await getDoc(charRef);
-                if (charSnap.exists()) {
-                    const activeEffects = (charSnap.data().activeEffects || []).filter((e: string) => e !== effectId);
-                    await updateDoc(charRef, { activeEffects });
-                }
-            } catch (e) { console.error("Effect remove from char failed", e); }
-        }
-    }, [combatants, syncState]);
+            const combatant = updated.find(c => c.id === combatantId);
+            if (combatant?.externalId) {
+                (async () => {
+                    try {
+                        const charRef = doc(db, 'personagens', combatant.externalId);
+                        const charSnap = await getDoc(charRef);
+                        if (charSnap.exists()) {
+                            const activeEffects = (charSnap.data().activeEffects || []).filter((e: string) => e !== effectId);
+                            await updateDoc(charRef, { activeEffects });
+                        }
+                    } catch (e) { console.error("Effect remove from char failed", e); }
+                })();
+            }
+            return updated;
+        });
+    }, [syncState]);
 
     const handleJoinBattle = useCallback(async (character: Partial<Combatant>) => {
         if (!encounterId) return;
