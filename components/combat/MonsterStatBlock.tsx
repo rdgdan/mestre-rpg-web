@@ -26,7 +26,9 @@ const MonsterStatBlock: React.FC<MonsterStatBlockProps> = ({ monster }) => {
             {/* Header */}
             <div className="border-b-2 border-[#7a2008] mb-2 pb-1">
                 <h2 className="text-3xl font-bold font-cinzel italic tracking-tight">{monster.name}</h2>
-                <p className="text-sm italic">{monster.type}</p>
+                <p className="text-sm italic">
+                    {typeof monster.type === 'object' ? (monster.type as any).type : monster.type}
+                </p>
             </div>
 
             {/* Basic Stats */}

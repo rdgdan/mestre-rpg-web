@@ -50,7 +50,8 @@ const AddCombatantModal: React.FC<AddCombatantModalProps> = ({
         const source = newCombatant.type === 'monster' ? dbMonsters : [...dbStandardNpcs, ...customNpcs];
 
         return source.filter(m => {
-            const nameMatch = m.name?.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').includes(query);
+            if (!m.name || typeof m.name !== 'string') return false;
+            const nameMatch = m.name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').includes(query);
             const translated = translateMonster(m.name);
             const translatedMatch = translated?.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').includes(query);
             return nameMatch || translatedMatch;
@@ -58,7 +59,7 @@ const AddCombatantModal: React.FC<AddCombatantModalProps> = ({
     }, [monsterSearch, newCombatant.type, dbMonsters, dbStandardNpcs, customNpcs]);
 
     const handleSelectMonster = (m: any) => {
-        const translated = translateMonster(m.name);
+        const translated = typeof m.name === 'string' ? translateMonster(m.name) : undefined;
         setNewCombatant(prev => ({
             ...prev,
             name: translated || m.name,
@@ -144,7 +145,9 @@ const AddCombatantModal: React.FC<AddCombatantModalProps> = ({
                                         >
                                             <div>
                                                 <div className="text-rpg-parchment font-medieval">{translateMonster(m.name) || m.name}</div>
-                                                <div className="text-[10px] text-rpg-grey uppercase">{m.type || m.race}</div>
+                                                <div className="text-[10px] text-rpg-grey uppercase">
+                                                    {typeof m.type === 'object' ? (m.type.type || '—') : (m.type || m.race || '—')}
+                                                </div>
                                             </div>
                                             <div className="text-right text-rpg-gold text-xs font-cinzel">CR {m.cr || m.challenge_rating || '—'}</div>
                                         </button>
