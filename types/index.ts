@@ -111,7 +111,7 @@ export interface Spell {
   school: string;
   castingTime: string;
   range: string;
-  components: string;
+  components: string | string[];
   duration: string;
   description: string;
   classes?: string[];
@@ -150,7 +150,7 @@ export interface SpellBase {
   school: string;
   castingTime: string;
   range: string;
-  components: string;
+  components: string | string[];
   duration: string;
   description: string;
   classes?: string[];

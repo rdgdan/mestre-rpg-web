@@ -55,7 +55,7 @@ export default function SpellDetails({
         </div>
         <div>
           <span className="text-rpg-grey">Componentes:</span>
-          <p className="text-rpg-parchment font-bold">{spell.components.join(', ')}</p>
+          <p className="text-rpg-parchment font-bold">{Array.isArray(spell.components) ? spell.components.join(', ') : spell.components}</p>
         </div>
         <div>
           <span className="text-rpg-grey">Duração:</span>

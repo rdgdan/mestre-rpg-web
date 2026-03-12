@@ -1,6 +1,7 @@
 import { db } from './firebase';
 import { collection, getDocs, query, orderBy } from 'firebase/firestore';
-export type { Spell } from '@/types';
+import { Spell } from '@/types';
+export type { Spell };
 
 export const spellsDatabase: Spell[] = [
     {
