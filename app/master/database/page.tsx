@@ -500,18 +500,108 @@ export default function DatabaseManagementPage() {
 
                         {['monsters', 'npcs'].includes(registrationType) && (
                             <>
-                                <div className="grid grid-cols-3 gap-2">
+                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                                     <InputField label="HP" type="number" value={formData.hp} onChange={(v: any) => updateField('hp', parseInt(v))} />
                                     <InputField label="CA" type="number" value={formData.ac} onChange={(v: any) => updateField('ac', parseInt(v))} />
                                     <InputField label="CR" value={formData.challenge} onChange={(v: any) => updateField('challenge', v)} />
+                                    <InputField label="XP" type="number" value={formData.xp} onChange={(v: any) => updateField('xp', parseInt(v))} />
                                 </div>
-                                <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 bg-black/20 p-3 rounded-lg">
+                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                                    <InputField label="Deslocamento" value={formData.speed} onChange={(v: any) => updateField('speed', v)} placeholder="Ex: 9m, Voo 18m" />
+                                    <InputField label="Sentidos" value={formData.senses} onChange={(v: any) => updateField('senses', v)} placeholder="Ex: Visão no Escuro 18m" />
+                                    <InputField label="Idiomas" value={formData.languages} onChange={(v: any) => updateField('languages', v)} placeholder="Ex: Comum, Dracônico" />
+                                </div>
+                                <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 bg-black/20 p-3 rounded-lg border border-white/5">
                                     {['str', 'dex', 'con', 'int', 'wis', 'cha'].map(at => (
                                         <div key={at} className="text-center">
-                                            <label className="text-[10px] text-rpg-gold uppercase">{at}</label>
-                                            <input type="number" value={formData.attributes?.[at] || 10} onChange={e => updateNestedField('attributes', at, parseInt(e.target.value))} className="w-full bg-black/40 border border-white/10 rounded text-center text-xs p-1" />
+                                            <label className="text-[10px] text-rpg-gold uppercase font-bold">{at}</label>
+                                            <input type="number" value={formData.attributes?.[at] || 10} onChange={e => updateNestedField('attributes', at, parseInt(e.target.value))} className="w-full bg-black/40 border border-white/10 rounded text-center text-xs p-1 focus:border-rpg-gold outline-none" />
                                         </div>
                                     ))}
+                                </div>
+
+                                <div className="space-y-4 bg-white/5 p-4 rounded-xl border border-white/5">
+                                    <h4 className="text-xs font-cinzel text-rpg-gold uppercase tracking-widest opacity-70">Defesas e Resistências</h4>
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                        <InputField label="Resistências a Dano" value={formData.resistances} onChange={(v: any) => updateField('resistances', v)} />
+                                        <InputField label="Vulnerabilidades" value={formData.vulnerabilities} onChange={(v: any) => updateField('vulnerabilities', v)} />
+                                        <InputField label="Imunidades a Dano" value={formData.immunities} onChange={(v: any) => updateField('immunities', v)} />
+                                        <InputField label="Imunidades a Condição" value={formData.condition_immunities} onChange={(v: any) => updateField('condition_immunities', v)} />
+                                    </div>
+                                </div>
+
+                                <div className="space-y-4 bg-black/20 p-4 rounded-xl border border-rpg-gold/10">
+                                    <div className="flex justify-between items-center">
+                                        <h4 className="text-xs font-cinzel text-rpg-gold uppercase tracking-widest">Ações e Características</h4>
+                                        <button 
+                                            type="button" 
+                                            onClick={() => {
+                                                const currentActions = formData.actions || [];
+                                                updateField('actions', [...currentActions, { name: 'Nova Ação', description: '', type: 'action' }]);
+                                            }}
+                                            className="text-[10px] bg-emerald-600/20 hover:bg-emerald-600/40 text-emerald-400 px-2 py-1 rounded border border-emerald-500/30 uppercase font-bold"
+                                        >
+                                            + Adicionar
+                                        </button>
+                                    </div>
+
+                                    <div className="space-y-3">
+                                        {(formData.actions || []).map((action: any, idx: number) => (
+                                            <div key={idx} className="bg-rpg-dark/50 p-3 rounded-lg border border-white/5 relative group">
+                                                <button 
+                                                    type="button"
+                                                    onClick={() => {
+                                                        const newActions = [...formData.actions];
+                                                        newActions.splice(idx, 1);
+                                                        updateField('actions', newActions);
+                                                    }}
+                                                    className="absolute -top-2 -right-2 bg-red-600 text-white w-5 h-5 rounded-full text-[10px] flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                                                >
+                                                    ✕
+                                                </button>
+                                                <div className="grid grid-cols-1 sm:grid-cols-4 gap-2 mb-2">
+                                                    <input 
+                                                        placeholder="Nome da Ação" 
+                                                        value={action.name} 
+                                                        onChange={e => {
+                                                            const newActions = [...formData.actions];
+                                                            newActions[idx].name = e.target.value;
+                                                            updateField('actions', newActions);
+                                                        }}
+                                                        className="sm:col-span-3 bg-black/40 border border-white/10 rounded p-2 text-xs text-rpg-gold font-bold outline-none focus:border-rpg-gold"
+                                                    />
+                                                    <select 
+                                                        value={action.type || 'action'} 
+                                                        onChange={e => {
+                                                            const newActions = [...formData.actions];
+                                                            newActions[idx].type = e.target.value;
+                                                            updateField('actions', newActions);
+                                                        }}
+                                                        className="bg-black/40 border border-white/10 rounded p-1 text-[10px] text-rpg-parchment outline-none focus:border-rpg-gold"
+                                                    >
+                                                        <option value="action">Ação</option>
+                                                        <option value="trait">Característica</option>
+                                                        <option value="bonus">Ação Bônus</option>
+                                                        <option value="reaction">Reação</option>
+                                                        <option value="legendary">Lendária</option>
+                                                    </select>
+                                                </div>
+                                                <textarea 
+                                                    placeholder="Descrição da habilidade..." 
+                                                    value={action.description || action.desc} 
+                                                    onChange={e => {
+                                                        const newActions = [...formData.actions];
+                                                        newActions[idx].description = e.target.value;
+                                                        updateField('actions', newActions);
+                                                    }}
+                                                    className="w-full bg-black/20 border border-white/10 rounded p-2 text-xs text-rpg-parchment/80 h-16 resize-none outline-none focus:border-rpg-gold"
+                                                />
+                                            </div>
+                                        ))}
+                                        {(!formData.actions || formData.actions.length === 0) && (
+                                            <p className="text-center text-[10px] text-rpg-grey italic py-4">Nenhuma ação cadastrada para esta criatura.</p>
+                                        )}
+                                    </div>
                                 </div>
                             </>
                         )}
