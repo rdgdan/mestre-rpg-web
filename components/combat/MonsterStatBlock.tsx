@@ -52,7 +52,15 @@ const MonsterStatBlock: React.FC<MonsterStatBlockProps> = ({ monster }) => {
             <div className="space-y-1 text-sm py-2">
                 {monster.senses && <p><span className="font-bold text-[#922610]">Sentidos:</span> {monster.senses}</p>}
                 {monster.languages && <p><span className="font-bold text-[#922610]">Idiomas:</span> {monster.languages}</p>}
-                <p><span className="font-bold text-[#922610]">Nível de Desafio:</span> {monster.challenge} ({monster.xp} XP)</p>
+                <p>
+                    <span className="font-bold text-[#922610]">Nível de Desafio:</span> {' '}
+                    {(monster.challenge || (monster as any).cr || (monster as any).challenge_rating || (monster as any).challengeRating) ? (
+                        typeof (monster.challenge || (monster as any).cr || (monster as any).challenge_rating || (monster as any).challengeRating) === 'object' 
+                        ? ((monster.challenge || (monster as any).cr || (monster as any).challenge_rating || (monster as any).challengeRating) as any).cr || ((monster.challenge || (monster as any).cr || (monster as any).challenge_rating || (monster as any).challengeRating) as any).rating 
+                        : (monster.challenge || (monster as any).cr || (monster as any).challenge_rating || (monster as any).challengeRating)
+                    ) : '—'} 
+                    {monster.xp ? ` (${monster.xp} XP)` : ''}
+                </p>
             </div>
 
             {/* Traits */}

@@ -58,14 +58,22 @@ const AddCombatantModal: React.FC<AddCombatantModalProps> = ({
         }).slice(0, 10);
     }, [monsterSearch, newCombatant.type, dbMonsters, dbStandardNpcs, customNpcs]);
 
+    const formatCR = (m: any) => {
+        const rawCr = m.cr || m.challenge_rating || m.challenge || (m as any).challengeRating;
+        if (!rawCr) return '';
+        if (typeof rawCr === 'object') return rawCr.cr || rawCr.rating || '';
+        return String(rawCr);
+    };
+
     const handleSelectMonster = (m: any) => {
         const translated = typeof m.name === 'string' ? translateMonster(m.name) : undefined;
+        const crValue = formatCR(m);
         setNewCombatant(prev => ({
             ...prev,
-            name: translated || m.name,
+            name: (translated as any)?.name || m.name,
             hp: m.hp || (m.hit_points) || 10,
             ac: m.ac || (m.armor_class) || 10,
-            cr: m.challenge_rating || m.cr || '0',
+            cr: crValue || '0',
             xp: m.xp || '',
             initiativeBonus: Math.floor(((m.dexterity || 10) - 10) / 2)
         }));
@@ -149,7 +157,7 @@ const AddCombatantModal: React.FC<AddCombatantModalProps> = ({
                                                     {typeof m.type === 'object' ? (m.type.type || '—') : (m.type || m.race || '—')}
                                                 </div>
                                             </div>
-                                            <div className="text-right text-rpg-gold text-xs font-cinzel">CR {m.cr || m.challenge_rating || '—'}</div>
+                                            <div className="text-right text-rpg-gold text-xs font-cinzel">CR {formatCR(m) || '—'}</div>
                                         </button>
                                     ))}
                                 </div>
