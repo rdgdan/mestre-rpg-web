@@ -1,8 +1,11 @@
 'use client';
 
+import { useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import { useCombat } from '@/hooks/useCombat';
+import BattleMap from '@/components/combat/BattleMap';
+import { getOrCreateBattleMap } from '@/lib/map-sync';
 
 // Components
 import TurnOrderTracker from '@/components/combat/TurnOrderTracker';
@@ -19,8 +22,10 @@ export default function ConfrontoDetalhesPage() {
     const router = useRouter();
     const params = useParams();
     const id = params.id as string;
+    const arenaId = id;
 
     const combat = useCombat(id, user);
+    const [activeTab, setActiveTab] = useState<'combat' | 'map'>('combat');
 
     if (combat.loading) {
         return (
@@ -62,26 +67,69 @@ export default function ConfrontoDetalhesPage() {
                 onNextTurn={combat.nextTurn}
             />
 
-            <CombatantList
-                combatants={combat.combatants}
-                phase={combat.phase}
-                turnIndex={combat.turnIndex}
-                notificationsMap={combat.notificationsMap}
-                hpAdjustmentValues={combat.hpAdjustmentValues}
-                healAdjustmentValues={combat.healAdjustmentValues}
-                sethpAdjustmentValues={combat.sethpAdjustmentValues}
-                setHealAdjustmentValues={combat.setHealAdjustmentValues}
-                updateHP={combat.updateHP}
-                removeCombatant={combat.removeCombatant}
-                setConfirmCureModal={combat.setConfirmCureModal}
-                setClassFxTarget={combat.setClassFxTarget}
-                setIsClassFxOpen={combat.setIsClassFxOpen}
-                syncState={combat.syncState}
-                setCombatants={combat.setCombatants}
-                isMaster={true}
-                user={user}
-                setMonsterSheet={combat.setMonsterSheet}
-            />
+            {/* Seletor de Abas - Sempre visível para o mestre */}
+            <div className="container mx-auto px-4 mt-6 flex flex-col sm:flex-row items-center justify-between gap-4 z-30 relative">
+                <div className="flex bg-black/60 p-1.5 rounded-2xl border border-rpg-gold/20 backdrop-blur-md shadow-2xl">
+                    <button 
+                        onClick={() => setActiveTab('combat')}
+                        className={`px-8 py-2.5 rounded-xl font-cinzel text-xs tracking-widest transition-all duration-300 ${activeTab === 'combat' ? 'bg-rpg-gold text-rpg-dark shadow-glow-gold/40 font-bold' : 'text-rpg-grey hover:text-white hover:bg-white/5'}`}
+                    >
+                        ⚔️ COMBATE
+                    </button>
+                    <button 
+                        onClick={async () => {
+                            await getOrCreateBattleMap(arenaId);
+                            setActiveTab('map');
+                        }}
+                        className={`px-8 py-2.5 rounded-xl font-cinzel text-xs tracking-widest transition-all duration-300 ${activeTab === 'map' ? 'bg-rpg-gold text-rpg-dark shadow-glow-gold/40 font-bold' : 'text-rpg-grey hover:text-white hover:bg-white/5'}`}
+                    >
+                        🗺️ MAPA DE BATALHA
+                    </button>
+                </div>
+
+                <div className="flex gap-3">
+                    <button 
+                        onClick={() => window.open(`/arena/${arenaId}/projector`, '_blank', 'width=1280,height=720')}
+                        className="bg-purple-900/40 hover:bg-purple-800/60 text-purple-100 border border-purple-500/40 px-6 py-2.5 rounded-2xl font-cinzel text-[10px] tracking-widest transition-all shadow-glow-purple/20 flex items-center gap-2 group"
+                    >
+                        <span className="group-hover:scale-125 transition-transform">📽️</span> ABRIR PROJETOR
+                    </button>
+                </div>
+            </div>
+
+            {activeTab === 'combat' && (
+                <CombatantList
+                    combatants={combat.combatants}
+                    phase={combat.phase}
+                    turnIndex={combat.turnIndex}
+                    notificationsMap={combat.notificationsMap}
+                    hpAdjustmentValues={combat.hpAdjustmentValues}
+                    healAdjustmentValues={combat.healAdjustmentValues}
+                    sethpAdjustmentValues={combat.sethpAdjustmentValues}
+                    setHealAdjustmentValues={combat.setHealAdjustmentValues}
+                    updateHP={combat.updateHP}
+                    removeCombatant={combat.removeCombatant}
+                    setConfirmCureModal={combat.setConfirmCureModal}
+                    setClassFxTarget={combat.setClassFxTarget}
+                    setIsClassFxOpen={combat.setIsClassFxOpen}
+                    syncState={combat.syncState}
+                    setCombatants={combat.setCombatants}
+                    isMaster={true}
+                    user={user}
+                    setMonsterSheet={combat.setMonsterSheet}
+                />
+            )}
+
+            {activeTab === 'map' && (
+                <main className="w-full max-w-[98vw] mx-auto p-2 sm:p-4 flex-grow flex flex-col h-[85vh] animate-fade-up">
+                    <div className="flex-1 bg-rpg-panel/30 border border-rpg-gold/10 rounded-2xl overflow-hidden shadow-inner relative">
+                        <BattleMap arenaId={arenaId} isMaster={true} combatants={combat.combatants} />
+                    </div>
+                    <p className="mt-4 text-[10px] text-rpg-grey text-center italic font-medieval uppercase tracking-widest opacity-50">
+                        Mestre: Clique em uma célula para revelar/esconder a névoa. Use os botões flutuantes para zoom e sincronização.
+                    </p>
+                </main>
+            )}
 
             {/* Empty State */}
             {combat.combatants.length === 0 && (

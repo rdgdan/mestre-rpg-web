@@ -13,6 +13,8 @@ import MonsterStatBlock from '@/components/combat/MonsterStatBlock';
 import Link from 'next/link';
 import JSZip from 'jszip';
 import { mapImportedDataToCharacter } from '@/lib/character-mapper';
+import BattleMap from '@/components/combat/BattleMap';
+import { getOrCreateBattleMap } from '@/lib/map-sync';
 
 export default function SharedArenaPage() {
     const { id: encounterId } = useParams();
@@ -56,6 +58,7 @@ export default function SharedArenaPage() {
     const [isManualJoin, setIsManualJoin] = useState(false);
     const [manualChar, setManualChar] = useState({ name: '', class: 'Guerreiro', level: 1, hp: 10, ac: 10 });
     const [isJoining, setIsJoining] = useState(false);
+    const [activeTab, setActiveTab] = useState<'combat' | 'map'>('combat');
 
     const isHost = Boolean(hostInfo.id && user?.uid && String(hostInfo.id) === String(user.uid));
 
@@ -163,6 +166,42 @@ export default function SharedArenaPage() {
                 onNextTurn={nextTurn}
             />
 
+            {/* Seletor de Abas - Sempre visível se for o mestre ou se o combate já começou */}
+            {(isHost || phase !== 'preparation') && (
+                <div className="container mx-auto px-4 mt-6 flex flex-col sm:flex-row items-center justify-between gap-4 z-30 relative">
+                    <div className="flex bg-black/60 p-1.5 rounded-2xl border border-rpg-gold/20 backdrop-blur-md shadow-2xl">
+                        <button 
+                            onClick={() => setActiveTab('combat')}
+                            className={`px-8 py-2.5 rounded-xl font-cinzel text-xs tracking-widest transition-all duration-300 ${activeTab === 'combat' ? 'bg-rpg-gold text-rpg-dark shadow-glow-gold/40 font-bold' : 'text-rpg-grey hover:text-white hover:bg-white/5'}`}
+                        >
+                            ⚔️ COMBATE
+                        </button>
+                        <button 
+                            onClick={async () => {
+                                if (isHost) {
+                                    await getOrCreateBattleMap(arenaId);
+                                }
+                                setActiveTab('map');
+                            }}
+                            className={`px-8 py-2.5 rounded-xl font-cinzel text-xs tracking-widest transition-all duration-300 ${activeTab === 'map' ? 'bg-rpg-gold text-rpg-dark shadow-glow-gold/40 font-bold' : 'text-rpg-grey hover:text-white hover:bg-white/5'}`}
+                        >
+                            🗺️ MAPA DE BATALHA
+                        </button>
+                    </div>
+
+                    {isHost && (
+                        <div className="flex gap-3">
+                            <button 
+                                onClick={() => window.open(`/arena/${arenaId}/projector`, '_blank', 'width=1280,height=720')}
+                                className="bg-purple-900/40 hover:bg-purple-800/60 text-purple-100 border border-purple-500/40 px-6 py-2.5 rounded-2xl font-cinzel text-[10px] tracking-widest transition-all shadow-glow-purple/20 flex items-center gap-2 group"
+                            >
+                                <span className="group-hover:scale-125 transition-transform">📽️</span> ABRIR PROJETOR
+                            </button>
+                        </div>
+                    )}
+                </div>
+            )}
+
             {phase === 'preparation' && (
                 <div className="flex flex-col items-center justify-center py-12 px-4 gap-8">
                     <div className="text-center space-y-2">
@@ -197,7 +236,7 @@ export default function SharedArenaPage() {
                 </div>
             )}
 
-            {phase !== 'preparation' && (
+            {phase !== 'preparation' && activeTab === 'combat' && (
                 <CombatantList
                     combatants={combatants}
                     phase={phase}
@@ -218,6 +257,19 @@ export default function SharedArenaPage() {
                     user={user}
                     setMonsterSheet={setMonsterSheet}
                 />
+            )}
+
+            {activeTab === 'map' && (
+                <main className="container mx-auto p-3 sm:p-6 flex-grow flex flex-col h-[70vh]">
+                    <div className="flex-1 bg-rpg-panel/30 border border-rpg-gold/10 rounded-2xl overflow-hidden shadow-inner relative">
+                        <BattleMap arenaId={arenaId} isMaster={isHost} combatants={combatants} />
+                    </div>
+                    {isHost && (
+                        <p className="mt-4 text-[10px] text-rpg-grey text-center italic font-medieval uppercase tracking-widest opacity-50">
+                            Mestre: Clique em uma célula para revelar/esconder a névoa. Use os botões flutuantes para zoom.
+                        </p>
+                    )}
+                </main>
             )}
 
             {/* Modal: Entrar na Batalha */}
