@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { BattleMapState, TokenPosition, MapDecal, listenToBattleMap, updateTokenPosition, toggleFogOfWar, updateDecals, updateViewSettings, updateImageSettings } from '@/lib/map-sync';
+import { BattleMapState, TokenPosition, MapDecal, listenToBattleMap, updateTokenPosition, updateTokensPosition, toggleFogOfWar, updateDecals, updateViewSettings, updateImageSettings } from '@/lib/map-sync';
 import { TerrainType, FeatureType, generateProceduralMap } from '@/lib/map-data';
 import { Combatant } from '@/hooks/useCombat';
 import { doc, getDoc, updateDoc, setDoc } from 'firebase/firestore';
@@ -328,13 +328,10 @@ export default function BattleMap({ arenaId, isMaster, combatants = [] }: Battle
                         const currentY = (upEvent.clientY - rect.top - viewOffset.y) / zoom;
                         
                         const isClick = Math.abs(currentX - startX) < 5 && Math.abs(currentY - startY) < 5;
-                        const isTokenClick = !!(upEvent.target as HTMLElement).closest('.token-unit');
                         
                         if (isClick) {
-                            if (isTokenClick) {
-                                // O onClick do token lida com a seleção
-                            } else if (selectedIds.length > 0) {
-                                // COMANDO DE TELEPORTE COM FORMAÇÃO
+                            if (selectedIds.length > 0) {
+                                // COMANDO DE TELEPORTE COM FORMAÇÃO E LIMITES
                                 const gridX = Math.floor(currentX / TILE_SIZE);
                                 const gridY = Math.floor(currentY / TILE_SIZE);
                                 
@@ -345,33 +342,43 @@ export default function BattleMap({ arenaId, isMaster, combatants = [] }: Battle
                                         (curr.y < prev.y || (curr.y === prev.y && curr.x < prev.x)) ? curr : prev
                                     );
 
-                                    // Calcular deslocamento em relação ao líder (usando valores arredondados)
                                     const dx = gridX - Math.round(leader.x);
                                     const dy = gridY - Math.round(leader.y);
                                     
                                     const maxGridX = grid.length > 0 ? grid[0].length : 40;
                                     const maxGridY = grid.length > 0 ? grid.length : 40;
 
-                                    selectedIds.forEach(id => {
-                                        const t = mapState.tokens?.find(tok => tok.id === id);
+                                    if (selectedIds.length === 1) {
+                                        const t = mapState.tokens?.find(tok => tok.id === selectedIds[0]);
                                         if (t) {
-                                            // Nova posição baseada no deslocamento do grupo
                                             let nX = Math.round(t.x) + dx;
                                             let nY = Math.round(t.y) + dy;
-                                            
-                                            // TRAVA DE SEGURANÇA: Não deixa sair do grid
                                             nX = Math.max(0, Math.min(maxGridX - 1, nX));
                                             nY = Math.max(0, Math.min(maxGridY - 1, nY));
-
-                                            updateTokenPosition(arenaId, id, nX, nY);
+                                            updateTokenPosition(arenaId, selectedIds[0], nX, nY);
                                         }
-                                    });
+                                    } else {
+                                        const updates: {id: string, x: number, y: number}[] = [];
+                                        selectedIds.forEach(id => {
+                                            const t = mapState.tokens?.find(tok => tok.id === id);
+                                            if (t) {
+                                                let nX = Math.round(t.x) + dx;
+                                                let nY = Math.round(t.y) + dy;
+                                                nX = Math.max(0, Math.min(maxGridX - 1, nX));
+                                                nY = Math.max(0, Math.min(maxGridY - 1, nY));
+                                                updates.push({ id, x: nX, y: nY });
+                                            }
+                                        });
+                                        if (updates.length > 0) {
+                                            updateTokensPosition(arenaId, updates);
+                                        }
+                                    }
                                     
-                                    // LIMPAR SELEÇÃO após o movimento para evitar "pulos" involuntários extras
+                                    // LIMPAR SELEÇÃO IMEDIATAMENTE APÓS O MOVIMENTO
                                     setSelectedIds([]);
                                 }
                             } else {
-                                // Clicou no vazio sem nada selecionado -> Limpa seleção
+                                // Clique no vazio sem nada selecionado -> Limpa seleção
                                 setSelectedIds([]);
                             }
                         } else {
@@ -581,6 +588,7 @@ export default function BattleMap({ arenaId, isMaster, combatants = [] }: Battle
                         {mapState.tokens?.map((token) => (
                             <motion.div
                                 key={token.id}
+                                data-token-id={token.id}
                                 onClick={(e) => {
                                     if (activeMode === 'TOKENS') {
                                         e.stopPropagation();
@@ -591,14 +599,14 @@ export default function BattleMap({ arenaId, isMaster, combatants = [] }: Battle
                                         }
                                     }
                                 }}
+                                className={`absolute flex items-center justify-center pointer-events-auto cursor-pointer token-unit group
+                                    ${selectedIds.includes(token.id) ? 'z-30' : 'z-20'}`}
+                                style={{ width: TILE_SIZE, height: TILE_SIZE }}
                                 animate={{ 
                                     x: Math.round(token.x) * TILE_SIZE, 
                                     y: Math.round(token.y) * TILE_SIZE 
                                 }}
-                                transition={{ duration: 0.1 }} 
-                                className={`absolute flex items-center justify-center pointer-events-auto cursor-pointer token-unit group
-                                    ${selectedIds.includes(token.id) ? 'z-30' : 'z-20'}`}
-                                style={{ width: TILE_SIZE, height: TILE_SIZE }}
+                                transition={{ duration: 0.1 }}
                             >
                                 {/* Círculo do Personagem perfeitamente centralizado */}
                                 <div className={`w-[50px] h-[50px] rounded-full border-2 flex items-center justify-center shadow-2xl transition-all duration-300

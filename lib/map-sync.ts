@@ -111,6 +111,27 @@ export async function updateTokenPosition(arenaId: string, tokenId: string, x: n
 }
 
 /**
+ * Atualiza a posição de múltiplos tokens no mapa em uma única transação
+ */
+export async function updateTokensPosition(arenaId: string, updates: { id: string, x: number, y: number }[]) {
+    const mapRef = doc(db, 'battle_maps', arenaId);
+    const snap = await getDoc(mapRef);
+    if (!snap.exists()) return;
+
+    let tokens = snap.data().tokens as TokenPosition[];
+    
+    // Aplica todas as atualizações na mesma lista
+    updates.forEach(update => {
+        tokens = tokens.map(t => t.id === update.id ? { ...t, x: update.x, y: update.y } : t);
+    });
+
+    await updateDoc(mapRef, {
+        tokens,
+        lastUpdated: Date.now()
+    });
+}
+
+/**
  * Revela ou esconde uma área na Névoa de Guerra
  */
 export async function toggleFogOfWar(arenaId: string, cell: string, reveal: boolean) {
