@@ -20,6 +20,8 @@ export interface TokenPosition {
     name: string;
     type: 'hero' | 'monster' | 'npc';
     icon?: string;
+    imageUrl?: string;
+    size?: 'M' | 'L' | 'H' | 'G'; // Medium, Large, Huge, Gargantuan
 }
 
 export interface BattleMapState {

@@ -76,10 +76,11 @@ export default function BattleMap({ arenaId, isMaster, combatants = [] }: Battle
             
             setMapState(safeState);
             
-            // Sincronizar zoom se for modo projetor (não mestre)
-            if (!isMaster) {
+            // Sincronizar zoom se for modo projetor (não mestre) apenas na carga inicial
+            if (!isMaster && !(window as any)._hasSyncedInitialCamera) {
                 setZoom(safeState.viewSettings.zoom);
                 setViewOffset({ x: safeState.viewSettings.offsetX, y: safeState.viewSettings.offsetY });
+                (window as any)._hasSyncedInitialCamera = true;
             }
         });
         return () => unsubscribe();
@@ -279,10 +280,22 @@ export default function BattleMap({ arenaId, isMaster, combatants = [] }: Battle
             ref={containerRef}
             className="relative w-full h-full overflow-hidden bg-black select-none cursor-grab active:cursor-grabbing"
             style={{ touchAction: 'none' }}
+            onWheel={(e) => {
+                const delta = e.deltaY;
+                setZoom(z => {
+                    let newZ = delta > 0 ? z - 0.1 : z + 0.1;
+                    // Jogadores podem dar zoom com restrições; Mestre livremente
+                    if (!isMaster) newZ = Math.min(Math.max(0.5, newZ), 2.5);
+                    else newZ = Math.min(Math.max(0.3, newZ), 4);
+                    return newZ;
+                });
+            }}
             onMouseDown={(e) => {
-                if (!isMaster || (e.target as HTMLElement).closest('.pointer-events-auto')) return;
+                if ((e.target as HTMLElement).closest('.pointer-events-auto')) return;
                 
-                if (activeMode === 'CALIBRATE') {
+                if (!isMaster && activeMode !== 'NAVIGATE') return;
+
+                if (isMaster && activeMode === 'CALIBRATE') {
                     // Modo de Calibragem: Arrastar a Imagem de Fundo
                     const settings = mapState?.backgroundImageSettings || { scale: 1, x: 0, y: 0 };
                     const startX = e.clientX - settings.x;
@@ -413,11 +426,19 @@ export default function BattleMap({ arenaId, isMaster, combatants = [] }: Battle
                     const startX = e.clientX - viewOffset.x;
                     const startY = e.clientY - viewOffset.y;
 
+                    const clamp = (val: number, min: number, max: number) => Math.min(Math.max(val, min), max);
+
                     const handleMouseMove = (moveEvent: MouseEvent) => {
-                        setViewOffset({
-                            x: moveEvent.clientX - startX,
-                            y: moveEvent.clientY - startY
-                        });
+                        let newX = moveEvent.clientX - startX;
+                        let newY = moveEvent.clientY - startY;
+
+                        // Jogadores não podem arrastar a câmera para a dimensão do vazio (limite elástico)
+                        if (!isMaster) {
+                            newX = clamp(newX, -2500, 2500);
+                            newY = clamp(newY, -2500, 2500);
+                        }
+
+                        setViewOffset({ x: newX, y: newY });
                     };
 
                     const handleMouseUp = () => {
@@ -601,7 +622,10 @@ export default function BattleMap({ arenaId, isMaster, combatants = [] }: Battle
                                 }}
                                 className={`absolute flex items-center justify-center pointer-events-auto cursor-pointer token-unit group
                                     ${selectedIds.includes(token.id) ? 'z-30' : 'z-20'}`}
-                                style={{ width: TILE_SIZE, height: TILE_SIZE }}
+                                style={{ 
+                                    width: TILE_SIZE * (token.size === 'L' ? 2 : token.size === 'H' ? 3 : token.size === 'G' ? 4 : 1), 
+                                    height: TILE_SIZE * (token.size === 'L' ? 2 : token.size === 'H' ? 3 : token.size === 'G' ? 4 : 1) 
+                                }}
                                 animate={{ 
                                     x: Math.round(token.x) * TILE_SIZE, 
                                     y: Math.round(token.y) * TILE_SIZE 
@@ -609,11 +633,15 @@ export default function BattleMap({ arenaId, isMaster, combatants = [] }: Battle
                                 transition={{ duration: 0.1 }}
                             >
                                 {/* Círculo do Personagem perfeitamente centralizado */}
-                                <div className={`w-[50px] h-[50px] rounded-full border-2 flex items-center justify-center shadow-2xl transition-all duration-300
+                                <div className={`w-full h-full rounded-full border-2 flex items-center justify-center shadow-2xl transition-all duration-300 overflow-hidden
                                     ${selectedIds.includes(token.id) ? 'scale-110 ring-4 ring-rpg-gold/50 border-white shadow-glow-gold' : 'border-current'}
                                     ${token.type === 'hero' ? 'border-rpg-gold bg-blue-900/80 shadow-glow-blue/20' : 'border-rpg-red bg-red-900/80 shadow-glow-red/20'}`}
                                 >
-                                    <span className="text-white text-xl">{token.icon || (token.type === 'hero' ? '👤' : '👹')}</span>
+                                    {token.imageUrl ? (
+                                        <img src={token.imageUrl} draggable={false} className="w-full h-full object-cover pointer-events-none" />
+                                    ) : (
+                                        <span className={`${(token.size && token.size !== 'M') ? 'text-4xl' : 'text-xl'} text-white`}>{token.icon || (token.type === 'hero' ? '👤' : '👹')}</span>
+                                    )}
                                 </div>
                                 
                                 {/* Nome do Combatente */}
