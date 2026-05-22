@@ -5,7 +5,7 @@ import { useCharacterSheet } from '@/hooks/useCharacterSheet';
 const mockAddDoc = jest.fn();
 const mockUpdateDoc = jest.fn();
 const mockGetDoc = jest.fn();
-const mockOnSnapshot = jest.fn(() => jest.fn()); // retorna unsubscribe
+const mockOnSnapshot: any = jest.fn(() => jest.fn()); // retorna unsubscribe
 
 // Mock do @/lib/firebase ANTES de qualquer importação
 jest.mock('@/lib/firebase', () => ({
@@ -21,10 +21,11 @@ jest.mock('firebase/firestore', () => ({
     addDoc: (...args: any[]) => mockAddDoc(...args),
     updateDoc: (...args: any[]) => mockUpdateDoc(...args),
     getDoc: (...args: any[]) => mockGetDoc(...args),
-    onSnapshot: (...args: any[]) => mockOnSnapshot(...args),
+    onSnapshot: (...args: any[]) => mockOnSnapshot.apply(null, args as any),
     getDocs: jest.fn(() => Promise.resolve({ docs: [] })),
     setDoc: jest.fn(),
     query: jest.fn(),
+    where: jest.fn(),
     orderBy: jest.fn(),
     limit: jest.fn(),
 })); 
@@ -39,7 +40,7 @@ jest.mock('next/navigation', () => ({
 }));
 
 describe('Combat Audit Flow', () => {
-    const mockCharacter = {
+    const mockCharacter: any = {
         id: 'char-123',
         ownerId: 'user-123',
         name: 'Guerreiro Teste',

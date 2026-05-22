@@ -8,10 +8,11 @@ jest.mock('@/lib/firebase', () => ({
 
 // Mock Firestore
 jest.mock('firebase/firestore', () => ({
-    collection: jest.fn(),
-    getDocs: jest.fn(),
-    query: jest.fn(),
-    orderBy: jest.fn()
+  collection: jest.fn(),
+  getDocs: jest.fn(),
+  query: jest.fn(),
+  where: jest.fn(),
+  orderBy: jest.fn()
 }));
 
 const mockSpells: Spell[] = [
